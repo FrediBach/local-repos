@@ -3,7 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f5f4ef" />
+    <meta name="theme-color" content="#f8f9f5" />
+    <script>
+      // Apply the saved or system theme before the first paint. Keep in sync with useTheme.
+      (() => {
+        let preference;
+        try { preference = localStorage.getItem('local-repos:theme'); } catch {}
+        const dark = preference === 'dark' || (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#181d17' : '#f8f9f5';
+      })();
+    </script>
     <meta name="description" content="A considered home for your local projects. Browse repositories, find your work, and pick up where you left off." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />

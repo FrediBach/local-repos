@@ -77,6 +77,41 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it('returns focus to the project title after opening details from its actions menu', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'Actions for margin' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Project details' }))
+    const dialog = screen.getByRole('dialog', { name: 'margin' })
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
+    await user.keyboard('{Escape}')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'margin', exact: true }))
+  })
+
+  it('supports keyboard tab navigation and returns focus to the project on Escape', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    const opener = screen.getByRole('button', { name: 'View margin' })
+    await user.click(opener)
+    const overview = screen.getByRole('tab', { name: 'Overview' })
+    expect(overview.getAttribute('aria-selected')).toBe('true')
+    overview.focus()
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Packages' }))
+    expect(screen.getByRole('tabpanel', { name: 'Packages' })).toBeTruthy()
+    await user.keyboard('{End}')
+    expect(screen.getByRole('tab', { name: 'README' }).getAttribute('aria-selected')).toBe('true')
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(overview)
+    await user.keyboard('{ArrowLeft}')
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'README' }))
+    await user.keyboard('{Home}')
+    expect(document.activeElement).toBe(overview)
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+  })
+
   it('runs a bounded package update and clears stale cached reports after refreshing', async () => {
     const user = userEvent.setup()
     const outdated = { manager: 'npm' as const, scannedAt: project.scannedAt, findings: [{ name: 'alpha', current: '1.0.0', latest: '1.0.1', change: 'patch' as const, majorGap: 0, score: 0.1 }], score: 0.1, level: 'low' as const }
@@ -89,7 +124,7 @@ describe('project workspace interactions', () => {
     })
     render(<App />)
     await user.click(await screen.findByRole('button', { name: 'View my-notebook' }))
-    await user.click(screen.getByRole('button', { name: 'Packages', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Packages', exact: true }))
     await user.click(screen.getByRole('button', { name: 'Update patches' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/projects/real-project/update-packages', expect.objectContaining({ body: '{"level":"patch"}' })))
     await waitFor(() => expect(screen.getByText('Outdated packages not scanned yet.')).toBeTruthy())
@@ -150,7 +185,7 @@ describe('project workspace interactions', () => {
     await user.click(screen.getByRole('button', { name: 'View margin' }))
     const dialog = screen.getByRole('dialog', { name: 'margin' })
     expect(within(dialog).getByText('feat/editor')).toBeTruthy()
-    await user.click(within(dialog).getByRole('button', { name: 'README' }))
+    await user.click(within(dialog).getByRole('tab', { name: 'README' }))
     expect(within(dialog).getByText(/Install dependencies with npm install, then run npm run dev/)).toBeTruthy()
     expect(within(dialog).getByText(/This is an example project/)).toBeTruthy()
     await user.click(within(dialog).getByRole('button', { name: 'Close dialog' }))

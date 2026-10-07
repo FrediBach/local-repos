@@ -1,0 +1,62 @@
+/* Shared semantic colors keep every surface, including portals, in one theme. */
+:root {
+  color-scheme: light;
+  --background: #f8f9f5;
+  --surface: #ffffff;
+  --surface-muted: #eef1e9;
+  --sidebar: #f0f2eb;
+  --foreground: #262e23;
+  --muted-foreground: #58634f;
+  --border: #d1d8c9;
+  --control-border: #7d8974;
+  --primary: #354a2b;
+  --primary-hover: #263c1d;
+  --primary-foreground: #ffffff;
+  --accent: #3c5f2b;
+  --accent-soft: #e1ead8;
+  --hover: #e8eee1;
+  --focus: #9a461e;
+  --selection: #d6e5c8;
+  --warm: #864415;
+  --danger: #a12938;
+  --danger-soft: #fff0f2;
+  --warning: #805200;
+  --warning-soft: #fff3d5;
+  --info: #245c97;
+  --info-soft: #edf5ff;
+  --overlay: #17211280;
+  --shadow: #1b2b181a;
+  --log-background: #20291d;
+  --log-foreground: #e2ecd9;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #181d17;
+  --surface: #222920;
+  --surface-muted: #2b3427;
+  --sidebar: #1e241c;
+  --foreground: #edf1e8;
+  --muted-foreground: #b5c1ac;
+  --border: #414e39;
+  --control-border: #819175;
+  --primary: #c0d5ac;
+  --primary-hover: #d4e5c5;
+  --primary-foreground: #1c2a15;
+  --accent: #c0d5ac;
+  --accent-soft: #35452c;
+  --hover: #303c2a;
+  --focus: #efb281;
+  --selection: #4a603b;
+  --warm: #efb281;
+  --danger: #ffabb5;
+  --danger-soft: #45262e;
+  --warning: #f0cc7c;
+  --warning-soft: #3d321c;
+  --info: #a1caff;
+  --info-soft: #233447;
+  --overlay: #080d09b3;
+  --shadow: #00000059;
+  --log-background: #11170e;
+  --log-foreground: #e2ecd9;
+}

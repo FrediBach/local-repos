@@ -1,6 +1,6 @@
 # Local Repos
 
-A local project library with README introductions, package search, vulnerability audits, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a light, restrained interface inspired by Dieter Rams.
+A local project library with README introductions, package search, vulnerability audits, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a restrained interface inspired by Dieter Rams, in light and dark themes.
 
 ## Run locally
 
@@ -20,6 +20,12 @@ npx playwright install chromium
 ```
 
 The initial screen contains labeled sample projects and illustrative previews. Connect your own directory to replace them.
+
+## Appearance and keyboard navigation
+
+Use the **System / Light / Dark** selector in the top bar to choose a theme. System follows your operating system and updates when it changes. The preference is saved locally and applied before the first paint; if browser storage is blocked, changes still work for the current session.
+
+The interface uses larger, scalable text, higher-contrast colors, visible focus indicators, and reduced-motion support. Press **Tab** to reach **Skip to projects**. In a project dialog, use **Left / Right** to switch tabs, **Home / End** to reach the first or last tab, and **Escape** to close and return focus to the project. Dialog summaries and content can be scrolled with the keyboard.
 
 ## Connect your projects
 

@@ -106,7 +106,7 @@ describe('outdated-package actions', () => {
     const user = await renderConnected()
     await user.click(screen.getByRole('button', { name: 'View Alpha' }))
     const dialog = within(screen.getByRole('dialog', { name: 'Alpha' }))
-    await user.click(dialog.getByRole('button', { name: 'Packages', exact: true }))
+    await user.click(dialog.getByRole('tab', { name: 'Packages', exact: true }))
     await user.click(dialog.getByRole('button', { name: 'Scan for outdated packages' }))
     expect(requests()).toHaveLength(1)
     await complete('alpha')

@@ -87,7 +87,7 @@ describe('workspace package search', () => {
     await user.click(screen.getByRole('button', { name: 'List view' }))
     expect(within(screen.getByRole('article')).getByText('workspace:^')).toBeTruthy()
     const dialog = await openProject(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Packages', exact: true }))
+    await user.click(within(dialog).getByRole('tab', { name: 'Packages', exact: true }))
     expect(within(dialog).getByRole('columnheader', { name: 'Declared version' })).toBeTruthy()
     expect(within(dialog).getByText('workspace:^')).toBeTruthy()
     expect(within(dialog).getByText(/Versions are declared ranges from package.json/)).toBeTruthy()
@@ -146,7 +146,7 @@ describe('workspace maintenance actions', () => {
   it('updates and persists an audit report and retains it if a later scan fails', async () => {
     const user = await renderConnected()
     const dialog = await openProject(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Packages', exact: true }))
+    await user.click(within(dialog).getByRole('tab', { name: 'Packages', exact: true }))
     expect(within(dialog).getByText('Not scanned yet.')).toBeTruthy()
     expect(actionRequests('audit')).toHaveLength(0)
     await user.click(within(dialog).getByRole('button', { name: 'Scan for vulnerabilities' }))
