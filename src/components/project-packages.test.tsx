@@ -71,7 +71,7 @@ describe('package audit status', () => {
     expect(screen.getByText('Not scanned yet.')).toBeTruthy()
     expect(screen.queryByText('No known vulnerabilities reported')).toBeNull()
     expect(screen.getByText(/Runs pnpm audit against the lockfile/)).toBeTruthy()
-    expect(screen.getByText(/Package names and versions are sent to the configured registry/)).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Package vulnerability audit' })).getByText(/Package names and versions are sent to the configured registry/)).toBeTruthy()
     expect(onAction).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Scan for vulnerabilities' }))
     expect(onAction).toHaveBeenCalledExactlyOnceWith('audit')

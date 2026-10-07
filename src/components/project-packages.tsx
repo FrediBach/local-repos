@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink, LoaderCircle, Package, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ProjectOutdated } from '@/components/project-outdated'
 import { dependencyKindLabel, packageMatches } from '@/lib/packages'
 import type { AuditSeverity, RepoProject } from '@/types'
 
@@ -46,6 +47,7 @@ export function ProjectPackages({ project, helper, demo, busy, onAction }: {
         <p className="maintenance-hint">Saved result from the last successful scan. Scan again after dependency changes. Counts follow the package manager’s report.</p>
       </> : <p className="maintenance-empty">Not scanned yet.</p>}
     </section>
+    <ProjectOutdated project={project} helper={helper} demo={demo} busy={busy} onAction={onAction} />
     <section aria-label="Declared packages">
       <div className="maintenance-heading"><h3><Package size={16} /> Packages <span className="muted-count">{dependencies.length}</span></h3></div>
       <p className="maintenance-hint">Versions are declared ranges from package.json, not installed versions. Includes runtime, development, peer, and optional dependencies.</p>

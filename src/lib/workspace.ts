@@ -12,6 +12,7 @@ export function preservePreviews(next: Workspace, previous?: Workspace): Workspa
       ...(cached.screenshot?.startsWith('data:image/png;base64,') ? { screenshot: cached.screenshot, preview: cached.preview } : {}),
       ...(project.storage === undefined && cached.storage ? { storage: cached.storage } : {}),
       ...(project.audit === undefined && cached.audit ? { audit: cached.audit } : {}),
+      ...(project.outdated === undefined && cached.outdated ? { outdated: cached.outdated } : {}),
     }
   }) }
 }

@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Browser } from 'playwright'
-import type { PackageAudit, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageAudit, PackageOutdated, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -16,6 +16,7 @@ import { getPackagePreviewTargets, resolveGithubHomepage } from './preview-sourc
 import { discoverPreviewAssets, type PreviewAssetCandidate } from './preview-assets'
 import { renderPreviewAsset } from './preview-asset-renderer'
 import { auditProject } from './package-audit'
+import { outdatedProject } from './package-outdated'
 import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
 
 export { devCommand } from './dev-server'
@@ -77,6 +78,7 @@ export class ProjectRuntime {
   private readonly captures = new Map<string, Promise<string>>()
   private readonly storageScans = new Map<string, Promise<ProjectStorage>>()
   private readonly audits = new Map<string, Promise<PackageAudit>>()
+  private readonly outdatedScans = new Map<string, Promise<PackageOutdated>>()
   private readonly removals = new Map<string, Promise<ProjectStorage>>()
   private readonly maintenance = new Set<string>()
   private readonly logHistory = new Map<string, string>()
@@ -136,6 +138,21 @@ export class ProjectRuntime {
     finally { this.audits.delete(id) }
   }
 
+  async outdated(id: string): Promise<PackageOutdated> {
+    this.available(id)
+    const pending = this.outdatedScans.get(id)
+    if (pending) return pending
+    const promise = (async () => {
+      const entry = await this.registry.get(id)
+      const outdated = await outdatedProject(entry)
+      entry.project.outdated = outdated
+      return outdated
+    })()
+    this.outdatedScans.set(id, promise)
+    try { return await promise }
+    finally { this.outdatedScans.delete(id) }
+  }
+
   async deleteNodeModules(id: string, confirm: unknown): Promise<ProjectStorage> {
     this.available(id)
     if (confirm !== true) throw new HelperError('Confirm removal of this project’s node_modules folder before continuing.', 400)
@@ -143,8 +160,8 @@ export class ProjectRuntime {
       || [...this.stoppingChildren.values()].some(child => child.id === id)) {
       throw new HelperError('Stop the project’s dev server and wait for preview capture and server shutdown to finish before removing dependencies.', 409)
     }
-    if (this.storageScans.has(id) || this.audits.has(id)) {
-      throw new HelperError('Wait for disk usage measurement and vulnerability scanning to finish before removing dependencies.', 409)
+    if (this.storageScans.has(id) || this.audits.has(id) || this.outdatedScans.has(id)) {
+      throw new HelperError('Wait for disk usage measurement and package scans to finish before removing dependencies.', 409)
     }
     // Reserve before any filesystem await so a simultaneous start, screenshot,
     // or second cleanup cannot slip between validation and recursive removal.
@@ -487,7 +504,7 @@ export class ProjectRuntime {
     // closed check immediately closes it, and awaiting here prevents orphaning
     // Chromium when the helper's entry point exits the process.
     await Promise.allSettled([...this.captures.values()])
-    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.removals.values()])
+    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.removals.values()])
     if (this.screenshotDirectory) await rm(await this.screenshotDirectory, { recursive: true, force: true }).catch(() => undefined)
   }
 }

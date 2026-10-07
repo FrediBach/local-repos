@@ -141,11 +141,16 @@ describe('registered project paths', () => {
     first[0].project.dev = { status: 'running', url: 'http://127.0.0.1:4567' }
     first[0].project.screenshot = 'data:image/jpeg;base64,capture'
     first[0].project.preview = { source: 'github', url: 'https://demo.example.test/', capturedAt: '2026-10-07T12:00:00Z' }
+    const outdated = { manager: 'npm' as const, scannedAt: '2026-10-07T12:00:00Z', findings: [], score: 0, level: 'current' as const }
+    first[0].project.outdated = outdated
     const second = (await scanDirectory(root)).registered
     registry.register(second)
     expect(second[0].project.dev?.status).toBe('running')
     expect(second[0].project.screenshot).toBe('data:image/jpeg;base64,capture')
     expect(second[0].project.preview).toEqual({ source: 'github', url: 'https://demo.example.test/', capturedAt: '2026-10-07T12:00:00Z' })
+    expect(second[0].project.outdated).toEqual(outdated)
+    first[0].project.outdated = { ...outdated, scannedAt: '2026-10-08T12:00:00Z' }
+    expect(registry.lookup(first[0].project.id).project.outdated?.scannedAt).toBe('2026-10-08T12:00:00Z')
     first[0].project.dev = { status: 'stopped' }
     expect((await registry.get(first[0].project.id)).project.dev?.status).toBe('stopped')
   })

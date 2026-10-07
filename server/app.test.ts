@@ -5,8 +5,9 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from './app'
 import { devCommand } from './runtime'
-import type { PackageAudit, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageAudit, PackageOutdated, ProjectStorage, RepoProject } from '../src/types'
 import * as packageAudit from './package-audit'
+import * as packageOutdated from './package-outdated'
 import * as projectStorage from './project-storage'
 
 let helper: ReturnType<typeof createApp>
@@ -96,20 +97,26 @@ describe('local helper API security', () => {
   })
 })
 
-describe('project storage and vulnerability actions', () => {
+describe('project storage and package actions', () => {
   const auditResult: PackageAudit = {
     manager: 'npm', scannedAt: '2026-10-07T12:00:00.000Z',
     counts: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 },
     findings: [{ name: 'fixture-package', severity: 'high', title: 'Fixture advisory', range: '<2.0.0', fixAvailable: true }],
   }
   const storageResult: ProjectStorage = { totalBytes: 4096, nodeModulesBytes: 0, hasNodeModules: false, measuredAt: '2026-10-07T12:00:00.000Z', partial: false }
+  const outdatedResult: PackageOutdated = {
+    manager: 'npm', scannedAt: '2026-10-07T12:00:00.000Z', score: 0.1, level: 'low',
+    findings: [{ name: 'fixture-package', current: '1.0.0', wanted: '1.0.1', latest: '1.0.1', change: 'patch', majorGap: 0, score: 0.1 }],
+  }
 
   it('rejects unknown ids for every maintenance action', async () => {
     const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
-    for (const action of ['storage', 'delete-node-modules', 'audit']) {
+    const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
+    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated']) {
       expect((await post(`/api/projects/unknown/${action}`, { confirm: true })).status).toBe(404)
     }
     expect(audit).not.toHaveBeenCalled()
+    expect(outdated).not.toHaveBeenCalled()
   })
 
   it('requires explicit deletion confirmation and stores refreshed usage after fixture cleanup', async () => {
@@ -144,13 +151,42 @@ describe('project storage and vulnerability actions', () => {
     expect(helper.registry.lookup(project.id).project.audit).toEqual(auditResult)
   })
 
-  it('blocks cleanup while the server is running or still stopping, and allows audits while running', async () => {
+  it('returns outdated findings and retains them across directory rescans', async () => {
+    const project = await createProject()
+    const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
+    const response = await post(`/api/projects/${project.id}/outdated`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ outdated: outdatedResult })
+    expect(outdated).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect(helper.registry.lookup(project.id).project.outdated).toEqual(outdatedResult)
+    const rescan = await (await post('/api/scan', { path: directory })).json()
+    expect(rescan.projects[0].outdated).toEqual(outdatedResult)
+  })
+
+  it('preserves the last outdated result after failure and permits a later retry', async () => {
+    const project = await createProject()
+    helper.registry.lookup(project.id).project.outdated = outdatedResult
+    const freshResult: PackageOutdated = { ...outdatedResult, findings: [], score: 0, level: 'current' }
+    const outdated = vi.spyOn(packageOutdated, 'outdatedProject')
+      .mockRejectedValueOnce(new Error('Fixture registry unavailable'))
+      .mockResolvedValueOnce(freshResult)
+    await expect(helper.runtime.outdated(project.id)).rejects.toThrow('Fixture registry unavailable')
+    expect(helper.registry.lookup(project.id).project.outdated).toEqual(outdatedResult)
+    expect(await helper.runtime.outdated(project.id)).toEqual(freshResult)
+    expect(helper.registry.lookup(project.id).project.outdated).toEqual(freshResult)
+    expect(outdated).toHaveBeenCalledTimes(2)
+    expect(await helper.runtime.deleteNodeModules(project.id, true)).toMatchObject({ hasNodeModules: false })
+  })
+
+  it('blocks cleanup while the server is running or still stopping, and allows package scans while running', async () => {
     const project = await createProject({ dev: 'node dev.cjs' })
     await writeFile(path.join(directory, 'project', 'dev.cjs'), `require('node:http').createServer((req, res) => res.end('ready')).listen(Number(process.env.PORT), process.env.HOST)`)
     vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
+    vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
     expect((await helper.runtime.start(project.id)).status).toBe('running')
     expect((await post(`/api/projects/${project.id}/delete-node-modules`, { confirm: true })).status).toBe(409)
     expect((await post(`/api/projects/${project.id}/audit`)).status).toBe(200)
+    expect((await post(`/api/projects/${project.id}/outdated`)).status).toBe(200)
     await helper.runtime.stop(project.id)
     expect((await post(`/api/projects/${project.id}/delete-node-modules`, { confirm: true })).status).toBe(409)
   }, 15_000)
@@ -163,6 +199,7 @@ describe('project storage and vulnerability actions', () => {
     await expect(helper.runtime.start(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.screenshot(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.audit(project.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.outdated(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.storage(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
     await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())
@@ -184,22 +221,45 @@ describe('project storage and vulnerability actions', () => {
     expect(await helper.runtime.deleteNodeModules(project.id, true)).toMatchObject({ hasNodeModules: false })
   })
 
-  it('coalesces audits and disk scans and prevents deletion until both finish', async () => {
+  it('coalesces package and disk scans and prevents deletion until all finish', async () => {
     const project = await createProject()
     let resolveAudit!: (audit: PackageAudit) => void
     let resolveStorage!: (storage: ProjectStorage) => void
+    let resolveOutdated!: (outdated: PackageOutdated) => void
     const audit = vi.spyOn(packageAudit, 'auditProject').mockImplementationOnce(() => new Promise(resolve => { resolveAudit = resolve }))
     const measure = vi.spyOn(projectStorage, 'measureProjectStorage').mockImplementationOnce(() => new Promise(resolve => { resolveStorage = resolve }))
+    const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockImplementationOnce(() => new Promise(resolve => { resolveOutdated = resolve }))
     const audits = [helper.runtime.audit(project.id), helper.runtime.audit(project.id)]
     const scans = [helper.runtime.storage(project.id), helper.runtime.storage(project.id)]
-    await vi.waitFor(() => { expect(audit).toHaveBeenCalledOnce(); expect(measure).toHaveBeenCalledOnce() })
+    const outdatedScans = [helper.runtime.outdated(project.id), helper.runtime.outdated(project.id)]
+    await vi.waitFor(() => { expect(audit).toHaveBeenCalledOnce(); expect(measure).toHaveBeenCalledOnce(); expect(outdated).toHaveBeenCalledOnce() })
     await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
     resolveAudit(auditResult)
     expect(await Promise.all(audits)).toEqual([auditResult, auditResult])
     await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
     resolveStorage(storageResult)
     expect(await Promise.all(scans)).toEqual([storageResult, storageResult])
+    await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
+    resolveOutdated(outdatedResult)
+    expect(await Promise.all(outdatedScans)).toEqual([outdatedResult, outdatedResult])
     expect(await helper.runtime.deleteNodeModules(project.id, true)).toMatchObject({ hasNodeModules: false })
+  })
+
+  it('waits for an in-flight outdated scan on shutdown and rejects new scans', async () => {
+    const project = await createProject()
+    let resolveOutdated!: (outdated: PackageOutdated) => void
+    const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockImplementationOnce(() => new Promise(resolve => { resolveOutdated = resolve }))
+    const scan = helper.runtime.outdated(project.id)
+    await vi.waitFor(() => expect(outdated).toHaveBeenCalledOnce())
+    let stopped = false
+    const shutdown = helper.runtime.shutdown().then(() => { stopped = true })
+    await expect(helper.runtime.outdated(project.id)).rejects.toMatchObject({ status: 503 })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(stopped).toBe(false)
+    resolveOutdated(outdatedResult)
+    expect(await scan).toEqual(outdatedResult)
+    await shutdown
+    expect(stopped).toBe(true)
   })
 })
 

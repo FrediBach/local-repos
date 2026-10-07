@@ -32,6 +32,26 @@ export interface PackageAudit {
   findings: AuditFinding[]
 }
 
+export type OutdatedLevel = 'current' | 'low' | 'moderate' | 'high'
+export interface OutdatedFinding {
+  name: string
+  current: string
+  wanted?: string
+  latest: string
+  kind?: ProjectDependency['kind']
+  change: 'major' | 'minor' | 'patch' | 'prerelease'
+  majorGap: number
+  score: number
+}
+export interface PackageOutdated {
+  manager: RepoProject['packageManager']
+  scannedAt: string
+  findings: OutdatedFinding[]
+  score: number
+  level: OutdatedLevel
+  skipped?: { name: string; reason: string }[]
+}
+
 export interface RepoProject {
   id: string
   name: string
@@ -50,6 +70,7 @@ export interface RepoProject {
   dependencies?: ProjectDependency[]
   storage?: ProjectStorage
   audit?: PackageAudit
+  outdated?: PackageOutdated
   git?: {
     branch?: string
     commit?: string
