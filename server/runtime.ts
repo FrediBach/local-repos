@@ -1,12 +1,20 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import http from 'node:http'
+import https from 'node:https'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Browser } from 'playwright'
-import type { RepoProject } from '../src/types'
+import type { PreviewMode, RepoProject } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
+import { selectDevScript } from '../src/lib/dev-script'
+import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
+import { capturePage } from './preview-renderer'
+import { getPackagePreviewTargets, resolveGithubHomepage } from './preview-sources'
+
+export { devCommand } from './dev-server'
 
 const execFileAsync = promisify(execFile)
 type DevState = NonNullable<RepoProject['dev']>
@@ -34,19 +42,15 @@ export async function freePort(): Promise<number> {
   })
 }
 
-export function devCommand(entry: RegisteredProject, port: number, platform = process.platform): { command: string; args: string[] } {
-  if (platform === 'win32') throw new HelperError('Starting dev servers and capturing previews on Windows are not supported by this POC yet. Run your dev server manually; folder scanning still works.', 501)
-  const script = entry.project.scripts.dev
-  if (!script) throw new HelperError('This project does not define a dev script in package.json.')
-  const manager = entry.project.packageManager
-  const command = manager
-  const flags = /(?:^|[\s/])vite(?:\s|$)/.test(script)
-    ? ['--host', '127.0.0.1', '--port', String(port), '--strictPort']
-    : /(?:^|[\s/])next\s+dev(?:\s|$)/.test(script)
-      ? ['--hostname', '127.0.0.1', '--port', String(port)]
-      : []
-  const args = manager === 'npm' ? ['run', 'dev', ...(flags.length ? ['--', ...flags] : [])] : ['run', 'dev', ...flags]
-  return { command, args }
+function serverResponds(url: string): Promise<boolean> {
+  return new Promise(resolve => {
+    const client = url.startsWith('https:') ? https : http
+    // Every candidate is loopback-only. Local framework HTTPS often uses a
+    // self-signed certificate; never apply this setting to remote websites.
+    const request = client.get(url, { timeout: 650, rejectUnauthorized: false }, response => { response.resume(); resolve(true) })
+    request.on('error', () => resolve(false))
+    request.on('timeout', () => { request.destroy(); resolve(false) })
+  })
 }
 
 function terminate(child: ChildProcess, signal: NodeJS.Signals = 'SIGTERM'): void {
@@ -111,11 +115,11 @@ export class ProjectRuntime {
     if (this.running.has(id)) return entry.project.dev ?? { status: 'starting' }
     const port = await freePort()
     if (this.closed || this.generations.get(id) !== generation) return entry.project.dev ?? { status: 'stopped' }
-    const { command, args } = devCommand(entry, port)
+    const { command, args, env } = devCommand(entry, port)
     const url = `http://127.0.0.1:${port}`
     const child = spawn(command, args, {
       cwd: entry.directory,
-      env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', BROWSER: 'none', NO_COLOR: '1' },
+      env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', BROWSER: 'none', NO_COLOR: '1', ...env },
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
@@ -144,26 +148,29 @@ export class ProjectRuntime {
         entry.project.dev = { status: 'error', error: `The dev server exited${code === null ? '' : ` with code ${code}`}. Check the logs and install project dependencies if needed.` }
       }
     })
-    for (let attempt = 0; attempt < 80; attempt++) {
+    const deadline = Date.now() + 45_000
+    while (Date.now() < deadline) {
       if (this.running.get(id) !== running || running.stopping) return entry.project.dev ?? { status: 'stopped' }
-      try {
-        // Receiving any HTTP status proves the server is listening, including
-        // projects whose root route intentionally returns a 404.
-        const response = await fetch(url, { signal: AbortSignal.timeout(500), redirect: 'manual' })
-        await response.body?.cancel()
-        if (this.running.get(id) !== running || running.stopping) return entry.project.dev ?? { status: 'stopped' }
-        entry.project.dev = { status: 'running', url }
+      const candidates = [...new Set([
+        ...discoverServerUrls(running.logs),
+        ...configuredServerUrls(selectDevScript(entry.project)?.command ?? '', port),
+        url,
+      ])].slice(0, 8)
+      const responses = await Promise.all(candidates.map(async candidate => ({ candidate, ready: await serverResponds(candidate) })))
+      if (this.running.get(id) !== running || running.stopping) return entry.project.dev ?? { status: 'stopped' }
+      const ready = responses.find(response => response.ready)
+      if (ready) {
+        entry.project.dev = { status: 'running', url: ready.candidate }
         return entry.project.dev
-      } catch {
-        await delay(250)
       }
+      await delay(250)
     }
     if (this.running.get(id) !== running) return entry.project.dev ?? { status: 'stopped' }
     const stopping = this.stop(id)
     const stoppedGeneration = this.generations.get(id)
     await stopping
     if (this.generations.get(id) !== stoppedGeneration) return entry.project.dev ?? { status: 'stopped' }
-    entry.project.dev = { status: 'error', error: `The dev server did not respond on port ${port}. Vite and Next.js are supported directly; other dev scripts must respect the PORT environment variable. Check the logs.` }
+    entry.project.dev = { status: 'error', error: `The dev server did not become ready within 45 seconds. We checked its configured port and local URLs printed in its logs. Check the logs, or capture from the project's website instead.` }
     return entry.project.dev
   }
 
@@ -189,11 +196,11 @@ export class ProjectRuntime {
     return entry.project.dev
   }
 
-  async screenshot(id: string): Promise<string> {
+  async screenshot(id: string, source: PreviewMode = 'auto'): Promise<string> {
     if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
     const pending = this.captures.get(id)
     if (pending) return pending
-    const promise = this.captureOnce(id)
+    const promise = this.captureOnce(id, source)
     this.captures.set(id, promise)
     try {
       return await promise
@@ -202,34 +209,81 @@ export class ProjectRuntime {
     }
   }
 
-  private async captureOnce(id: string): Promise<string> {
+  private async captureOnce(id: string, source: PreviewMode): Promise<string> {
     const entry = await this.registry.get(id)
     let capturedServer: RunningServer | undefined
     let browser: Browser | undefined
     try {
-      const dev = await this.start(id, false)
-      if (dev.status !== 'running' || !dev.url) throw new HelperError(dev.error || 'The dev server could not be started for a screenshot.')
-      capturedServer = this.running.get(id)
-      const { chromium } = await import('playwright')
-      try {
-        browser = await chromium.launch({ headless: true, timeout: 15_000 })
-        this.browsers.add(browser)
-      } catch (error) {
-        throw new HelperError(`Screenshot browser is unavailable. Run npx playwright install chromium in the Local Repos folder, then try again. ${error instanceof Error ? error.message.split('\n')[0] : ''}`, 503)
+      const failures: string[] = []
+      const attempted = new Set<string>()
+      const targets = getPackagePreviewTargets(entry.project)
+      const capture = async (target: { url: string; source: NonNullable<RepoProject['preview']>['source'] }): Promise<string | undefined> => {
+        if (attempted.has(target.url)) return
+        attempted.add(target.url)
+        if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+        if (!browser) {
+          const { chromium } = await import('playwright')
+          try {
+            browser = await chromium.launch({ headless: true, timeout: 15_000 })
+            this.browsers.add(browser)
+          } catch (error) {
+            throw new HelperError(`Screenshot browser is unavailable. Run npx playwright install chromium in the Local Repos folder, then try again. ${error instanceof Error ? error.message.split('\n')[0] : ''}`, 503)
+          }
+        }
+        if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+        try {
+          const png = await capturePage(browser, target.url)
+          if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+          this.screenshotDirectory ??= mkdtemp(path.join(os.tmpdir(), 'local-repos-previews-'))
+          const filename = path.join(await this.screenshotDirectory, `${id}.png`)
+          await writeFile(filename, png)
+          this.screenshots.set(id, filename)
+          const screenshot = `/api/screenshots/${id}.png?v=${Date.now()}`
+          entry.project.screenshot = screenshot
+          entry.project.preview = { ...target, capturedAt: new Date().toISOString() }
+          return screenshot
+        } catch (error) {
+          if (this.closed) throw error
+          failures.push(`${target.source === 'local' ? 'Local preview' : 'Project URL'} (${target.url}): ${error instanceof Error ? error.message : 'Capture failed.'}`)
+          return
+        }
       }
-      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
-      const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
-      await page.goto(dev.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await page.waitForTimeout(1_200)
-      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
-      this.screenshotDirectory ??= mkdtemp(path.join(os.tmpdir(), 'local-repos-previews-'))
-      const directory = await this.screenshotDirectory
-      const filename = path.join(directory, `${id}.png`)
-      await page.screenshot({ path: filename, fullPage: false, animations: 'disabled' })
-      this.screenshots.set(id, filename)
-      const screenshot = `/api/screenshots/${id}.png?v=${Date.now()}`
-      entry.project.screenshot = screenshot
-      return screenshot
+
+      // An explicit preview route is an override; inferred homepages are used
+      // after trying the local application, unless Project URL was selected.
+      if (source !== 'local') {
+        for (const target of targets.filter(target => target.source === 'configured')) {
+          const result = await capture(target)
+          if (result) return result
+        }
+      }
+      if (source !== 'website') {
+        if (selectDevScript(entry.project)) {
+          let dev: DevState | undefined
+          try { dev = await this.start(id, false) }
+          catch (error) { failures.push(error instanceof Error ? error.message : 'The local server could not start.') }
+          if (dev?.status === 'running' && dev.url) {
+            capturedServer = this.running.get(id)
+            const result = await capture({ url: dev.url, source: 'local' })
+            if (result) return result
+          } else if (dev) failures.push(dev.error || 'The local server did not start.')
+          // A failed/blank local preview should not keep a temporary process
+          // alive while an unrelated deployed website is being captured.
+          if (capturedServer && this.running.get(id) === capturedServer && !this.keepAlive.has(id)) await this.stop(id)
+        } else failures.push('No dev, start, or serve script is configured.')
+      }
+      if (source !== 'local') {
+        for (const target of targets.filter(target => target.source !== 'configured')) {
+          const result = await capture(target)
+          if (result) return result
+        }
+        const github = await resolveGithubHomepage(entry.project.git?.origin)
+        if (github) {
+          const result = await capture(github)
+          if (result) return result
+        } else failures.push('No additional website was found in the GitHub repository’s public homepage setting.')
+      }
+      throw new HelperError(`Could not capture a rendered preview. ${failures.join(' ')} Set package.json homepage or localRepos.previewUrl to the application URL or route to use.`, 422)
     } finally {
       await browser?.close().catch(() => undefined)
       if (browser) this.browsers.delete(browser)

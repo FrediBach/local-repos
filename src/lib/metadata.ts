@@ -6,6 +6,8 @@ export interface PackageMetadata {
   author?: string
   license?: string
   description?: string
+  homepage?: string
+  previewUrl?: string
   stack: string[]
   scripts: Record<string, string>
   packageManager: RepoProject['packageManager']
@@ -18,6 +20,22 @@ const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
+
+/** App previews need an absolute web URL, never a repository page or credentials. */
+export function normalizePreviewUrl(value: unknown): string | undefined {
+  const raw = text(value)
+  if (!raw || raw.length > 4096 || !/^https?:\/\/[^/\\?#\s]/i.test(raw) || /[\s\\\u0000-\u001f\u007f]/.test(raw)) return undefined
+  try {
+    const url = new URL(raw)
+    if (!url.hostname || url.username || url.password) return undefined
+    // These hosts serve repository interfaces. GitHub Pages and custom app
+    // domains are separate hosts and remain valid preview targets.
+    if (/^(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org)$/.test(url.hostname) || url.hostname === 'api.github.com') return undefined
+    return url.toString()
+  } catch {
+    return undefined
+  }
+}
 
 const technologies: [string, string[]][] = [
   ['React', ['react', 'react-dom']],
@@ -68,6 +86,8 @@ export function parsePackageJson(source: string): PackageMetadata {
     author: text(pkg.author) ?? text(record(pkg.author).name),
     license: text(pkg.license) ?? text(record(pkg.license).type),
     description: text(pkg.description),
+    homepage: normalizePreviewUrl(pkg.homepage),
+    previewUrl: normalizePreviewUrl(record(pkg.localRepos).previewUrl),
     stack: technologies.filter(([, packages]) => packages.some((name) => name in dependencies)).map(([name]) => name),
     scripts,
     packageManager,

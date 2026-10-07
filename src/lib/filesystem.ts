@@ -150,6 +150,8 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
         version: pkg?.version,
         author: pkg?.author,
         license: pkg?.license,
+        homepage: pkg?.homepage,
+        previewUrl: pkg?.previewUrl,
         stack,
         scripts: pkg?.scripts ?? {},
         packageManager,

@@ -1,3 +1,5 @@
+export type PreviewMode = 'auto' | 'local' | 'website'
+
 export interface RepoProject {
   id: string
   name: string
@@ -8,6 +10,8 @@ export interface RepoProject {
   version?: string
   author?: string
   license?: string
+  homepage?: string
+  previewUrl?: string
   stack: string[]
   scripts: Record<string, string>
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun'
@@ -22,6 +26,7 @@ export interface RepoProject {
   updatedAt?: string
   scannedAt: string
   screenshot?: string
+  preview?: { url: string; source: 'local' | 'configured' | 'package' | 'github'; capturedAt: string }
   dev?: { status: 'stopped' | 'starting' | 'running' | 'error'; url?: string; error?: string }
 }
 

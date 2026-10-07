@@ -31,6 +31,8 @@ describe('local directory scanning', () => {
     const directory = await fixture('hello', {
       name: '@studio/hello', version: '1.2.3', author: { name: 'Ada' },
       description: 'Package fallback', dependencies: { react: '^19', vite: '^7' },
+      homepage: 'https://example.github.io/hello/#welcome',
+      localRepos: { previewUrl: 'https://hello.example.test/demo' },
       scripts: { dev: 'node this-must-never-run.js' },
     })
     await writeFile(path.join(directory, 'README.md'), '# Hello\n\nA small project for curious people.\n\n## Install\n\nnpm install')
@@ -45,6 +47,7 @@ describe('local directory scanning', () => {
     expect(result.projects).toHaveLength(1)
     expect(result.projects[0]).toMatchObject({
       name: '@studio/hello', version: '1.2.3', author: 'Ada',
+      homepage: 'https://example.github.io/hello/#welcome', previewUrl: 'https://hello.example.test/demo',
       description: 'A small project for curious people.', relativePath: 'hello', packageManager: 'pnpm',
       dev: { status: 'stopped' },
       git: { branch: 'fixture-main', message: 'Create fixture project', origin: 'https://github.com/example/hello', dirty: true },
@@ -131,9 +134,13 @@ describe('registered project paths', () => {
     const first = (await scanDirectory(root)).registered
     registry.register(first)
     first[0].project.dev = { status: 'running', url: 'http://127.0.0.1:4567' }
+    first[0].project.screenshot = 'data:image/jpeg;base64,capture'
+    first[0].project.preview = { source: 'github', url: 'https://demo.example.test/', capturedAt: '2026-10-07T12:00:00Z' }
     const second = (await scanDirectory(root)).registered
     registry.register(second)
     expect(second[0].project.dev?.status).toBe('running')
+    expect(second[0].project.screenshot).toBe('data:image/jpeg;base64,capture')
+    expect(second[0].project.preview).toEqual({ source: 'github', url: 'https://demo.example.test/', capturedAt: '2026-10-07T12:00:00Z' })
     first[0].project.dev = { status: 'stopped' }
     expect((await registry.get(first[0].project.id)).project.dev?.status).toBe('stopped')
   })

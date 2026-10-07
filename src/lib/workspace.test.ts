@@ -21,12 +21,13 @@ function workspace(projects: RepoProject[]): Workspace {
 
 describe('captured preview persistence', () => {
   it('retains cached PNG data when a rescan or helper restart loses its temporary screenshot', () => {
-    const previous = workspace([project('one', cachedPng)])
+    const preview = { url: 'https://example.com/app', source: 'github' as const, capturedAt: '2026-10-07T10:00:00.000Z' }
+    const previous = workspace([{ ...project('one', cachedPng), preview }])
     const rescanned = workspace([{ ...project('one'), version: '2.0.0', description: 'Updated from disk' }])
 
     const result = preservePreviews(rescanned, previous)
     expect(result.projects[0]).toMatchObject({
-      id: 'one', screenshot: cachedPng, version: '2.0.0', description: 'Updated from disk',
+      id: 'one', screenshot: cachedPng, preview, version: '2.0.0', description: 'Updated from disk',
     })
     expect(rescanned.projects[0].screenshot).toBeUndefined()
     expect(previous.projects[0].description).toBe('Project overview')

@@ -5,7 +5,7 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Local-Repos': '1' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(path.endsWith('screenshot') ? 120_000 : 60_000),
+    signal: AbortSignal.timeout(path.endsWith('screenshot') ? 240_000 : 60_000),
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) throw new Error(data?.error || 'The local helper is unavailable. Start the app with npm run dev and try again.')

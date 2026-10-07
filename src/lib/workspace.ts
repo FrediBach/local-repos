@@ -3,8 +3,8 @@ import type { Workspace } from '@/types'
 /** Keep captured images available after the helper's temporary files expire. */
 export function preservePreviews(next: Workspace, previous?: Workspace): Workspace {
   if (!previous) return next
-  const images = new Map(previous.projects.filter(project => project.screenshot?.startsWith('data:image/png;base64,')).map(project => [project.id, project.screenshot]))
-  return { ...next, projects: next.projects.map(project => images.has(project.id) ? { ...project, screenshot: images.get(project.id) } : project) }
+  const images = new Map(previous.projects.filter(project => project.screenshot?.startsWith('data:image/png;base64,')).map(project => [project.id, { screenshot: project.screenshot, preview: project.preview }]))
+  return { ...next, projects: next.projects.map(project => images.has(project.id) ? { ...project, ...images.get(project.id) } : project) }
 }
 
 export async function cachePreview(url: string): Promise<string> {

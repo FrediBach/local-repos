@@ -82,9 +82,58 @@ describe('local helper API security', () => {
     expect(badJson.status).toBe(400)
     expect((await fetch(`${address}/api/files?path=/etc/passwd`)).status).toBe(404)
   })
+
+  it('rejects an invalid capture source before starting a server or browser', async () => {
+    const project = await createProject({ start: 'node dev.cjs' })
+    const capture = vi.spyOn(helper.runtime, 'screenshot')
+    const response = await post(`/api/projects/${project.id}/screenshot`, { source: 'https://example.com' })
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toContain('automatic, local, or website')
+    expect(capture).not.toHaveBeenCalled()
+    expect(await helper.runtime.status(project.id)).toEqual({ status: 'stopped' })
+  })
 })
 
 describe('dev server lifecycle', () => {
+  it('runs a project with only a start script and stops its server', async () => {
+    const project = await createProject({ start: 'node start.cjs' })
+    await writeFile(path.join(directory, 'project', 'start.cjs'), `require('node:http').createServer((req, res) => res.end('start script ready')).listen(Number(process.env.PORT), process.env.HOST)`)
+    const response = await post(`/api/projects/${project.id}/start`)
+    expect(response.status).toBe(200)
+    const { dev } = await response.json()
+    expect(dev.status).toBe('running')
+    expect(await (await fetch(dev.url)).text()).toBe('start script ready')
+    expect(await (await post(`/api/projects/${project.id}/stop`)).json()).toEqual({ dev: { status: 'stopped' } })
+    await expect(fetch(dev.url, { signal: AbortSignal.timeout(1_000) })).rejects.toThrow()
+  }, 15_000)
+
+  it('discovers a custom server’s actual address and base path when it ignores PORT', async () => {
+    const project = await createProject({ dev: 'node custom.cjs' })
+    await writeFile(path.join(directory, 'project', 'custom.cjs'), `
+      const server = require('node:http').createServer((req, res) => {
+        if (req.url !== '/project-preview/') {
+          res.statusCode = 404;
+          return res.end('Use the project base path');
+        }
+        res.end('custom project ready');
+      });
+      server.listen(0, '127.0.0.1', () => {
+        process.stdout.write('\\u001b[32mReady at http://local');
+        setTimeout(() => process.stdout.write('host:' + server.address().port + '/project-preview/\\u001b[0m\\n'), 30);
+      });
+    `)
+    const response = await post(`/api/projects/${project.id}/start`)
+    expect(response.status).toBe(200)
+    const { dev } = await response.json()
+    expect(dev.status).toBe('running')
+    expect(dev.url).toMatch(/^http:\/\/localhost:\d+\/project-preview\/$/)
+    expect(await (await fetch(dev.url)).text()).toBe('custom project ready')
+    expect((await fetch(new URL('/', dev.url))).status).toBe(404)
+    expect(await helper.runtime.status(project.id)).toEqual(dev)
+    await post(`/api/projects/${project.id}/stop`)
+    await expect(fetch(dev.url, { signal: AbortSignal.timeout(1_000) })).rejects.toThrow()
+  }, 15_000)
+
   it('starts only on request, exposes logs, survives rescan, and stops its process', async () => {
     const project = await createProject({ dev: 'node dev.cjs' })
     await writeFile(path.join(directory, 'project', 'dev.cjs'), `require('node:http').createServer((req, res) => res.end('fixture ready')).listen(Number(process.env.PORT), process.env.HOST, () => console.log('fixture started'))`)

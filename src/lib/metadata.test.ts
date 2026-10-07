@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractReadmeIntro, normalizeGitOrigin, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
+import { extractReadmeIntro, normalizeGitOrigin, normalizePreviewUrl, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
 
 describe('package metadata', () => {
   it('extracts typed fields, authors, scripts and frameworks across dependency groups', () => {
@@ -22,6 +22,29 @@ describe('package metadata', () => {
     expect(() => parsePackageJson('null')).toThrow()
     expect(parsePackageJson('{"name":42,"scripts":null,"dependencies":["react"]}')).toMatchObject({
       name: undefined, scripts: {}, stack: [], packageManager: 'npm',
+    })
+  })
+
+  it('reads app URLs while preserving their route, query and hash', () => {
+    expect(parsePackageJson(JSON.stringify({
+      homepage: 'https://studio.github.io/demo/gallery?theme=light#/project/one',
+      localRepos: { previewUrl: 'http://localhost:4242/demo?preview=1#screen' },
+    }))).toMatchObject({
+      homepage: 'https://studio.github.io/demo/gallery?theme=light#/project/one',
+      previewUrl: 'http://localhost:4242/demo?preview=1#screen',
+    })
+  })
+
+  it.each([
+    undefined, 123, '', '.', '/demo/', 'demo.example.com', 'javascript:alert(1)',
+    'file:///tmp/example.html', 'https:example.com', 'https:///example.com',
+    'https://user:secret@example.com/demo', 'https://example.com\\demo',
+    'https://exa\nmple.com', 'https://github.com/studio/repo',
+    'https://www.gitlab.com/studio/repo', 'https://bitbucket.org/studio/repo',
+  ])('ignores unsafe, relative or repository URLs: %s', (url) => {
+    expect(normalizePreviewUrl(url)).toBeUndefined()
+    expect(parsePackageJson(JSON.stringify({ homepage: url, localRepos: { previewUrl: url } }))).toMatchObject({
+      homepage: undefined, previewUrl: undefined,
     })
   })
 })

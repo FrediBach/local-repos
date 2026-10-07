@@ -31,7 +31,7 @@ describe('read-only folder scan', () => {
   it('discovers projects and grouped repos, ignores dependencies and stops at project boundaries', async () => {
     const root = directory('Projects', {
       web: {
-        'package.json': JSON.stringify({ name: 'web-app', version: '1.0.0', author: 'Ada', scripts: { dev: 'vite' }, dependencies: { react: '^19' } }),
+        'package.json': JSON.stringify({ name: 'web-app', version: '1.0.0', author: 'Ada', homepage: 'https://web.example.test/app/#welcome', localRepos: { previewUrl: 'https://preview.example.test/demo' }, scripts: { dev: 'vite' }, dependencies: { react: '^19' } }),
         'README.md': '# Web\n\nA home for local projects.',
         'pnpm-lock.yaml': '', 'components.json': '{}',
         child: { 'package.json': '{"name":"inside-app"}' },
@@ -46,6 +46,7 @@ describe('read-only folder scan', () => {
     expect(result.projects.map((project) => project.relativePath)).toEqual(['clients/api', 'web'])
     expect(result.projects[1]).toMatchObject({
       id: 'browser:Projects/web', name: 'web-app', author: 'Ada', version: '1.0.0',
+      homepage: 'https://web.example.test/app/#welcome', previewUrl: 'https://preview.example.test/demo',
       description: 'A home for local projects.', stack: ['React', 'shadcn/ui'],
       packageManager: 'pnpm', scripts: { dev: 'vite' },
     })

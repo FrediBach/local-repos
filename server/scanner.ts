@@ -107,6 +107,8 @@ async function inspectProject(directory: string, root: string, names: string[], 
     version: metadata?.version,
     author: metadata?.author,
     license: metadata?.license,
+    homepage: metadata?.homepage,
+    previewUrl: metadata?.previewUrl,
     stack: [...new Set([...(metadata?.stack ?? []), ...Object.entries(markerStack).filter(([name]) => names.includes(name)).map(([, tech]) => tech), ...(names.includes('components.json') ? ['shadcn/ui'] : []), ...(names.includes('tsconfig.json') ? ['TypeScript'] : [])])],
     scripts: metadata?.scripts ?? {},
     packageManager: metadata?.packageManager ?? 'npm',
@@ -205,7 +207,8 @@ export class ProjectRegistry {
       if (previous) {
         const dev = previous.project.dev
         const screenshot = previous.project.screenshot
-        Object.assign(previous.project, entry.project, { dev, screenshot })
+        const preview = previous.project.preview
+        Object.assign(previous.project, entry.project, { dev, screenshot, preview })
         entry.project = previous.project
       }
       this.projects.set(entry.project.id, entry)
