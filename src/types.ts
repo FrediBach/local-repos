@@ -1,4 +1,5 @@
 export type PreviewMode = 'auto' | 'local' | 'website'
+export type PreviewKind = 'screenshot' | 'og-image' | 'logo' | 'favicon'
 
 export interface RepoProject {
   id: string
@@ -26,7 +27,14 @@ export interface RepoProject {
   updatedAt?: string
   scannedAt: string
   screenshot?: string
-  preview?: { url: string; source: 'local' | 'configured' | 'package' | 'github'; capturedAt: string }
+  preview?: {
+    url?: string
+    source: 'local' | 'configured' | 'package' | 'github' | 'repository'
+    kind?: PreviewKind
+    assetUrl?: string
+    assetPath?: string
+    capturedAt: string
+  }
   dev?: { status: 'stopped' | 'starting' | 'running' | 'error'; url?: string; error?: string }
 }
 

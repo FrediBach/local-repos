@@ -13,11 +13,15 @@ import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
 import { capturePage } from './preview-renderer'
 import { getPackagePreviewTargets, resolveGithubHomepage } from './preview-sources'
+import { discoverPreviewAssets, type PreviewAssetCandidate } from './preview-assets'
+import { renderPreviewAsset } from './preview-asset-renderer'
 
 export { devCommand } from './dev-server'
 
 const execFileAsync = promisify(execFile)
 type DevState = NonNullable<RepoProject['dev']>
+type PreviewDetails = Omit<NonNullable<RepoProject['preview']>, 'capturedAt'>
+type CaptureTarget = { url: string; source: 'local' | 'configured' | 'package' | 'github' }
 interface RunningServer {
   child: ChildProcess
   logs: string
@@ -216,10 +220,10 @@ export class ProjectRuntime {
     try {
       const failures: string[] = []
       const attempted = new Set<string>()
+      const attemptedTargets: CaptureTarget[] = []
+      const localAssets: PreviewAssetCandidate[] = []
       const targets = getPackagePreviewTargets(entry.project)
-      const capture = async (target: { url: string; source: NonNullable<RepoProject['preview']>['source'] }): Promise<string | undefined> => {
-        if (attempted.has(target.url)) return
-        attempted.add(target.url)
+      const ensureBrowser = async (): Promise<Browser> => {
         if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
         if (!browser) {
           const { chromium } = await import('playwright')
@@ -231,21 +235,48 @@ export class ProjectRuntime {
           }
         }
         if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+        return browser
+      }
+      const save = async (png: Buffer, details: PreviewDetails): Promise<string> => {
+        if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+        this.screenshotDirectory ??= mkdtemp(path.join(os.tmpdir(), 'local-repos-previews-'))
+        const filename = path.join(await this.screenshotDirectory, `${id}.png`)
+        await writeFile(filename, png)
+        this.screenshots.set(id, filename)
+        const screenshot = `/api/screenshots/${id}.png?v=${Date.now()}`
+        entry.project.screenshot = screenshot
+        entry.project.preview = { ...details, capturedAt: new Date().toISOString() }
+        return screenshot
+      }
+      const capture = async (target: CaptureTarget): Promise<string | undefined> => {
+        if (attempted.has(target.url)) return
+        attempted.add(target.url)
+        attemptedTargets.push(target)
+        const activeBrowser = await ensureBrowser()
         try {
-          const png = await capturePage(browser, target.url)
-          if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
-          this.screenshotDirectory ??= mkdtemp(path.join(os.tmpdir(), 'local-repos-previews-'))
-          const filename = path.join(await this.screenshotDirectory, `${id}.png`)
-          await writeFile(filename, png)
-          this.screenshots.set(id, filename)
-          const screenshot = `/api/screenshots/${id}.png?v=${Date.now()}`
-          entry.project.screenshot = screenshot
-          entry.project.preview = { ...target, capturedAt: new Date().toISOString() }
-          return screenshot
+          const png = await capturePage(activeBrowser, target.url)
+          return await save(png, { ...target, kind: 'screenshot' })
         } catch (error) {
           if (this.closed) throw error
           failures.push(`${target.source === 'local' ? 'Local preview' : 'Project URL'} (${target.url}): ${error instanceof Error ? error.message : 'Capture failed.'}`)
           return
+        }
+      }
+
+      const rememberLocalAssets = async (target: CaptureTarget) => {
+        // Frameworks may generate metadata and image routes that do not exist
+        // as named files. Save those bytes before stopping our temporary server,
+        // but prefer any successful website screenshot over these images.
+        const deadline = Date.now() + 8_000
+        try {
+          const assets = await discoverPreviewAssets(await ensureBrowser(), undefined, [target])
+          for (const asset of assets.slice(0, 10)) {
+            if (this.closed || Date.now() >= deadline) break
+            const image = await asset.load()
+            if (image) localAssets.push({ ...asset, load: async () => image })
+          }
+        } catch (error) {
+          if (this.closed) throw error
         }
       }
 
@@ -266,6 +297,7 @@ export class ProjectRuntime {
             capturedServer = this.running.get(id)
             const result = await capture({ url: dev.url, source: 'local' })
             if (result) return result
+            await rememberLocalAssets({ url: dev.url, source: 'local' })
           } else if (dev) failures.push(dev.error || 'The local server did not start.')
           // A failed/blank local preview should not keep a temporary process
           // alive while an unrelated deployed website is being captured.
@@ -283,7 +315,42 @@ export class ProjectRuntime {
           if (result) return result
         } else failures.push('No additional website was found in the GitHub repository’s public homepage setting.')
       }
-      throw new HelperError(`Could not capture a rendered preview. ${failures.join(' ')} Set package.json homepage or localRepos.previewUrl to the application URL or route to use.`, 422)
+      // A rendered application is always preferred. Only after every eligible
+      // page fails do we try its social image, branding, and finally icons.
+      // Temporary local servers are already stopped; their static assets can
+      // still be read from the repository without starting the app again.
+      try {
+        const fallbackDeadline = Date.now() + 25_000
+        const activeBrowser = await ensureBrowser()
+        const discovered = await discoverPreviewAssets(activeBrowser, source === 'website' ? undefined : entry.directory, attemptedTargets.filter(target => target.source !== 'local'))
+        const kindOrder = { 'og-image': 0, logo: 1, favicon: 2 }
+        const sourceOrder = { configured: 0, local: 1, package: 2, github: 3, repository: 4 }
+        const seen = new Set<string>()
+        const assets = [...discovered, ...localAssets].sort((a, b) => kindOrder[a.kind] - kindOrder[b.kind] || sourceOrder[a.source] - sourceOrder[b.source]).filter(asset => {
+          const key = asset.assetUrl ?? asset.assetPath
+          if (!key || seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        for (const asset of assets) {
+          if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+          if (Date.now() >= fallbackDeadline) break
+          try {
+            const image = await asset.load()
+            if (!image || this.closed || Date.now() >= fallbackDeadline) continue
+            const png = await renderPreviewAsset(activeBrowser, image, asset.kind)
+            return await save(png, { kind: asset.kind, source: asset.source, url: asset.url, assetUrl: asset.assetUrl, assetPath: asset.assetPath })
+          } catch (error) {
+            if (this.closed) throw error
+            // A missing or corrupt OG image should not hide a valid logo/icon.
+          }
+        }
+        failures.push('No usable Open Graph image, logo, or favicon was found.')
+      } catch (error) {
+        if (this.closed) throw error
+        failures.push(`Image fallback: ${error instanceof Error ? error.message : 'No usable image was found.'}`)
+      }
+      throw new HelperError(`Could not capture a preview. ${failures.join(' ')} Set package.json homepage or localRepos.previewUrl to the application URL or route to use.`, 422)
     } finally {
       await browser?.close().catch(() => undefined)
       if (browser) this.browsers.delete(browser)

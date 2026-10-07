@@ -4,7 +4,12 @@ import { useState } from 'react'
 
 export function ProjectPreview({ project, large = false }: { project: RepoProject; large?: boolean }) {
   const [failedImage, setFailedImage] = useState<string>()
-  if (project.screenshot && failedImage !== project.screenshot) return <div className={`project-preview screenshot-preview ${large ? 'large' : ''}`}><img src={project.screenshot} alt={`Screenshot of ${project.name}`} loading="lazy" onError={() => setFailedImage(project.screenshot)} /></div>
+  if (project.screenshot && failedImage !== project.screenshot) {
+    const kind = project.preview?.kind ?? 'screenshot'
+    const label = kind === 'og-image' ? 'Open Graph image' : kind === 'logo' ? 'Logo' : 'Favicon'
+    const assetClass = kind === 'screenshot' ? '' : `asset-preview asset-preview-${kind}`
+    return <div className={`project-preview screenshot-preview ${assetClass} ${large ? 'large' : ''}`}><img src={project.screenshot} alt={kind === 'screenshot' ? `Screenshot of ${project.name}` : `${label} for ${project.name}`} loading="lazy" onError={() => setFailedImage(project.screenshot)} /></div>
+  }
   const type = project.id.replace('demo-', '')
   const demo = project.id.startsWith('demo-')
   return <div className={`project-preview preview-${demo ? type : 'empty'} ${large ? 'large' : ''}`}>

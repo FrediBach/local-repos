@@ -54,7 +54,7 @@ Common Vite/SvelteKit, Next.js, Astro, Nuxt, Angular, Vue CLI, webpack, Parcel, 
 Choose a preview source beside **Capture preview**:
 
 - **Automatic** tries an explicit `localRepos.previewUrl` first, then the local app, then `package.json`'s `homepage`, and finally the public GitHub repository's About → Website setting, found through its Git origin. An unavailable or blank page allows the next source to be tried.
-- **Local** captures the local app only, without falling back to a website.
+- **Local** tries the local app, then image assets in its repository, without looking up a deployed website.
 - **Project URL** skips local startup and tries the configured preview URL, package homepage, and GitHub website. This also works for projects without a runnable development script.
 
 Add these optional fields to a project's `package.json` to configure its deployed website or a specific preview route:
@@ -70,7 +70,9 @@ Add these optional fields to a project's `package.json` to configure its deploye
 
 URLs must be absolute HTTP(S) addresses without embedded credentials. Paths, query parameters, and hashes are preserved. Repository pages are not used as app previews. After updating Local Repos, restart `npm run dev` to load the new helper; use **Synced …** to rescan your projects and load their URL metadata. Rescan after later changes to those package fields too.
 
-Capture opens a fresh, unsigned-in Chromium page at 1440 × 900. It waits for visible content, fonts, images, and layout changes to settle, then retries nearly uniform images instead of caching a blank white preview. If the page still fails, the error includes available browser diagnostics. The successful source and URL are shown with the preview and cached alongside the image. Capture is manual and can be repeated to refresh it.
+Capture opens a fresh, unsigned-in Chromium page at 1440 × 900. It waits for visible content, fonts, images, and layout changes to settle, then retries nearly uniform images instead of caching a blank white preview.
+
+If every eligible page fails, capture looks for an **Open Graph image**, then a **logo**, then a **favicon**. It checks website metadata and, in Automatic or Local mode, common image files in the repository. Project URL mode uses website assets only. Missing, corrupt, or unsupported images are skipped. Asset previews are converted to PNG and cached just like screenshots, so they work offline and survive helper restarts. Logos and icons are centered without stretching, and the project details identify the image kind and source webpage or repository path. This fallback also runs during **Capture previews** batches. If no usable image is found, the previous preview stays in place and the error includes available capture diagnostics. Capture can be repeated to refresh the preview.
 
 A local capture starts the project's server if needed and stops it afterward only if capture started it. An already running server stays running. Starting a server or capturing locally runs the project's actual script with your local user permissions; use these actions for projects you trust. Changing or forgetting a workspace stops its running servers before disconnecting. The helper also terminates the servers it owns when it shuts down normally; closing the app tab alone does not stop them.
 

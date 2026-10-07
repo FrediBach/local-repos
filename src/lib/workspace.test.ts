@@ -39,6 +39,13 @@ describe('captured preview persistence', () => {
     expect(preservePreviews(next, previous).projects[0].screenshot).toBe(cachedPng)
   })
 
+  it('retains the asset kind and repository provenance with a cached image after resync', () => {
+    const preview: NonNullable<RepoProject['preview']> = { kind: 'favicon', source: 'repository', assetPath: 'public/favicon.ico', capturedAt: '2026-10-07T10:00:00.000Z' }
+    const previous = workspace([{ ...project('one', cachedPng), preview }])
+    const rescanned = workspace([project('one')])
+    expect(preservePreviews(rescanned, previous).projects[0]).toMatchObject({ screenshot: cachedPng, preview })
+  })
+
   it('never assigns a removed project’s preview to another project', () => {
     const previous = workspace([project('old-id', cachedPng)])
     const next = workspace([{ ...project('new-id'), name: previous.projects[0].name }])

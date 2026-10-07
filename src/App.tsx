@@ -171,7 +171,11 @@ export default function App() {
       if (name === 'screenshot' && result.screenshot) result.screenshot = await cachePreview(result.screenshot)
       if (version !== workspaceVersion.current) return
       const cached = name === 'open' || await persist({ ...workspace, projects: workspace.projects.map(p => p.id === project.id ? { ...p, ...result } : p) })
-      if (name === 'screenshot' && cached) setNotice({ text: `Preview captured for ${project.name}${result.preview?.source && result.preview.source !== 'local' ? ' from its project website' : ''}.` })
+      if (name === 'screenshot' && cached) {
+        const kind = result.preview?.kind
+        const asset = kind === 'og-image' ? 'Open Graph image' : kind === 'logo' ? 'Logo' : kind === 'favicon' ? 'Favicon' : 'Preview'
+        setNotice({ text: `${asset} captured for ${project.name}${result.preview?.source === 'repository' ? ' from its repository' : result.preview?.source && result.preview.source !== 'local' ? ' from its project website' : ''}.` })
+      }
       if (name === 'open') setNotice({ text: 'Open request sent to your computer.' })
     } catch (error) { setNotice({ text: error instanceof Error ? error.message : 'The action could not be completed.', error: true }) }
     finally { setBusy('') }
