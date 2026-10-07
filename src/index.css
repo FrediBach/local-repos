@@ -197,3 +197,35 @@ h1 { font-size: clamp(25px, 2.55vw, 39px); letter-spacing: -1.5px; line-height: 
 .preview-source-link > span:not(.status-dot) { color: #91a27b; overflow-wrap: anywhere; min-width: 0; }
 .captured-source { padding: 9px 11px; background: #f0f5e9; border: 1px solid #dfe8d2; border-radius: 5px; }
 @media (max-width: 480px) { .preview-source-controls > .button { margin-left: 0; } }
+
+.page-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 24px; flex-shrink: 0; }
+.capture-progress-panel { margin-top: 19px; padding: 16px 18px; background: #f0f3e9; border: 1px solid #dbe2cf; border-radius: 6px; }
+.capture-progress-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; }
+.capture-progress-title { display: flex; align-items: flex-start; gap: 10px; color: #677e4f; min-width: 0; }
+.capture-progress-title > svg { margin-top: 1px; }
+.capture-progress-title strong { display: block; font-size: 12px; font-weight: 500; color: #4d613a; }
+.capture-progress-title p { margin: 6px 0 0; font-size: 11px; color: #59694b; line-height: 1.6; overflow-wrap: anywhere; }
+.capture-progress-title p b { font-weight: 500; color: #617b44; }
+.capture-progress-header .button { margin-top: -5px; color: #59694b; }
+.capture-progress-dismiss { display: flex; padding: 0; color: #59694b; }
+.capture-progress-track { height: 4px; border-radius: 3px; overflow: hidden; background: #dde5d0; margin-top: 15px; }
+.capture-progress-track > span { display: block; height: 100%; background: #879c6b; border-radius: inherit; transition: width .2s ease-out; }
+.capture-progress-counts { display: flex; align-items: center; gap: 14px; margin-top: 10px; color: #59694b; font-size: 10px; font-variant-numeric: tabular-nums; }
+.capture-progress-counts > span:first-child { margin-right: auto; }
+.capture-progress-counts .capture-failure-count { color: #805431; }
+.capture-cache-warning { font-size: 10px; line-height: 1.6; color: #805431; margin: 12px 0 0; }
+.capture-failures { border-top: 1px solid #dce5d0; margin-top: 13px; padding-top: 12px; color: #805431; font-size: 10px; line-height: 1.7; }
+.capture-failures summary { cursor: pointer; }
+.capture-failures ul { list-style: none; margin: 12px 0; padding: 0; max-height: 180px; overflow-y: auto; }
+.capture-failures li { display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; overflow-wrap: anywhere; }
+.capture-failures li strong { font-weight: 500; }
+.capture-failures li span { color: #606954; }
+.capture-failures p { margin: 0; color: #606954; }
+.preview-button { position: relative; }
+.project-card.is-capturing { border-color: #99ad7e; box-shadow: 0 0 0 2px #a7ba8e18; }
+.project-capture-badge { position: absolute; display: flex; align-items: center; gap: 6px; bottom: 10px; left: 10px; max-width: calc(100% - 20px); border: 1px solid #d8e3c9; border-radius: 4px; background: #fbfdf5f0; color: #607a44; padding: 6px 8px; font-size: 9px; box-shadow: 0 2px 8px #31441a0d; }
+.project-capture-badge > svg { flex-shrink: 0; }
+.project-capture-badge > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1280px) { .page-heading { flex-wrap: wrap; } .page-heading-actions { margin-top: 0; } }
+@media (max-width: 850px) { .page-heading-actions { justify-content: flex-start; flex-wrap: wrap; gap: 8px; } .page-heading-actions .button { font-size: 11px; padding: 10px 12px; } }
+@media (max-width: 480px) { .capture-progress-panel { padding: 14px; } .capture-progress-header { gap: 6px; } .capture-progress-header .button { font-size: 9px; padding: 6px; } .capture-progress-counts { gap: 8px; font-size: 9px; } }

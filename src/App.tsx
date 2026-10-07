@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Play, Plus, RefreshCw, Search, ShieldCheck, Star, Terminal, Unplug, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Monitor, Play, Plus, RefreshCw, Search, ShieldCheck, Star, Terminal, Unplug, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ProjectPreview } from '@/components/project-preview'
 import { ProjectControls } from '@/components/project-controls'
+import { PreviewBatchProgress } from '@/components/preview-batch-progress'
+import { usePreviewBatch } from '@/hooks/use-preview-batch'
 import { api, originUrl, projectAction, scanWithHelper } from '@/lib/api'
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
@@ -52,6 +54,7 @@ export default function App() {
   const searchRef = useRef<HTMLInputElement>(null)
   const workspaceVersion = useRef(0)
   const favoritesVersion = useRef(0)
+  const previewBatch = usePreviewBatch()
   const projects = workspace?.projects ?? demoProjects
   const selected = projects.find(p => p.id === selectedId)
   const isDemo = !workspace
@@ -103,9 +106,9 @@ export default function App() {
     return () => { active = false; clearInterval(timer) }
   }, [workspace?.mode, workspace?.projects, running, busy])
 
-  async function persist(next: Workspace) {
+  async function persist(next: Workspace, reportError = true) {
     setWorkspace(next)
-    try { await saveWorkspace(next); return true } catch { setNotice({ text: 'Projects loaded, but browser storage could not save this workspace.', error: true }); return false }
+    try { await saveWorkspace(next); return true } catch { if (reportError) setNotice({ text: 'Projects loaded, but browser storage could not save this workspace.', error: true }); return false }
   }
 
   function navigate(next: Filter, nextStack: string | null = null) { setFilter(next); setStack(nextStack); setQuery('') }
@@ -117,6 +120,7 @@ export default function App() {
     void saveFavorites(next).catch(() => setNotice({ text: 'Could not save favorites in this browser.', error: true }))
   }
   async function connect(mode: 'browser' | 'helper') {
+    if (busy || previewBatch.isActive()) return
     const version = ++workspaceVersion.current
     setBusy('connect'); setConnectError('')
     try {
@@ -132,12 +136,13 @@ export default function App() {
       if (version !== workspaceVersion.current) return
       if (workspace?.mode === 'helper' && (next.mode !== 'helper' || next.rootPath !== workspace.rootPath)) await stopWorkspaceServers(workspace)
       next = preservePreviews(next, workspace)
-      const cached = await persist(next); navigate('all'); setConnectOpen(false)
+      const cached = await persist(next); previewBatch.dismiss(); navigate('all'); setConnectOpen(false)
       if (cached) setNotice({ text: `Connected ${next.rootName}. Found ${next.projects.length} project${next.projects.length === 1 ? '' : 's'}.${next.warnings?.length ? ` ${next.warnings.length} scan note(s) — see workspace info.` : ''}` })
     } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setConnectError(error instanceof Error ? error.message : 'Unable to connect to this directory.') }
     finally { setBusy('') }
   }
   async function resync() {
+    if (busy || previewBatch.isActive()) return
     if (!workspace) { setConnectOpen(true); return }
     const version = ++workspaceVersion.current
     setBusy('sync')
@@ -156,6 +161,7 @@ export default function App() {
     finally { setBusy('') }
   }
   async function action(project: RepoProject, name: string, body: unknown = {}) {
+    if (busy || previewBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     const version = ++workspaceVersion.current
     setBusy(`${project.id}:${name}`)
@@ -171,10 +177,10 @@ export default function App() {
     finally { setBusy('') }
   }
   async function forgetWorkspace() {
-    if (busy) return
+    if (busy || previewBatch.isActive()) return
     ++workspaceVersion.current
     setBusy('disconnect')
-    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); setWorkspace(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
+    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); setWorkspace(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
     catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Could not disconnect the workspace.', error: true }) }
     finally { setBusy('') }
   }
@@ -182,6 +188,30 @@ export default function App() {
   async function stopWorkspaceServers(current: Workspace) {
     if (current.mode !== 'helper') return
     await Promise.all(current.projects.filter(project => project.dev?.status === 'running' || project.dev?.status === 'starting').map(project => projectAction(project.id, 'stop')))
+  }
+
+  async function captureAllPreviews() {
+    if (busy || previewBatch.isActive()) return
+    if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
+    if (!workspace.projects.length) return
+    const version = ++workspaceVersion.current
+    let nextWorkspace = workspace
+    setBusy('batch-capture')
+    setNotice(undefined)
+    try {
+      await previewBatch.run(workspace.projects, async (project, isCurrent) => {
+        const result = await projectAction<Partial<RepoProject>>(project.id, 'screenshot', { source: 'auto' })
+        if (!isCurrent() || version !== workspaceVersion.current) return
+        if (!result.screenshot) throw new Error('The helper did not return a preview image.')
+        result.screenshot = await cachePreview(result.screenshot)
+        if (!isCurrent() || version !== workspaceVersion.current) return
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, ...result } : current) }
+        const cached = await persist(nextWorkspace, false)
+        return { cacheWarning: !cached }
+      })
+    } finally {
+      if (version === workspaceVersion.current) setBusy('')
+    }
   }
 
   const pageName = stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : 'All projects')
@@ -197,7 +227,7 @@ export default function App() {
       <div className="sidebar-divider" />
       <div className="sidebar-section-label technology-label">TECHNOLOGIES <span>{stacks.length.toString().padStart(2, '0')}</span></div>
       <nav className="stack-nav" aria-label="Filter by technology">{stacks.map(tech => <button key={tech} className={stack === tech ? 'active' : ''} onClick={() => navigate('all', stack === tech ? null : tech)}><span className={`tech-dot tech-${tech.toLowerCase().replace(/[^a-z]/g, '')}`} /><span>{tech}</span><span className="tech-count">{projects.filter(p => p.stack.includes(tech)).length}</span></button>)}</nav>
-      <div className="sidebar-bottom"><div className="directory-card"><div className="directory-icon"><FolderOpen size={17} /><span className={isDemo ? 'status-dot neutral' : 'status-dot'} /></div><div><strong>{workspace?.rootName ?? 'Demo workspace'}</strong><span>{isDemo ? 'A look at what’s possible' : workspace.mode === 'helper' ? 'Local helper workspace' : 'Browser folder access'}</span></div><button aria-label="Change directory" onClick={() => setConnectOpen(true)}><ChevronDown size={15} /></button></div>
+      <div className="sidebar-bottom"><div className="directory-card"><div className="directory-icon"><FolderOpen size={17} /><span className={isDemo ? 'status-dot neutral' : 'status-dot'} /></div><div><strong>{workspace?.rootName ?? 'Demo workspace'}</strong><span>{isDemo ? 'A look at what’s possible' : workspace.mode === 'helper' ? 'Local helper workspace' : 'Browser folder access'}</span></div><button aria-label="Change directory" disabled={!!busy} onClick={() => setConnectOpen(true)}><ChevronDown size={15} /></button></div>
         <button className="sidebar-help" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /><span>How it works</span><ArrowUpRight size={13} /></button>
         {installPrompt && <button className="sidebar-help" onClick={async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) }}><Download size={15} /><span>Install Local Repos</span></button>}
         <div className="sidebar-footnote"><span className="status-dot" /> Yours. Locally. <span>v0.1</span></div>
@@ -207,15 +237,17 @@ export default function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><span>{pageName}</span></div><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} />{online ? 'All local. All yours.' : 'Offline · cached workspace'}<button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button></div></header>
       <div className="page-content">
-        <section className="page-heading"><div><div className="eyebrow"><span className="orange-square" /> YOUR WORK, IN ONE PLACE</div><h1>{filter === 'favorites' ? 'The ones you come back to.' : filter === 'running' ? 'A little work in progress.' : stack ? `Made with ${stack}.` : 'A place for your projects.'}</h1><p>{filter === 'favorites' ? 'Keep your go-to projects close at hand.' : filter === 'running' ? 'Your active development servers, at a glance.' : 'Less looking. More making. Pick up where you left off.'}</p></div><Button onClick={() => { setConnectError(''); setConnectOpen(true) }}><Plus size={16} />{workspace ? 'Change directory' : 'Connect directory'}</Button></section>
+        <section className="page-heading"><div><div className="eyebrow"><span className="orange-square" /> YOUR WORK, IN ONE PLACE</div><h1>{filter === 'favorites' ? 'The ones you come back to.' : filter === 'running' ? 'A little work in progress.' : stack ? `Made with ${stack}.` : 'A place for your projects.'}</h1><p>{filter === 'favorites' ? 'Keep your go-to projects close at hand.' : filter === 'running' ? 'Your active development servers, at a glance.' : 'Less looking. More making. Pick up where you left off.'}</p></div><div className="page-heading-actions"><Button variant="outline" disabled={!!busy || !workspace || !projects.length} onClick={captureAllPreviews} title={workspace?.mode === 'browser' ? 'Connect the local helper to capture previews' : `Capture previews for all ${projects.length} projects`}>{busy === 'batch-capture' ? <LoaderCircle size={16} className="spinning" /> : <Monitor size={16} />}Capture previews</Button><Button disabled={!!busy} onClick={() => { setConnectError(''); setConnectOpen(true) }}><Plus size={16} />{workspace ? 'Change directory' : 'Connect directory'}</Button></div></section>
 
         <div className="workspace-strip"><div><Folder size={15} /><span className="workspace-path">{workspace?.rootPath ?? (workspace ? workspace.rootName : '~/projects / demo workspace')}</span><span className="small-divider" /><span>{projects.length} projects</span>{isDemo && <span className="sample-badge">SAMPLE</span>}</div><button onClick={resync} disabled={!!busy} className="sync-button"><RefreshCw size={13} className={busy === 'sync' ? 'spinning' : ''} /><span>{workspace ? `Synced ${relativeTime(workspace.syncedAt).toLowerCase()}` : 'Connect your own'}</span>{!workspace && <ArrowRight size={13} />}</button></div>
+
+        {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
 
         <div className="toolbar"><div className="search-box"><Search size={17} /><input ref={searchRef} value={query} onChange={event => setQuery(event.target.value)} placeholder="Find a project…" aria-label="Search projects" />{query ? <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button> : <kbd>⌘ K</kbd>}</div><div className="toolbar-right"><label className="sort-control"><ArrowDownWideNarrow size={15} /><select value={sort} onChange={event => setSort(event.target.value)} aria-label="Sort projects"><option value="updated">Last updated</option><option value="name">Name A–Z</option><option value="stack">Technology</option></select><ChevronDown size={12} /></label><div className="view-toggle"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={17} /></button></div></div></div>
         {(stack || query) && <div className="filter-summary"><span>{filtered.length} {filtered.length === 1 ? 'project' : 'projects'} found{stack ? ` in ${stack}` : ''}</span><button onClick={() => { setStack(null); setQuery('') }}>Clear filters <X size={12} /></button></div>}
 
-        {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <article className="project-card" key={project.id} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
-          <button className="preview-button" onClick={() => openProject(project)} aria-label={`View ${project.name}`}><ProjectPreview project={project} /></button>
+        {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <article className={`project-card ${previewBatch.progress?.current?.id === project.id ? 'is-capturing' : ''}`} key={project.id} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
+          <button className="preview-button" onClick={() => openProject(project)} aria-label={`View ${project.name}`}><ProjectPreview project={project} />{previewBatch.progress?.current?.id === project.id && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
           <div className="project-info"><div className="project-title-row"><button className="project-title" onClick={() => openProject(project)}>{project.name}</button><button className={`favorite-button ${favorites.includes(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favorites.includes(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorites.includes(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><div className="project-tags">{project.stack.slice(0, 3).map(tech => <button key={tech} onClick={() => navigate('all', tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div></div>
           <div className="project-footer"><span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><DropdownMenu><DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => openProject(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem><DropdownMenuItem onSelect={() => toggleFavorite(project.id)}><Star size={14} />{favorites.includes(project.id) ? 'Remove favorite' : 'Add to favorites'}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'vscode' })}><Code2 size={14} />Open in VS Code</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'sourcetree' })}><GitBranch size={14} />Open in Sourcetree</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'folder' })}><FolderOpen size={14} />Show in folder</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
         </article>)}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{query || stack ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{query || stack ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}

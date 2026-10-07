@@ -45,6 +45,8 @@ Only one workspace is displayed at a time. Metadata, captured previews, favorite
 
 Connect through the helper, open a project, and select **Start server** or **Capture preview**. Scanning never starts project scripts automatically.
 
+Use **Capture previews**, beside **Change directory**, to capture every project in the workspace one at a time using the **Automatic** source. This includes projects hidden by the current filters. Progress shows the current project, completed count, successes, and failures; each successful preview updates the list and browser cache immediately. A failed capture keeps the previous image and continues to the next project. **Stop after current** finishes the active capture and its server cleanup before stopping the queue. Keep the app open while capturing; closing or reloading it discards the remaining queue.
+
 Local startup uses the first available `dev`, `start`, or `serve` script in `package.json`. Projects need their dependencies already installed and their package manager available on the helper's `PATH`. npm, pnpm, Yarn, and Bun are detected from package metadata and lockfiles. Local Repos does not install project dependencies.
 
 Common Vite/SvelteKit, Next.js, Astro, Nuxt, Angular, Vue CLI, webpack, Parcel, and Create React App commands are recognized. Existing host and port settings are respected; supported commands receive a local hostname and free port when needed. Custom scripts can use the `PORT` environment variable or print a local HTTP(S) URL in their logs. The helper follows these announced URLs, including paths, instead of assuming every server runs on the assigned port. Use **Logs** to inspect startup failures.
@@ -113,7 +115,7 @@ The helper binds only to loopback, checks the request host and origin, rejects c
 - Captures use a fresh browser session without authentication. Apps requiring login or interactive setup cannot be previewed automatically. Local startup has a 45-second readiness limit; each page capture has a 25-second rendering limit. A configured project URL can bypass local startup or select a custom route.
 - GitHub website discovery supports public repositories on `github.com`. Other Git hosts need a package homepage or explicit preview URL. A deployed preview may differ from your local branch or uncommitted changes.
 - VS Code and file-browser opening depend on installed local applications. Sourcetree opening is implemented for macOS. Windows local dev-server startup and process-tree cleanup are not supported; **Project URL** capture does not require launching a local dev server and needs the helper and Chromium.
-- There is no automatic filesystem watching, background resync, bulk capture, or management of development servers launched outside Local Repos.
+- There is no automatic filesystem watching, background resync, or management of development servers launched outside Local Repos.
 
 ## Checks
 
