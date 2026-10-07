@@ -149,13 +149,13 @@ async function requireLockfile(entry: RegisteredProject): Promise<void> {
   const names = lockfiles[entry.project.packageManager]
   for (const name of names) {
     try {
-      const info = await lstat(path.join(entry.directory, name))
+      const info = await lstat(path.join(entry.workspaceDirectory ?? entry.directory, name))
       if (!info.isFile()) throw new HelperError(`Audit requires a regular ${name} file; linked lockfiles are not supported.`)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
   }
-  if (!(await Promise.all(names.map(name => hasRegularFile(entry.directory, name)))).some(Boolean)) {
+  if (!(await Promise.all(names.map(name => hasRegularFile(entry.workspaceDirectory ?? entry.directory, name)))).some(Boolean)) {
     throw new HelperError(`Audit requires ${names.join(' or ')} in this project. ${entry.project.packageManager === 'bun' ? 'Binary bun.lockb files are not supported by this audit action.' : 'Create the lockfile with your package manager first.'}`)
   }
 }
@@ -175,7 +175,7 @@ export async function auditProject(entry: RegisteredProject, runner: AuditRunner
     YARN_ENABLE_SCRIPTS: 'false', YARN_ENABLE_TELEMETRY: 'false',
   }
   const options: ExecFileOptionsWithStringEncoding = {
-    cwd: entry.directory, encoding: 'utf8', shell: false, timeout: 60_000, maxBuffer: 8 * 1024 * 1024, env,
+    cwd: entry.workspaceDirectory ?? entry.directory, encoding: 'utf8', shell: false, timeout: 60_000, maxBuffer: 8 * 1024 * 1024, env,
   }
   let temporary: string | undefined
   try {

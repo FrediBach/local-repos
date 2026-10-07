@@ -55,6 +55,7 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   app.post('/api/projects/:id/storage', async (request, response) => response.json({ storage: await runtime.storage(request.params.id) }))
   app.post('/api/projects/:id/delete-node-modules', async (request, response) => response.json({ storage: await runtime.deleteNodeModules(request.params.id, request.body?.confirm) }))
   app.post('/api/projects/:id/audit', async (request, response) => response.json({ audit: await runtime.audit(request.params.id) }))
+  app.post('/api/projects/:id/update-packages', async (request, response) => response.json({ packageUpdate: await runtime.updatePackages(request.params.id, request.body?.level) }))
   app.post('/api/projects/:id/outdated', async (request, response) => response.json({ outdated: await runtime.outdated(request.params.id) }))
   app.post('/api/projects/:id/screenshot', async (request, response) => {
     const source = request.body?.source ?? 'auto'

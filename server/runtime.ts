@@ -1,5 +1,5 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Browser } from 'playwright'
-import type { PackageAudit, PackageOutdated, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageUpdate, PackageAudit, PackageOutdated, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -16,6 +16,8 @@ import { getPackagePreviewTargets, resolveGithubHomepage } from './preview-sourc
 import { discoverPreviewAssets, type PreviewAssetCandidate } from './preview-assets'
 import { renderPreviewAsset } from './preview-asset-renderer'
 import { auditProject } from './package-audit'
+import { updateProject } from './package-update'
+import { parsePackageJson } from '../src/lib/metadata'
 import { outdatedProject } from './package-outdated'
 import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
 
@@ -79,6 +81,7 @@ export class ProjectRuntime {
   private readonly storageScans = new Map<string, Promise<ProjectStorage>>()
   private readonly audits = new Map<string, Promise<PackageAudit>>()
   private readonly outdatedScans = new Map<string, Promise<PackageOutdated>>()
+  private readonly updates = new Map<string, Promise<PackageUpdate>>()
   private readonly removals = new Map<string, Promise<ProjectStorage>>()
   private readonly maintenance = new Set<string>()
   private readonly logHistory = new Map<string, string>()
@@ -105,7 +108,7 @@ export class ProjectRuntime {
   private available(id: string): void {
     this.registry.lookup(id)
     if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
-    if (this.maintenance.has(id)) throw new HelperError('Dependencies are being removed. Wait until cleanup finishes before taking another action.', 409)
+    if (this.registry.related(id).some(entry => this.maintenance.has(entry.project.id))) throw new HelperError('Dependencies are being changed in this repository. Wait until maintenance finishes before taking another action.', 409)
   }
 
   async storage(id: string): Promise<ProjectStorage> {
@@ -153,14 +156,52 @@ export class ProjectRuntime {
     finally { this.outdatedScans.delete(id) }
   }
 
+  async updatePackages(id: string, level: unknown): Promise<PackageUpdate> {
+    this.available(id)
+    if (level !== 'minor' && level !== 'patch') throw new HelperError('Choose a minor or patch update.', 400)
+    const related = this.registry.related(id)
+    for (const { project } of related) {
+      const key = project.id
+      if (this.running.has(key) || this.starts.has(key) || this.captures.has(key)
+        || this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key)
+        || [...this.stoppingChildren.values()].some(child => child.id === key)) {
+        throw new HelperError('Stop dev servers and wait for previews and package scans in this repository to finish before updating dependencies.', 409)
+      }
+    }
+    this.maintenance.add(id)
+    const promise = (async () => {
+      const entry = await this.registry.get(id)
+      try {
+        const update = await updateProject(entry, level)
+        entry.project.packageUpdate = update
+        return update
+      } finally {
+        // Installs can partially succeed before failing. Never keep old scores.
+        for (const member of related) {
+          member.project.audit = undefined
+          member.project.outdated = undefined
+          member.project.storage = undefined
+          try {
+            const metadata = parsePackageJson(await readFile(path.join(member.directory, 'package.json'), 'utf8'))
+            member.project.dependencies = metadata.dependencies
+          } catch { member.project.dependencies = undefined }
+        }
+      }
+    })()
+    this.updates.set(id, promise)
+    try { return await promise }
+    finally { this.updates.delete(id); this.maintenance.delete(id) }
+  }
+
   async deleteNodeModules(id: string, confirm: unknown): Promise<ProjectStorage> {
     this.available(id)
     if (confirm !== true) throw new HelperError('Confirm removal of this project’s node_modules folder before continuing.', 400)
-    if (this.running.has(id) || this.starts.has(id) || this.captures.has(id)
-      || [...this.stoppingChildren.values()].some(child => child.id === id)) {
+    const relatedIds = this.registry.related(id).map(entry => entry.project.id)
+    if (relatedIds.some(key => this.running.has(key) || this.starts.has(key) || this.captures.has(key))
+      || [...this.stoppingChildren.values()].some(child => relatedIds.includes(child.id))) {
       throw new HelperError('Stop the project’s dev server and wait for preview capture and server shutdown to finish before removing dependencies.', 409)
     }
-    if (this.storageScans.has(id) || this.audits.has(id) || this.outdatedScans.has(id)) {
+    if (relatedIds.some(key => this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key))) {
       throw new HelperError('Wait for disk usage measurement and package scans to finish before removing dependencies.', 409)
     }
     // Reserve before any filesystem await so a simultaneous start, screenshot,
@@ -504,7 +545,7 @@ export class ProjectRuntime {
     // closed check immediately closes it, and awaiting here prevents orphaning
     // Chromium when the helper's entry point exits the process.
     await Promise.allSettled([...this.captures.values()])
-    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.removals.values()])
+    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.removals.values(), ...this.updates.values()])
     if (this.screenshotDirectory) await rm(await this.screenshotDirectory, { recursive: true, force: true }).catch(() => undefined)
   }
 }

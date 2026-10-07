@@ -16,7 +16,7 @@ const text = (value: unknown): string | undefined => typeof value === 'string' &
 const kinds: ProjectDependency['kind'][] = ['peerDependencies', 'devDependencies', 'dependencies', 'optionalDependencies']
 const packageName = /^(?:@[a-zA-Z0-9._~-]+\/)?[a-zA-Z0-9_~][a-zA-Z0-9._~-]*$/
 
-const runOutdatedCommand: OutdatedRunner = (command, args, options) => new Promise((resolve, reject) => {
+export const runOutdatedCommand: OutdatedRunner = (command, args, options) => new Promise((resolve, reject) => {
   execFile(command, args, options, (error, stdout, stderr) => {
     if (error && (typeof error.code !== 'number' || error.killed || error.signal)) { reject(error); return }
     resolve({ stdout, stderr, exitCode: error?.code as number | undefined ?? 0 })
@@ -31,7 +31,7 @@ function json(value: string): unknown {
   try { return JSON.parse(value) } catch { unsupportedReport() }
 }
 
-async function projectDependencies(entry: RegisteredProject): Promise<Map<string, ProjectDependency>> {
+export async function projectDependencies(entry: RegisteredProject): Promise<Map<string, ProjectDependency>> {
   let manifest: unknown
   try {
     const filename = path.join(entry.directory, 'package.json')
@@ -57,7 +57,7 @@ async function requireLockfile(entry: RegisteredProject): Promise<void> {
   let found = false
   for (const name of names[entry.project.packageManager]) {
     try {
-      if (!(await lstat(path.join(entry.directory, name))).isFile()) throw new HelperError(`Outdated scanning requires a regular ${name} file; linked lockfiles are not supported.`)
+      if (!(await lstat(path.join(entry.workspaceDirectory ?? entry.directory, name))).isFile()) throw new HelperError(`Outdated scanning requires a regular ${name} file; linked lockfiles are not supported.`)
       found = true
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
   }
@@ -149,19 +149,20 @@ async function modernYarnRows(names: string[], runner: OutdatedRunner, options: 
   return { rows, missing: names.filter(name => !current.has(name)) }
 }
 
-async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: NonNullable<PackageOutdated['skipped']>, runner: OutdatedRunner, options: ExecFileOptionsWithStringEncoding): Promise<void> {
+async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: NonNullable<PackageOutdated['skipped']>, runner: OutdatedRunner, options: ExecFileOptionsWithStringEncoding, entry: RegisteredProject): Promise<void> {
   // npm silently omits 404s, unmatched ranges and missing dev/optional packages.
   // An empty outdated object therefore isn't proof that every dependency is current.
   const locked = new Map<string, string>()
   for (const filename of ['npm-shrinkwrap.json', 'package-lock.json']) {
     try {
-      const lockPath = path.join(String(options.cwd), filename)
+      const lockPath = path.join(entry.workspaceDirectory ?? entry.directory, filename)
       const info = await lstat(lockPath)
       if (!info.isFile() || info.size > 8 * 1024 * 1024) throw new HelperError('Outdated scanning requires an npm lockfile smaller than 8 MB.', 502)
       const lock: unknown = JSON.parse(await readFile(lockPath, 'utf8'))
       if (!object(lock)) unsupportedReport()
       for (const name of names) {
-        const metadata = object(lock.packages) ? lock.packages[`node_modules/${name}`] : object(lock.dependencies) ? lock.dependencies[name] : undefined
+        const packagePath = entry.project.monorepo?.packagePath
+        const metadata = object(lock.packages) ? (packagePath ? lock.packages[`${packagePath}/node_modules/${name}`] : undefined) ?? lock.packages[`node_modules/${name}`] : object(lock.dependencies) ? lock.dependencies[name] : undefined
         if (object(metadata) && !metadata.link && text(metadata.version)) locked.set(name, text(metadata.version)!)
       }
       break // npm-shrinkwrap takes precedence over package-lock.
@@ -173,7 +174,7 @@ async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: 
     const results = await Promise.allSettled(omitted.slice(index, index + 4).map(async name => {
       let current: string | undefined
       try {
-        const filename = path.join(String(options.cwd), 'node_modules', name, 'package.json')
+        const filename = path.join(entry.directory, 'node_modules', name, 'package.json')
         const info = await lstat(filename)
         if (info.isFile() && info.size <= 256 * 1024) {
           const metadata: unknown = JSON.parse(await readFile(filename, 'utf8'))
@@ -261,7 +262,8 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
         yarn: ['outdated', '--json', '--non-interactive', '--ignore-scripts', '--production=false', '--cache-folder', path.join(temporary, 'yarn-cache'), ...names],
         bun: ['outdated', '--no-save', '--ignore-scripts', '--no-progress', '--cache-dir', path.join(temporary, 'bun-cache'), ...names],
       }
-      const output = await runner(manager, args[manager], options)
+      if (manager === 'npm' && entry.workspaceDirectory) args.npm.push('--workspace', entry.project.monorepo!.packagePath)
+      const output = await runner(manager, args[manager], manager === 'npm' && entry.workspaceDirectory ? { ...options, cwd: entry.workspaceDirectory } : options)
       verifyOutput(output, manager !== 'bun')
       rows = manager === 'yarn' ? parseYarnRows(output.stdout) : manager === 'bun' ? parseBunRows(output.stdout, output.stderr) : parseJsonRows(output.stdout)
       if (output.exitCode === 1 && !rows.length) unsupportedReport()
@@ -269,11 +271,11 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
     if (manager === 'npm') {
       // --workspaces=false incorrectly filters the root out in some npm versions.
       // Keep only root entries from --long output instead of using that selector.
-      rows = rows.filter(row => row.dependentLocation === undefined || row.dependentLocation === '' || row.dependentLocation === '.')
-      await verifyNpmOmissions(names, rows, skipped, runner, options)
+      rows = rows.filter(row => row.dependentLocation === undefined || (entry.workspaceDirectory ? row.dependentLocation === entry.project.monorepo?.packagePath : row.dependentLocation === '' || row.dependentLocation === '.'))
+      await verifyNpmOmissions(names, rows, skipped, runner, options, entry)
     }
     // Classic Yarn includes child workspace reports even without recursion.
-    if (manager === 'yarn' && !modernYarn) rows = rows.filter(row => row.dependentLocation === undefined || row.dependentLocation === '')
+    if (manager === 'yarn' && !modernYarn) rows = rows.filter(row => row.dependentLocation === undefined || row.dependentLocation === '' || (entry.workspaceDirectory && row.dependentLocation === entry.project.name))
     const findings = new Map<string, OutdatedFinding>()
     for (const row of rows) {
       if (!names.includes(row.name)) continue

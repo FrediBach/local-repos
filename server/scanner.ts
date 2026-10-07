@@ -4,6 +4,7 @@ import { open, readdir, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { extractReadmeIntro, normalizeGitOrigin, parsePackageJson } from '../src/lib/metadata'
+import { matchesWorkspace, workspacePatterns } from '../src/lib/monorepo'
 import type { RepoProject, ScanResult } from '../src/types'
 
 const execFileAsync = promisify(execFile)
@@ -20,6 +21,7 @@ export interface RegisteredProject {
   project: RepoProject
   directory: string
   root: string
+  workspaceDirectory?: string
 }
 
 export class HelperError extends Error {
@@ -153,25 +155,38 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
   let inspectedFolders = 0
   let scheduledFolders = 1
   let truncated = false
-  const queue = [{ directory: root, entries, depth: 0 }]
+  type WorkspaceContext = { entry: RegisteredProject; patterns: string[]; depth: number }
+  const queue: { directory: string; entries: typeof entries; depth: number; workspace?: WorkspaceContext }[] = [{ directory: root, entries, depth: 0 }]
   while (queue.length && registered.length < MAX_PROJECTS && inspectedFolders < 500) {
     // Process small batches so large collections do not create hundreds of git
-    // subprocesses simultaneously. Stop descending when a repository is found.
+    // subprocesses simultaneously. Descend through declared workspaces only.
     const batch = queue.splice(0, Math.min(8, 500 - inspectedFolders))
     inspectedFolders += batch.length
-    const inspected = await Promise.all(batch.map(async ({ directory, entries: currentEntries, depth }) => {
+    const inspected = await Promise.all(batch.map(async ({ directory, entries: currentEntries, depth, workspace }) => {
       const names = currentEntries.map((entry) => entry.name)
-      if (looksLikeProject(names)) {
+      let project: RegisteredProject | undefined
+      const memberPath = workspace ? path.relative(workspace.entry.directory, directory).split(path.sep).join('/') : ''
+      if (workspace ? names.includes('package.json') && matchesWorkspace(memberPath, workspace.patterns) : looksLikeProject(names)) {
         try {
-          return await inspectProject(directory, root, names, warnings)
+          project = await inspectProject(directory, root, names, warnings)
+          if (workspace) {
+            project.workspaceDirectory = workspace.entry.directory
+            project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath }
+            project.project.packageManager = workspace.entry.project.packageManager
+            project.project.git ??= workspace.entry.project.git
+          }
+          const patterns = workspacePatterns(await readBounded(directory, 'package.json'), await readBounded(directory, 'pnpm-workspace.yaml'))
+          if (!patterns.length) return project
+          workspace = { entry: project, patterns, depth }
         } catch {
           warnings.push(`${path.relative(root, directory)}: this folder could not be read.`)
-          return undefined
+          return project
         }
       }
-      if (depth >= 2) return undefined
+      if (workspace ? depth - workspace.depth >= 8 : depth >= 2) return project
       const candidates = currentEntries.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name))
       for (const child of candidates) {
+        if (workspace && !matchesWorkspace(path.relative(workspace.entry.directory, path.join(directory, child.name)).split(path.sep).join('/'), workspace.patterns, true)) continue
         // Reserve before awaiting filesystem access so concurrent groups cannot
         // all claim the same remaining budget or silently drop overflow.
         if (scheduledFolders >= 500) {
@@ -182,17 +197,21 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
         try {
           const childDirectory = await realpath(path.join(directory, child.name))
           if (!isWithin(root, childDirectory)) continue
-          queue.push({ directory: childDirectory, entries: await readdir(childDirectory, { withFileTypes: true }), depth: depth + 1 })
+          queue.push({ directory: childDirectory, entries: await readdir(childDirectory, { withFileTypes: true }), depth: depth + 1, workspace })
         } catch {
           warnings.push(`${child.name}: this folder could not be read.`)
         }
       }
-      return undefined
+      return project
     }))
     for (const project of inspected) if (project && registered.length < MAX_PROJECTS) registered.push(project)
   }
   if (truncated || queue.length || registered.length >= MAX_PROJECTS) warnings.push(`Scan limited to 500 folders and ${MAX_PROJECTS} projects. Choose a smaller collection to see the rest.`)
   registered.sort((a, b) => a.project.name.localeCompare(b.project.name))
+  for (const entry of registered) {
+    const count = registered.filter(child => child.project.monorepo?.id === entry.project.id).length
+    if (count) entry.project.workspacePackageCount = count
+  }
   return {
     result: { rootName: path.basename(root) || root, rootPath: root, projects: registered.map((entry) => entry.project), syncedAt: new Date().toISOString(), warnings },
     registered,
@@ -201,6 +220,12 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
 
 export class ProjectRegistry {
   private readonly projects = new Map<string, RegisteredProject>()
+
+  related(id: string): RegisteredProject[] {
+    const entry = this.lookup(id)
+    const directory = entry.workspaceDirectory ?? entry.directory
+    return [...this.projects.values()].filter(other => (other.workspaceDirectory ?? other.directory) === directory)
+  }
 
   register(entries: RegisteredProject[]): void {
     for (const entry of entries) {
@@ -235,6 +260,9 @@ export class ProjectRegistry {
     }
     if (current !== entry.directory || !isWithin(entry.root, current)) {
       throw new HelperError('The project path changed. Sync its folder again before taking an action.', 403)
+    }
+    if (entry.workspaceDirectory && (await realpath(entry.workspaceDirectory) !== entry.workspaceDirectory || !isWithin(entry.root, entry.workspaceDirectory))) {
+      throw new HelperError('The workspace path changed. Sync again before taking an action.', 403)
     }
     return entry
   }

@@ -8,6 +8,7 @@ import { devCommand } from './runtime'
 import type { PackageAudit, PackageOutdated, ProjectStorage, RepoProject } from '../src/types'
 import * as packageAudit from './package-audit'
 import * as packageOutdated from './package-outdated'
+import * as packageUpdate from './package-update'
 import * as projectStorage from './project-storage'
 
 let helper: ReturnType<typeof createApp>
@@ -98,6 +99,45 @@ describe('local helper API security', () => {
 })
 
 describe('project storage and package actions', () => {
+  it('validates update levels and blocks sibling maintenance until an update completes', async () => {
+    await mkdir(path.join(directory, 'apps/web'), { recursive: true })
+    await mkdir(path.join(directory, 'apps/admin'), { recursive: true })
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'studio', workspaces: ['apps/*'] }))
+    await writeFile(path.join(directory, 'apps/web/package.json'), '{"name":"web"}')
+    await writeFile(path.join(directory, 'apps/admin/package.json'), '{"name":"admin"}')
+    const scan = await (await post('/api/scan', { path: directory })).json()
+    const web = scan.projects.find((project: RepoProject) => project.name === 'web')!
+    const admin = scan.projects.find((project: RepoProject) => project.name === 'admin')!
+    expect((await post(`/api/projects/${web.id}/update-packages`, { level: 'major' })).status).toBe(400)
+    const updateResult = { level: 'patch' as const, packages: [{ name: 'alpha', from: '1.0.0', to: '1.0.1' }], updatedAt: new Date().toISOString(), skipped: [] }
+    let finish!: (result: typeof updateResult) => void
+    const update = vi.spyOn(packageUpdate, 'updateProject').mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const updating = helper.runtime.updatePackages(web.id, 'patch')
+    await vi.waitFor(() => expect(update).toHaveBeenCalledOnce())
+    await expect(helper.runtime.start(admin.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.outdated(admin.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.deleteNodeModules(admin.id, true)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.updatePackages(admin.id, 'minor')).rejects.toMatchObject({ status: 409 })
+    finish(updateResult)
+    expect(await updating).toEqual(updateResult)
+    expect(helper.registry.lookup(web.id).project.packageUpdate).toEqual(updateResult)
+    update.mockResolvedValueOnce(updateResult)
+    expect((await post(`/api/projects/${admin.id}/update-packages`, { level: 'minor' })).status).toBe(200)
+  })
+
+  it('invalidates saved reports after a failed update and releases maintenance', async () => {
+    const project = await createProject()
+    const entry = helper.registry.lookup(project.id)
+    entry.project.outdated = outdatedResult
+    entry.project.audit = auditResult
+    vi.spyOn(packageUpdate, 'updateProject').mockRejectedValueOnce(new Error('Install failed'))
+    await expect(helper.runtime.updatePackages(project.id, 'minor')).rejects.toThrow('Install failed')
+    expect(entry.project.outdated).toBeUndefined()
+    expect(entry.project.audit).toBeUndefined()
+    vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
+    expect(await helper.runtime.outdated(project.id)).toEqual(outdatedResult)
+  })
+
   const auditResult: PackageAudit = {
     manager: 'npm', scannedAt: '2026-10-07T12:00:00.000Z',
     counts: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 },
@@ -112,7 +152,7 @@ describe('project storage and package actions', () => {
   it('rejects unknown ids for every maintenance action', async () => {
     const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
     const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
-    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated']) {
+    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated', 'update-packages']) {
       expect((await post(`/api/projects/unknown/${action}`, { confirm: true })).status).toBe(404)
     }
     expect(audit).not.toHaveBeenCalled()

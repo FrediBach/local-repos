@@ -27,6 +27,35 @@ async function fixture(name: string, metadata: unknown = { name }): Promise<stri
 }
 
 describe('local directory scanning', () => {
+  it('discovers multiple workspace apps, inherits their manager and excludes nonmembers', async () => {
+    const monorepo = await fixture('studio', { name: 'studio', packageManager: 'pnpm@10.0.0' })
+    await writeFile(path.join(monorepo, 'pnpm-workspace.yaml'), 'packages:\n  - "apps/*"\n  - "packages/*"\n  - "!apps/ignored"\n')
+    await writeFile(path.join(monorepo, 'pnpm-lock.yaml'), 'lockfileVersion: 9')
+    await fixture('studio/apps/web', { name: '@studio/web', scripts: { dev: 'vite' }, dependencies: { react: '^19' } })
+    await fixture('studio/apps/admin', { name: '@studio/admin', scripts: { dev: 'next dev' } })
+    await fixture('studio/apps/ignored')
+    await fixture('studio/packages/ui', { name: '@studio/ui' })
+    await fixture('studio/examples/unlisted')
+    const { registered } = await scanDirectory(root)
+    expect(registered.map(entry => entry.project.name).sort()).toEqual(['@studio/admin', '@studio/ui', '@studio/web', 'studio'])
+    const parent = registered.find(entry => entry.project.name === 'studio')!
+    const web = registered.find(entry => entry.project.name === '@studio/web')!
+    expect(parent.project.workspacePackageCount).toBe(3)
+    expect(web).toMatchObject({ directory: await realpath(path.join(monorepo, 'apps/web')), workspaceDirectory: await realpath(monorepo), project: { packageManager: 'pnpm', monorepo: { id: parent.project.id, name: 'studio', packagePath: 'apps/web' }, scripts: { dev: 'vite' } } })
+    expect((await scanDirectory(monorepo)).result.projects).toHaveLength(4)
+    const registry = new ProjectRegistry()
+    registry.register(registered)
+    expect(registry.related(web.project.id)).toHaveLength(4)
+  })
+
+  it('supports npm/Yarn workspace declarations while rejecting outside and linked members', async () => {
+    const monorepo = await fixture('studio', { name: 'studio', workspaces: { packages: ['apps/{web,admin}', '../outside', '/outside'] } })
+    await fixture('studio/apps/web', { name: 'web' })
+    const outside = await fixture('outside', { name: 'outside' })
+    await symlink(outside, path.join(monorepo, 'apps/admin'))
+    expect((await scanDirectory(monorepo)).result.projects.map(project => project.name).sort()).toEqual(['studio', 'web'])
+  })
+
   it('reads metadata and real git history without executing project scripts', async () => {
     const directory = await fixture('hello', {
       name: '@studio/hello', version: '1.2.3', author: { name: 'Ada' },

@@ -1,3 +1,4 @@
+import { matchesWorkspace, workspacePatterns } from './monorepo'
 import type { RepoProject, ScanResult } from '../types'
 import { extractReadmeIntro, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
 
@@ -100,7 +101,8 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
   let limitWarning = false
   const warn = (message: string) => { if (warnings.length < 20 && !warnings.includes(message)) warnings.push(message) }
 
-  async function visit(directory: FileSystemDirectoryHandle, relativePath: string, depth: number): Promise<void> {
+  type WorkspaceContext = { project: RepoProject; patterns: string[]; depth: number }
+  async function visit(directory: FileSystemDirectoryHandle, relativePath: string, depth: number, workspace?: WorkspaceContext): Promise<void> {
     if (inspected >= 500 || projects.length >= 250) {
       if (!limitWarning) warn('Scan limited to 500 folders and 250 projects. Choose a smaller parent folder to see the rest.')
       limitWarning = true
@@ -117,7 +119,8 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
       return
     }
     const isProject = entries.has('.git') || entries.has('package.json') || Object.keys(markerStack).some((name) => entries.has(name))
-    if (isProject) {
+    const memberPath = workspace ? relativePath.slice(workspace.project.relativePath === '.' ? 0 : workspace.project.relativePath.length + 1) : ''
+    if (workspace ? entries.has('package.json') && matchesWorkspace(memberPath, workspace.patterns) : isProject) {
       let pkg: ReturnType<typeof parsePackageJson> | undefined
       let modifiedAt = 0
       try {
@@ -140,7 +143,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
         : entries.has('pnpm-lock.yaml') ? 'pnpm'
           : entries.has('yarn.lock') ? 'yarn' : pkg?.packageManager ?? 'npm'
       const git = await readGit(directory, entries, (message) => warn(`${relativePath}: ${message}`))
-      projects.push({
+      const project: RepoProject = {
         id: `browser:${handle.name}/${relativePath}`,
         name: pkg?.name ?? directory.name,
         dirName: directory.name,
@@ -155,20 +158,33 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
         stack,
         scripts: pkg?.scripts ?? {},
         dependencies: pkg?.dependencies ?? [],
-        packageManager,
-        git,
+        packageManager: workspace?.project.packageManager ?? packageManager,
+        git: git ?? workspace?.project.git,
+        ...(workspace ? { monorepo: { id: workspace.project.id, name: workspace.project.name, relativePath: workspace.project.relativePath, packagePath: memberPath } } : {}),
         updatedAt: git?.committedAt ?? (modifiedAt ? new Date(modifiedAt).toISOString() : undefined),
         scannedAt: syncedAt,
-      })
-      return
+      }
+      projects.push(project)
+      try {
+        const patterns = workspacePatterns((await readFile(directory, 'package.json'))?.text, (await readFile(directory, 'pnpm-workspace.yaml'))?.text)
+        if (!patterns.length) return
+        workspace = { project, patterns, depth }
+      } catch { warn(`${relativePath}: workspace declarations could not be read.`); return }
     }
-    if (depth >= 2) return
+    if (workspace ? depth - workspace.depth >= 8 : depth >= 2) return
     const children = [...entries.values()].filter((entry) => entry.kind === 'directory' && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name)).sort((a, b) => a.name.localeCompare(b.name))
     for (const child of children) {
-      await visit(child as FileSystemDirectoryHandle, relativePath === '.' ? child.name : `${relativePath}/${child.name}`, depth + 1)
+      const childPath = relativePath === '.' ? child.name : `${relativePath}/${child.name}`
+      const workspacePath = workspace ? childPath.slice(workspace.project.relativePath === '.' ? 0 : workspace.project.relativePath.length + 1) : ''
+      if (workspace && !matchesWorkspace(workspacePath, workspace.patterns, true)) continue
+      await visit(child as FileSystemDirectoryHandle, childPath, depth + 1, workspace)
     }
   }
 
   await visit(handle, '.', 0)
+  for (const project of projects) {
+    const count = projects.filter(child => child.monorepo?.id === project.id).length
+    if (count) project.workspacePackageCount = count
+  }
   return { rootName: handle.name, projects: projects.sort((a, b) => a.name.localeCompare(b.name)), syncedAt, warnings: warnings.length ? warnings : undefined }
 }

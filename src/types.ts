@@ -33,6 +33,12 @@ export interface PackageAudit {
 }
 
 export type OutdatedLevel = 'current' | 'low' | 'moderate' | 'high'
+export interface PackageUpdate {
+  level: 'minor' | 'patch'
+  updatedAt: string
+  packages: { name: string; from: string; to: string }[]
+  skipped: { name: string; reason: string }[]
+}
 export interface OutdatedFinding {
   name: string
   current: string
@@ -57,6 +63,8 @@ export interface RepoProject {
   name: string
   dirName: string
   relativePath: string
+  monorepo?: { id: string; name: string; relativePath: string; packagePath: string }
+  workspacePackageCount?: number
   description: string
   readme?: string
   version?: string
@@ -71,6 +79,7 @@ export interface RepoProject {
   storage?: ProjectStorage
   audit?: PackageAudit
   outdated?: PackageOutdated
+  packageUpdate?: PackageUpdate
   git?: {
     branch?: string
     commit?: string

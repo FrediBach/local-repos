@@ -23,6 +23,21 @@ const report: PackageOutdated = {
 const props = { project, helper: true, demo: false, busy: '', onAction: vi.fn() }
 
 describe('outdated package details', () => {
+  it('offers separate bounded update actions and disables them during maintenance', async () => {
+    const user = userEvent.setup(), onAction = vi.fn()
+    const { rerender } = render(<ProjectOutdated {...props} project={{ ...project, outdated: report }} onAction={onAction} />)
+    await user.click(screen.getByRole('button', { name: 'Update patches' }))
+    expect(onAction).toHaveBeenLastCalledWith('update-patches')
+    await user.click(screen.getByRole('button', { name: 'Update minor versions' }))
+    expect(onAction).toHaveBeenLastCalledWith('update-minor')
+    expect(screen.getByText(/Patches stay within the installed minor version/)).toBeTruthy()
+    rerender(<ProjectOutdated {...props} project={{ ...project, outdated: report }} busy="fixture:update-minor" onAction={onAction} />)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Update patches' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Update minor versions' }).disabled).toBe(true)
+    rerender(<ProjectOutdated {...props} helper={false} project={{ ...project, outdated: report }} />)
+    expect(screen.queryByRole('button', { name: 'Update patches' })).toBeNull()
+  })
+
   it('keeps unscanned state explicit and runs only the outdated action when requested', async () => {
     const onAction = vi.fn()
     const user = userEvent.setup()

@@ -77,6 +77,27 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it('runs a bounded package update and clears stale cached reports after refreshing', async () => {
+    const user = userEvent.setup()
+    const outdated = { manager: 'npm' as const, scannedAt: project.scannedAt, findings: [{ name: 'alpha', current: '1.0.0', latest: '1.0.1', change: 'patch' as const, majorGap: 0, score: 0.1 }], score: 0.1, level: 'low' as const }
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper', projects: [{ ...project, outdated }] })
+    fetchMock.mockImplementation((url: string) => {
+      if (url.endsWith('/update-packages')) return response({ packageUpdate: { level: 'patch', updatedAt: project.scannedAt, packages: [{ name: 'alpha', from: '1.0.0', to: '1.0.1' }], skipped: [] } })
+      if (url === '/api/scan') return response({ ...scan, projects: [{ ...project, dependencies: [{ name: 'alpha', version: '1.0.1', kind: 'dependencies' }] }] })
+      if (url === '/api/health') return response({ ok: true })
+      throw new Error(`Unexpected request ${url}`)
+    })
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'View my-notebook' }))
+    await user.click(screen.getByRole('button', { name: 'Packages', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Update patches' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/projects/real-project/update-packages', expect.objectContaining({ body: '{"level":"patch"}' })))
+    await waitFor(() => expect(screen.getByText('Outdated packages not scanned yet.')).toBeTruthy())
+    const saved = storage.saveWorkspace.mock.calls.at(-1)![0] as Workspace
+    expect(saved.projects[0].outdated).toBeUndefined()
+    expect(saved.projects[0].dependencies?.[0].version).toBe('1.0.1')
+  })
+
   it('labels demo data, finds a branch, and recovers from an empty search', async () => {
     const user = userEvent.setup()
     render(<App />)

@@ -35,7 +35,7 @@ export function ProjectPackages({ project, helper, demo, busy, onAction }: {
       <div className="maintenance-heading"><h3><ShieldCheck size={16} /> Vulnerabilities</h3><Button variant="outline" size="sm" disabled={!!busy || demo} onClick={() => onAction('audit')}>
         {scanning ? <LoaderCircle size={14} className="spinning" /> : <ShieldCheck size={14} />}{scanning ? 'Scanning…' : report ? 'Scan again' : 'Scan for vulnerabilities'}
       </Button></div>
-      <p className="maintenance-hint">{demo ? 'Connect a directory to audit your packages.' : helper ? `Runs ${project.packageManager} audit against the lockfile, including development dependencies. Package names and versions are sent to the configured registry. No fixes are applied.` : 'Connect with the local helper to run package audits.'}</p>
+      <p className="maintenance-hint">{demo ? 'Connect a directory to audit your packages.' : helper ? `Runs ${project.packageManager} audit against ${project.monorepo ? 'the shared workspace lockfile (all workspace packages)' : 'the lockfile'}, including development dependencies. Package names and versions are sent to the configured registry. No fixes are applied.` : 'Connect with the local helper to run package audits.'}</p>
       {report ? <>
         <p className="audit-result" role="status">{total ? `${total} reported ${total === 1 ? 'vulnerability' : 'vulnerabilities'}` : 'No known vulnerabilities reported'}<span>Last scan · {new Date(report.scannedAt).toLocaleString()} · {report.manager}</span></p>
         <div className="audit-counts">{severities.map(severity => <span key={severity} className={`severity severity-${severity}`}><b>{report.counts[severity]}</b> {severity}</span>)}</div>

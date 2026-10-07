@@ -28,6 +28,18 @@ function directory(name: string, tree: Tree): FileSystemDirectoryHandle {
 }
 
 describe('read-only folder scan', () => {
+  it.each(['npm', 'pnpm'])('discovers %s workspace apps below repository boundaries', async manager => {
+    const result = await scanDirectory(directory('Projects', { studio: {
+      'package.json': JSON.stringify({ name: 'studio', packageManager: `${manager}@10.0.0`, ...(manager === 'npm' ? { workspaces: ['apps/*', '!apps/ignored'] } : {}) }),
+      ...(manager === 'pnpm' ? { 'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - "!apps/ignored"' } : {}),
+      apps: { web: { 'package.json': '{"name":"web","scripts":{"dev":"vite"}}' }, admin: { 'package.json': '{"name":"admin","scripts":{"dev":"next dev"}}' }, ignored: { 'package.json': '{}' } },
+      examples: { 'package.json': '{}' },
+    } }))
+    expect(result.projects.map(project => project.name)).toEqual(['admin', 'studio', 'web'])
+    expect(result.projects[1].workspacePackageCount).toBe(2)
+    expect(result.projects[2]).toMatchObject({ packageManager: manager, relativePath: 'studio/apps/web', scripts: { dev: 'vite' }, monorepo: { name: 'studio', packagePath: 'apps/web' } })
+  })
+
   it('discovers projects and grouped repos, ignores dependencies and stops at project boundaries', async () => {
     const root = directory('Projects', {
       web: {
