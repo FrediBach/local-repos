@@ -1,6 +1,37 @@
 export type PreviewMode = 'auto' | 'local' | 'website'
 export type PreviewKind = 'screenshot' | 'og-image' | 'logo' | 'favicon'
 
+export interface ProjectDependency {
+  name: string
+  version: string
+  kind: 'dependencies' | 'devDependencies' | 'peerDependencies' | 'optionalDependencies'
+}
+
+export interface ProjectStorage {
+  totalBytes: number
+  nodeModulesBytes: number
+  hasNodeModules: boolean
+  measuredAt: string
+  partial: boolean
+}
+
+export type AuditSeverity = 'info' | 'low' | 'moderate' | 'high' | 'critical'
+export interface AuditFinding {
+  name: string
+  severity: AuditSeverity
+  range?: string
+  title: string
+  url?: string
+  fixAvailable?: boolean
+  direct?: boolean
+}
+export interface PackageAudit {
+  manager: RepoProject['packageManager']
+  scannedAt: string
+  counts: Record<AuditSeverity, number>
+  findings: AuditFinding[]
+}
+
 export interface RepoProject {
   id: string
   name: string
@@ -16,6 +47,9 @@ export interface RepoProject {
   stack: string[]
   scripts: Record<string, string>
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun'
+  dependencies?: ProjectDependency[]
+  storage?: ProjectStorage
+  audit?: PackageAudit
   git?: {
     branch?: string
     commit?: string

@@ -49,6 +49,10 @@ describe('local directory scanning', () => {
       name: '@studio/hello', version: '1.2.3', author: 'Ada',
       homepage: 'https://example.github.io/hello/#welcome', previewUrl: 'https://hello.example.test/demo',
       description: 'A small project for curious people.', relativePath: 'hello', packageManager: 'pnpm',
+      dependencies: [
+        { name: 'react', version: '^19', kind: 'dependencies' },
+        { name: 'vite', version: '^7', kind: 'dependencies' },
+      ],
       dev: { status: 'stopped' },
       git: { branch: 'fixture-main', message: 'Create fixture project', origin: 'https://github.com/example/hello', dirty: true },
     })
@@ -83,6 +87,7 @@ describe('local directory scanning', () => {
     const { result } = await scanDirectory(root)
     expect(result.projects.map((project) => project.relativePath)).toEqual(['group/nested', 'python-project'])
     expect(result.projects[1].stack).toContain('Python')
+    expect(result.projects[1].dependencies).toEqual([])
   })
 
   it('supports selecting one repository and survives malformed metadata', async () => {

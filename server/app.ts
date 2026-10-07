@@ -52,6 +52,9 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   app.get('/api/projects/:id/logs', async (request, response) => response.json({ logs: await runtime.logs(request.params.id) }))
   app.post('/api/projects/:id/start', async (request, response) => response.json({ dev: await runtime.start(request.params.id) }))
   app.post('/api/projects/:id/stop', async (request, response) => response.json({ dev: await runtime.stop(request.params.id) }))
+  app.post('/api/projects/:id/storage', async (request, response) => response.json({ storage: await runtime.storage(request.params.id) }))
+  app.post('/api/projects/:id/delete-node-modules', async (request, response) => response.json({ storage: await runtime.deleteNodeModules(request.params.id, request.body?.confirm) }))
+  app.post('/api/projects/:id/audit', async (request, response) => response.json({ audit: await runtime.audit(request.params.id) }))
   app.post('/api/projects/:id/screenshot', async (request, response) => {
     const source = request.body?.source ?? 'auto'
     if (source !== 'auto' && source !== 'local' && source !== 'website') throw new HelperError('Choose automatic, local, or website preview capture.')

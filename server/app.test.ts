@@ -1,11 +1,13 @@
-import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { request, type Server } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from './app'
 import { devCommand } from './runtime'
-import type { RepoProject } from '../src/types'
+import type { PackageAudit, ProjectStorage, RepoProject } from '../src/types'
+import * as packageAudit from './package-audit'
+import * as projectStorage from './project-storage'
 
 let helper: ReturnType<typeof createApp>
 let server: Server
@@ -91,6 +93,113 @@ describe('local helper API security', () => {
     expect((await response.json()).error).toContain('automatic, local, or website')
     expect(capture).not.toHaveBeenCalled()
     expect(await helper.runtime.status(project.id)).toEqual({ status: 'stopped' })
+  })
+})
+
+describe('project storage and vulnerability actions', () => {
+  const auditResult: PackageAudit = {
+    manager: 'npm', scannedAt: '2026-10-07T12:00:00.000Z',
+    counts: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 },
+    findings: [{ name: 'fixture-package', severity: 'high', title: 'Fixture advisory', range: '<2.0.0', fixAvailable: true }],
+  }
+  const storageResult: ProjectStorage = { totalBytes: 4096, nodeModulesBytes: 0, hasNodeModules: false, measuredAt: '2026-10-07T12:00:00.000Z', partial: false }
+
+  it('rejects unknown ids for every maintenance action', async () => {
+    const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
+    for (const action of ['storage', 'delete-node-modules', 'audit']) {
+      expect((await post(`/api/projects/unknown/${action}`, { confirm: true })).status).toBe(404)
+    }
+    expect(audit).not.toHaveBeenCalled()
+  })
+
+  it('requires explicit deletion confirmation and stores refreshed usage after fixture cleanup', async () => {
+    const project = await createProject()
+    const modules = path.join(directory, 'project', 'node_modules')
+    await mkdir(modules)
+    await writeFile(path.join(modules, 'fixture.js'), 'temporary dependency')
+    await writeFile(path.join(directory, 'project', 'package-lock.json'), 'fixture lockfile')
+    const usage = await post(`/api/projects/${project.id}/storage`)
+    expect(usage.status).toBe(200)
+    expect(await usage.json()).toMatchObject({ storage: { hasNodeModules: true, partial: false } })
+    for (const confirm of [undefined, false, 'true']) {
+      expect((await post(`/api/projects/${project.id}/delete-node-modules`, { confirm })).status).toBe(400)
+    }
+    expect((await lstat(modules)).isDirectory()).toBe(true)
+    const removed = await post(`/api/projects/${project.id}/delete-node-modules`, { confirm: true })
+    expect(removed.status).toBe(200)
+    const { storage } = await removed.json()
+    expect(storage).toMatchObject({ hasNodeModules: false, nodeModulesBytes: 0, partial: false })
+    expect(helper.registry.lookup(project.id).project.storage).toEqual(storage)
+    await expect(lstat(modules)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(path.join(directory, 'project', 'package-lock.json'), 'utf8')).toBe('fixture lockfile')
+  })
+
+  it('returns audit findings and stores them on the registered project', async () => {
+    const project = await createProject()
+    const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
+    const response = await post(`/api/projects/${project.id}/audit`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ audit: auditResult })
+    expect(audit).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect(helper.registry.lookup(project.id).project.audit).toEqual(auditResult)
+  })
+
+  it('blocks cleanup while the server is running or still stopping, and allows audits while running', async () => {
+    const project = await createProject({ dev: 'node dev.cjs' })
+    await writeFile(path.join(directory, 'project', 'dev.cjs'), `require('node:http').createServer((req, res) => res.end('ready')).listen(Number(process.env.PORT), process.env.HOST)`)
+    vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
+    expect((await helper.runtime.start(project.id)).status).toBe('running')
+    expect((await post(`/api/projects/${project.id}/delete-node-modules`, { confirm: true })).status).toBe(409)
+    expect((await post(`/api/projects/${project.id}/audit`)).status).toBe(200)
+    await helper.runtime.stop(project.id)
+    expect((await post(`/api/projects/${project.id}/delete-node-modules`, { confirm: true })).status).toBe(409)
+  }, 15_000)
+
+  it('reserves cleanup before awaiting filesystem access and releases the reservation on failure', async () => {
+    const project = await createProject()
+    let rejectRemoval!: (error: Error) => void
+    const remove = vi.spyOn(projectStorage, 'removeProjectNodeModules').mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectRemoval = reject }))
+    const deletion = helper.runtime.deleteNodeModules(project.id, true).catch(error => error)
+    await expect(helper.runtime.start(project.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.screenshot(project.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.audit(project.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.storage(project.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())
+    rejectRemoval(new Error('Fixture deletion failure'))
+    expect(await deletion).toMatchObject({ message: 'Fixture deletion failure' })
+    expect(await helper.runtime.storage(project.id)).toMatchObject({ hasNodeModules: false })
+  })
+
+  it('refuses cleanup during pending starts and captures before either acquires a server', async () => {
+    const project = await createProject()
+    const start = helper.runtime.start(project.id).catch(error => error)
+    await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
+    await start
+    const { chromium } = await import('playwright')
+    vi.spyOn(chromium, 'launch').mockRejectedValue(new Error('Fixture browser unavailable'))
+    const capture = helper.runtime.screenshot(project.id).catch(error => error)
+    await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
+    await capture
+    expect(await helper.runtime.deleteNodeModules(project.id, true)).toMatchObject({ hasNodeModules: false })
+  })
+
+  it('coalesces audits and disk scans and prevents deletion until both finish', async () => {
+    const project = await createProject()
+    let resolveAudit!: (audit: PackageAudit) => void
+    let resolveStorage!: (storage: ProjectStorage) => void
+    const audit = vi.spyOn(packageAudit, 'auditProject').mockImplementationOnce(() => new Promise(resolve => { resolveAudit = resolve }))
+    const measure = vi.spyOn(projectStorage, 'measureProjectStorage').mockImplementationOnce(() => new Promise(resolve => { resolveStorage = resolve }))
+    const audits = [helper.runtime.audit(project.id), helper.runtime.audit(project.id)]
+    const scans = [helper.runtime.storage(project.id), helper.runtime.storage(project.id)]
+    await vi.waitFor(() => { expect(audit).toHaveBeenCalledOnce(); expect(measure).toHaveBeenCalledOnce() })
+    await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
+    resolveAudit(auditResult)
+    expect(await Promise.all(audits)).toEqual([auditResult, auditResult])
+    await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
+    resolveStorage(storageResult)
+    expect(await Promise.all(scans)).toEqual([storageResult, storageResult])
+    expect(await helper.runtime.deleteNodeModules(project.id, true)).toMatchObject({ hasNodeModules: false })
   })
 })
 

@@ -13,6 +13,13 @@ describe('package metadata', () => {
       name: '@studio/site', version: '0.2.1', author: 'Ada Lovelace', license: 'MIT',
       description: 'A useful project', packageManager: 'pnpm',
       scripts: { dev: 'vite', build: 'vite build' },
+      dependencies: [
+        { name: 'react', version: '^19', kind: 'dependencies' },
+        { name: 'react-dom', version: '^19', kind: 'dependencies' },
+        { name: 'tailwindcss', version: '^4', kind: 'devDependencies' },
+        { name: 'typescript', version: '^5', kind: 'devDependencies' },
+        { name: 'vite', version: '^7', kind: 'devDependencies' },
+      ],
       stack: ['React', 'TypeScript', 'Vite', 'Tailwind CSS'],
     })
   })
@@ -21,8 +28,25 @@ describe('package metadata', () => {
     expect(() => parsePackageJson('{broken')).toThrow()
     expect(() => parsePackageJson('null')).toThrow()
     expect(parsePackageJson('{"name":42,"scripts":null,"dependencies":["react"]}')).toMatchObject({
-      name: undefined, scripts: {}, stack: [], packageManager: 'npm',
+      name: undefined, scripts: {}, dependencies: [], stack: [], packageManager: 'npm',
     })
+  })
+
+  it('preserves declared version specs and distinct groups, including peers and optional packages', () => {
+    const metadata = parsePackageJson(JSON.stringify({
+      dependencies: { react: 'npm:preact@^10', shared: 'workspace:*', invalid: 42, '': '^1' },
+      devDependencies: { react: '^19.0.0' },
+      peerDependencies: { react: '>=18 <20' },
+      optionalDependencies: { '@tauri-apps/api': 'file:../tauri', invalid: null },
+    }))
+    expect(metadata.dependencies).toEqual([
+      { name: 'react', version: 'npm:preact@^10', kind: 'dependencies' },
+      { name: 'shared', version: 'workspace:*', kind: 'dependencies' },
+      { name: 'react', version: '^19.0.0', kind: 'devDependencies' },
+      { name: 'react', version: '>=18 <20', kind: 'peerDependencies' },
+      { name: '@tauri-apps/api', version: 'file:../tauri', kind: 'optionalDependencies' },
+    ])
+    expect(metadata.stack).toEqual(['React', 'Tauri'])
   })
 
   it('reads app URLs while preserving their route, query and hash', () => {

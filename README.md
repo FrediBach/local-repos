@@ -1,6 +1,6 @@
 # Local Repos
 
-A local project library with README introductions, package details, technology filters, Git activity, and development previews. Built as a proof of concept with a light, restrained interface inspired by Dieter Rams.
+A local project library with README introductions, package search and audits, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a light, restrained interface inspired by Dieter Rams.
 
 ## Run locally
 
@@ -28,11 +28,11 @@ Choose **Connect directory**, then use either connection method:
 | Method | Available features | Requirements |
 | --- | --- | --- |
 | Choose a local directory | Read-only scanning, metadata, basic Git details, favorites, cached browsing | Desktop browser with `showDirectoryPicker`, such as Chrome or Edge; permission to read the selected folder |
-| Connect with the local helper | Scanning, full Git CLI metadata, dev servers, screenshots, VS Code, Sourcetree, system file browser | Running helper and an absolute directory path, such as `/Users/you/Projects` |
+| Connect with the local helper | Scanning, full Git CLI metadata, disk usage, dependency cleanup, package audits, dev servers, screenshots, VS Code, Sourcetree, system file browser | Running helper and an absolute directory path, such as `/Users/you/Projects` |
 
 The browser cannot reveal an absolute path or launch local processes. To enable local actions for a folder selected through the browser, reconnect it by entering its path in the helper form.
 
-- Search names, descriptions, technologies, folder names, and branches. Use `⌘K` or `Ctrl+K` to focus search.
+- Search names, descriptions, technologies, folder names, branches, and package names. Choose **Package name** beside search to find only projects that declare a matching dependency. Matching declared versions appear on the project cards. Use `⌘K` or `Ctrl+K` to focus search.
 - Switch between grid and list views; filter by technology, favorites, or running servers.
 - Open a project for its README, package metadata, current branch, latest commit, and origin link.
 - Use **Synced …** to rescan. Changes are not watched continuously. A saved helper connection also rescans on app startup when the helper is available.
@@ -40,6 +40,20 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 - Use **How it works → Forget this directory** to remove the saved workspace. This does not delete project files.
 
 Only one workspace is displayed at a time. Metadata, captured previews, favorites, and the browser directory handle are stored in IndexedDB for this browser and app origin. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
+
+## Packages, disk usage, and vulnerabilities
+
+Open a project’s **Packages** tab to inspect its runtime, development, peer, and optional dependencies. Package search works with either connection method and matches names case-insensitively, including scoped names. Versions are the ranges or other specifications declared in the root `package.json`, not resolved or installed versions. Resync existing workspaces to load the new dependency metadata. Nested monorepo packages and transitive dependencies are not included in package search.
+
+In **Overview → Disk usage**, select **Measure disk usage** to measure the entire project and its root `node_modules`. This requires the local helper and runs on demand; ordinary scans do not traverse dependency trees. Measurements include hidden files, Git data, and build output, use allocated disk blocks where available, count hard links once, and do not follow symlinks. Scans stop after 20 seconds, 250,000 entries, or 128 directory levels; incomplete results are explicitly shown as lower bounds. Measurements show their timestamp and also appear on project cards.
+
+After measuring, **Delete node_modules** opens a confirmation for that project. It permanently removes only the root dependency directory, keeping source files, lockfiles, and nested workspace dependency directories outside that root `node_modules`. Linked or non-directory targets are rejected. The helper refuses cleanup while it is starting, running, or stopping that project’s development server, capturing a preview, measuring storage, or auditing packages. Stop other tools using the directory before deleting. Disk usage is measured again after deletion. Reinstall dependencies with the project’s package manager before running it again; Local Repos does not install them for you.
+
+In **Packages → Scan for vulnerabilities**, the helper runs the detected package manager’s audit against the existing lockfile, including development dependencies. It supports npm, pnpm, Yarn Classic (1.16+), modern Yarn (2.4+), and Bun (1.2.15+). Bun requires a text `bun.lock`; binary-only `bun.lockb` projects receive an explanatory error. The package manager must already be installed. See the audit documentation for [npm](https://docs.npmjs.com/cli/v11/commands/npm-audit/), [pnpm](https://pnpm.io/cli/audit), [Yarn Classic](https://classic.yarnpkg.com/lang/en/docs/cli/audit/), [modern Yarn](https://yarnpkg.com/cli/npm/audit), and [Bun](https://bun.com/docs/pm/cli/audit). Audits do not install dependencies, run lifecycle scripts, or apply fixes. Modern Yarn’s temporary install-state cache is redirected outside the project and removed afterward.
+
+Audits contact the configured package registry and send dependency names and versions. Results show severity counts, affected packages, vulnerable ranges, available fix information, and advisory links where supplied. Counts follow each package manager’s reporting conventions and configured advisory exclusions. Network errors, unsupported output, missing lockfiles, and timeouts are reported as failures, never as clean scans. Audits are limited to 60 seconds per command and 8 MiB of output. Windows audits currently require Bun; npm, pnpm, and Yarn command shims are not supported by this helper’s shell-free execution.
+
+Disk measurements and successful audit results are cached with timestamps, including across helper restarts. They describe the last measurement or scan: refresh disk usage or scan again after project changes. Failed audits keep the previous successful result visible.
 
 ## Run a project and capture a preview
 
@@ -103,6 +117,7 @@ For a UI-only development session, use `npm run dev:browser`.
 - **Browser scanning:** `src/lib/filesystem.ts` reads a user-granted File System Access API directory handle. `src/lib/metadata.ts` parses package metadata and extracts the first README prose paragraph without evaluating project code.
 - **Local cache:** `src/lib/storage.ts` stores a workspace, captured preview data, and favorites with IndexedDB.
 - **Local helper:** `server/scanner.ts` reads bounded metadata files and invokes Git. `server/runtime.ts` manages dev processes, Playwright screenshots, and application opening. `server/app.ts` exposes the local API.
+- **Maintenance:** `server/project-storage.ts` measures disk usage and removes root dependencies; `server/package-audit.ts` runs and normalizes package manager audits. Runtime guards coordinate these actions with server and preview work.
 - **PWA:** `vite-plugin-pwa` generates the manifest and production service worker.
 
 The helper binds only to loopback, checks the request host and origin, rejects cross-site requests, and requires `X-Local-Repos: 1` on mutating API requests. Project actions accept registered project IDs rather than arbitrary commands. It is intended to run locally alongside the app, not as a public network service.

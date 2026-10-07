@@ -49,8 +49,10 @@ describe('read-only folder scan', () => {
       homepage: 'https://web.example.test/app/#welcome', previewUrl: 'https://preview.example.test/demo',
       description: 'A home for local projects.', stack: ['React', 'shadcn/ui'],
       packageManager: 'pnpm', scripts: { dev: 'vite' },
+      dependencies: [{ name: 'react', version: '^19', kind: 'dependencies' }],
     })
     expect(result.projects[0].stack).toEqual(['Python'])
+    expect(result.projects[0].dependencies).toEqual([])
   })
 
   it('reads packed branch refs and current commit metadata for a selected repository', async () => {

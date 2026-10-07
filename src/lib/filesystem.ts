@@ -154,6 +154,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
         previewUrl: pkg?.previewUrl,
         stack,
         scripts: pkg?.scripts ?? {},
+        dependencies: pkg?.dependencies ?? [],
         packageManager,
         git,
         updatedAt: git?.committedAt ?? (modifiedAt ? new Date(modifiedAt).toISOString() : undefined),

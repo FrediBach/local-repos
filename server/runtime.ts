@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Browser } from 'playwright'
-import type { PreviewMode, RepoProject } from '../src/types'
+import type { PackageAudit, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -15,6 +15,8 @@ import { capturePage } from './preview-renderer'
 import { getPackagePreviewTargets, resolveGithubHomepage } from './preview-sources'
 import { discoverPreviewAssets, type PreviewAssetCandidate } from './preview-assets'
 import { renderPreviewAsset } from './preview-asset-renderer'
+import { auditProject } from './package-audit'
+import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
 
 export { devCommand } from './dev-server'
 
@@ -73,12 +75,16 @@ export class ProjectRuntime {
   private readonly running = new Map<string, RunningServer>()
   private readonly starts = new Map<string, Promise<DevState>>()
   private readonly captures = new Map<string, Promise<string>>()
+  private readonly storageScans = new Map<string, Promise<ProjectStorage>>()
+  private readonly audits = new Map<string, Promise<PackageAudit>>()
+  private readonly removals = new Map<string, Promise<ProjectStorage>>()
+  private readonly maintenance = new Set<string>()
   private readonly logHistory = new Map<string, string>()
   private readonly screenshots = new Map<string, string>()
   private readonly generations = new Map<string, number>()
   private readonly keepAlive = new Set<string>()
   private readonly browsers = new Set<Browser>()
-  private readonly stoppingChildren = new Map<ChildProcess, ReturnType<typeof setTimeout>>()
+  private readonly stoppingChildren = new Map<ChildProcess, { id: string; timer: ReturnType<typeof setTimeout> }>()
   private screenshotDirectory?: Promise<string>
   private closed = false
 
@@ -94,8 +100,71 @@ export class ProjectRuntime {
     return this.running.get(id)?.logs ?? this.logHistory.get(id) ?? ''
   }
 
-  async start(id: string, persistent = true): Promise<DevState> {
+  private available(id: string): void {
+    this.registry.lookup(id)
     if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+    if (this.maintenance.has(id)) throw new HelperError('Dependencies are being removed. Wait until cleanup finishes before taking another action.', 409)
+  }
+
+  async storage(id: string): Promise<ProjectStorage> {
+    this.available(id)
+    const pending = this.storageScans.get(id)
+    if (pending) return pending
+    const promise = (async () => {
+      const entry = await this.registry.get(id)
+      const storage = await measureProjectStorage(entry.directory)
+      entry.project.storage = storage
+      return storage
+    })()
+    this.storageScans.set(id, promise)
+    try { return await promise }
+    finally { this.storageScans.delete(id) }
+  }
+
+  async audit(id: string): Promise<PackageAudit> {
+    this.available(id)
+    const pending = this.audits.get(id)
+    if (pending) return pending
+    const promise = (async () => {
+      const entry = await this.registry.get(id)
+      const audit = await auditProject(entry)
+      entry.project.audit = audit
+      return audit
+    })()
+    this.audits.set(id, promise)
+    try { return await promise }
+    finally { this.audits.delete(id) }
+  }
+
+  async deleteNodeModules(id: string, confirm: unknown): Promise<ProjectStorage> {
+    this.available(id)
+    if (confirm !== true) throw new HelperError('Confirm removal of this project’s node_modules folder before continuing.', 400)
+    if (this.running.has(id) || this.starts.has(id) || this.captures.has(id)
+      || [...this.stoppingChildren.values()].some(child => child.id === id)) {
+      throw new HelperError('Stop the project’s dev server and wait for preview capture and server shutdown to finish before removing dependencies.', 409)
+    }
+    if (this.storageScans.has(id) || this.audits.has(id)) {
+      throw new HelperError('Wait for disk usage measurement and vulnerability scanning to finish before removing dependencies.', 409)
+    }
+    // Reserve before any filesystem await so a simultaneous start, screenshot,
+    // or second cleanup cannot slip between validation and recursive removal.
+    this.maintenance.add(id)
+    const promise = (async () => {
+      const entry = await this.registry.get(id)
+      const storage = await removeProjectNodeModules(entry.directory)
+      entry.project.storage = storage
+      return storage
+    })()
+    this.removals.set(id, promise)
+    try { return await promise }
+    finally {
+      this.removals.delete(id)
+      this.maintenance.delete(id)
+    }
+  }
+
+  async start(id: string, persistent = true): Promise<DevState> {
+    this.available(id)
     if (persistent) this.keepAlive.add(id)
     const pending = this.starts.get(id)
     if (pending) return pending
@@ -191,9 +260,15 @@ export class ProjectRuntime {
       terminate(running.child)
       const timer = setTimeout(() => {
         terminate(running.child, 'SIGKILL')
-        this.stoppingChildren.delete(running.child)
+        if (!running.child.pid || running.child.exitCode !== null || running.child.signalCode !== null) {
+          this.stoppingChildren.delete(running.child)
+        } else {
+          // Sending SIGKILL is not itself confirmation of process exit. Keep
+          // dependency cleanup blocked until the child has actually stopped.
+          running.child.once('exit', () => this.stoppingChildren.delete(running.child))
+        }
       }, 2_000)
-      this.stoppingChildren.set(running.child, timer)
+      this.stoppingChildren.set(running.child, { id, timer })
       timer.unref()
     }
     entry.project.dev = { status: 'stopped' }
@@ -201,7 +276,7 @@ export class ProjectRuntime {
   }
 
   async screenshot(id: string, source: PreviewMode = 'auto'): Promise<string> {
-    if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+    this.available(id)
     const pending = this.captures.get(id)
     if (pending) return pending
     const promise = this.captureOnce(id, source)
@@ -393,7 +468,7 @@ export class ProjectRuntime {
     this.starts.clear()
     const servers = [...this.running.values()]
     const stoppedChildren = [...this.stoppingChildren.keys()]
-    for (const timer of this.stoppingChildren.values()) clearTimeout(timer)
+    for (const { timer } of this.stoppingChildren.values()) clearTimeout(timer)
     this.stoppingChildren.clear()
     for (const running of servers) {
       running.stopping = true
@@ -412,6 +487,7 @@ export class ProjectRuntime {
     // closed check immediately closes it, and awaiting here prevents orphaning
     // Chromium when the helper's entry point exits the process.
     await Promise.allSettled([...this.captures.values()])
+    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.removals.values()])
     if (this.screenshotDirectory) await rm(await this.screenshotDirectory, { recursive: true, force: true }).catch(() => undefined)
   }
 }

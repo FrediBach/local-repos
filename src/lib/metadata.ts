@@ -1,4 +1,4 @@
-import type { RepoProject } from '../types'
+import type { ProjectDependency, RepoProject } from '../types'
 
 export interface PackageMetadata {
   name?: string
@@ -10,6 +10,7 @@ export interface PackageMetadata {
   previewUrl?: string
   stack: string[]
   scripts: Record<string, string>
+  dependencies: ProjectDependency[]
   packageManager: RepoProject['packageManager']
 }
 
@@ -69,11 +70,12 @@ export function parsePackageJson(source: string): PackageMetadata {
     throw new Error('package.json must contain an object.')
   }
   const pkg = record(parsed)
-  const dependencies = {
-    ...record(pkg.dependencies),
-    ...record(pkg.devDependencies),
-    ...record(pkg.peerDependencies),
-  }
+  const dependencyKinds: ProjectDependency['kind'][] = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
+  const dependencies = dependencyKinds.flatMap((kind) => Object.entries(record(pkg[kind]))
+    .filter((entry): entry is [string, string] => Boolean(entry[0].trim()) && typeof entry[1] === 'string')
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, version]) => ({ name, version, kind })))
+  const packageNames = new Set(dependencies.map(({ name }) => name))
   const scripts = Object.fromEntries(
     Object.entries(record(pkg.scripts)).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
   )
@@ -88,8 +90,9 @@ export function parsePackageJson(source: string): PackageMetadata {
     description: text(pkg.description),
     homepage: normalizePreviewUrl(pkg.homepage),
     previewUrl: normalizePreviewUrl(record(pkg.localRepos).previewUrl),
-    stack: technologies.filter(([, packages]) => packages.some((name) => name in dependencies)).map(([name]) => name),
+    stack: technologies.filter(([, packages]) => packages.some((name) => packageNames.has(name))).map(([name]) => name),
     scripts,
+    dependencies,
     packageManager,
   }
 }

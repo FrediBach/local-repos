@@ -1,10 +1,19 @@
 import type { Workspace } from '@/types'
 
-/** Keep captured images available after the helper's temporary files expire. */
+/** Keep durable previews and dated maintenance results across helper restarts. */
 export function preservePreviews(next: Workspace, previous?: Workspace): Workspace {
   if (!previous) return next
-  const images = new Map(previous.projects.filter(project => project.screenshot?.startsWith('data:image/png;base64,')).map(project => [project.id, { screenshot: project.screenshot, preview: project.preview }]))
-  return { ...next, projects: next.projects.map(project => images.has(project.id) ? { ...project, ...images.get(project.id) } : project) }
+  const saved = new Map(previous.projects.map(project => [project.id, project]))
+  return { ...next, projects: next.projects.map(project => {
+    const cached = saved.get(project.id)
+    if (!cached) return project
+    return {
+      ...project,
+      ...(cached.screenshot?.startsWith('data:image/png;base64,') ? { screenshot: cached.screenshot, preview: cached.preview } : {}),
+      ...(project.storage === undefined && cached.storage ? { storage: cached.storage } : {}),
+      ...(project.audit === undefined && cached.audit ? { audit: cached.audit } : {}),
+    }
+  }) }
 }
 
 export async function cachePreview(url: string): Promise<string> {
