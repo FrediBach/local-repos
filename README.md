@@ -55,6 +55,10 @@ Audits contact the configured package registry and send dependency names and ver
 
 Disk measurements and successful audit results are cached with timestamps, including across helper restarts. They describe the last measurement or scan: refresh disk usage or scan again after project changes. Failed audits keep the previous successful result visible.
 
+Use **Scan vulnerabilities**, to the left of **Capture previews**, to audit every project in the workspace, including projects hidden by filters. The local helper processes one project at a time and saves each successful result immediately. Progress shows the current project, completed scans, projects with vulnerabilities, and failures. A missing package manifest or supported lockfile is reported for that project and the queue continues. **Stop after current** finishes the active audit and then stops; keep the app open while scanning. Preview capture, resync, directory changes, and other project actions are disabled until the scan finishes or stops.
+
+Projects with reported vulnerabilities show a shield icon and count in both grid and list views. The color represents the highest reported severity: red for critical, orange for high, amber for moderate, blue for low, and slate for informational findings. Hover for the severity breakdown and last scan time, or click to open **Packages** and review the report. Clean and unscanned projects have no warning icon. A failed rescan keeps the previous result and its icon; a successful clean scan removes it.
+
 ## Run a project and capture a preview
 
 Connect through the helper, open a project, and select **Start server** or **Capture preview**. Scanning never starts project scripts automatically.

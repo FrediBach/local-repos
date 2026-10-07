@@ -282,3 +282,11 @@ h1 { font-size: clamp(25px, 2.55vw, 39px); letter-spacing: -1.5px; line-height: 
 .finding-detail a { display: inline-flex; align-items: center; gap: 4px; color: #657e4b; text-decoration: underline; }
 @media (max-width: 850px) { .search-group { flex-wrap: wrap; } .search-scope { min-height: 30px; } .search-group .search-box { flex-basis: 100%; } }
 @media (max-width: 480px) { .maintenance-heading { gap: 10px; } .dependency-table th, .dependency-table td { padding-left: 5px; padding-right: 5px; } .storage-stats strong { font-size: 18px; } .delete-actions { flex-wrap: wrap; } }
+
+.project-audit-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 3px; min-height: 24px; margin-left: auto; padding: 3px 5px; border: 1px solid currentColor; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.project-audit-badge:hover { box-shadow: 0 0 0 1px currentColor; }
+.project-audit-badge.audit-severity-critical { color: #a32631; background: #fff0f1; }
+.project-audit-badge.audit-severity-high { color: #a34116; background: #fff1e8; }
+.project-audit-badge.audit-severity-moderate { color: #846008; background: #fff7d9; }
+.project-audit-badge.audit-severity-low { color: #286299; background: #edf5ff; }
+.project-audit-badge.audit-severity-info { color: #596473; background: #f0f3f7; }

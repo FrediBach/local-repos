@@ -10,12 +10,15 @@ import { ProjectStoragePanel, formatBytes } from '@/components/project-storage'
 import { packageMatches } from '@/lib/packages'
 import { PreviewBatchProgress } from '@/components/preview-batch-progress'
 import { usePreviewBatch } from '@/hooks/use-preview-batch'
+import { AuditBatchProgress } from '@/components/audit-batch-progress'
+import { ProjectAuditBadge } from '@/components/project-audit-badge'
+import { useAuditBatch } from '@/hooks/use-audit-batch'
 import { api, originUrl, projectAction, scanWithHelper } from '@/lib/api'
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadWorkspace, saveFavorites, saveWorkspace } from '@/lib/storage'
 import { cachePreview, preservePreviews } from '@/lib/workspace'
-import type { RepoProject, Workspace } from '@/types'
+import type { PackageAudit, RepoProject, Workspace } from '@/types'
 
 type Filter = 'all' | 'favorites' | 'running'
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
@@ -59,6 +62,7 @@ export default function App() {
   const workspaceVersion = useRef(0)
   const favoritesVersion = useRef(0)
   const previewBatch = usePreviewBatch()
+  const auditBatch = useAuditBatch()
   const projects = workspace?.projects ?? demoProjects
   const selected = projects.find(p => p.id === selectedId)
   const isDemo = !workspace
@@ -118,7 +122,7 @@ export default function App() {
   }
 
   function navigate(next: Filter, nextStack: string | null = null) { setFilter(next); setStack(nextStack); setQuery('') }
-  function openProject(project: RepoProject) { setSelectedId(project.id); setDetailTab('overview'); setLogs(undefined) }
+  function openProject(project: RepoProject, tab: 'overview' | 'packages' = 'overview') { setSelectedId(project.id); setDetailTab(tab); setLogs(undefined) }
   function toggleFavorite(id: string) {
     favoritesVersion.current += 1
     const next = favorites.includes(id) ? favorites.filter(item => item !== id) : [...favorites, id]
@@ -126,7 +130,7 @@ export default function App() {
     void saveFavorites(next).catch(() => setNotice({ text: 'Could not save favorites in this browser.', error: true }))
   }
   async function connect(mode: 'browser' | 'helper') {
-    if (busy || previewBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive()) return
     const version = ++workspaceVersion.current
     setBusy('connect'); setConnectError('')
     try {
@@ -142,13 +146,13 @@ export default function App() {
       if (version !== workspaceVersion.current) return
       if (workspace?.mode === 'helper' && (next.mode !== 'helper' || next.rootPath !== workspace.rootPath)) await stopWorkspaceServers(workspace)
       next = preservePreviews(next, workspace)
-      const cached = await persist(next); previewBatch.dismiss(); navigate('all'); setConnectOpen(false)
+      const cached = await persist(next); previewBatch.dismiss(); auditBatch.dismiss(); navigate('all'); setConnectOpen(false)
       if (cached) setNotice({ text: `Connected ${next.rootName}. Found ${next.projects.length} project${next.projects.length === 1 ? '' : 's'}.${next.warnings?.length ? ` ${next.warnings.length} scan note(s) — see workspace info.` : ''}` })
     } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setConnectError(error instanceof Error ? error.message : 'Unable to connect to this directory.') }
     finally { setBusy('') }
   }
   async function resync() {
-    if (busy || previewBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive()) return
     if (!workspace) { setConnectOpen(true); return }
     const version = ++workspaceVersion.current
     setBusy('sync')
@@ -167,7 +171,7 @@ export default function App() {
     finally { setBusy('') }
   }
   async function action(project: RepoProject, name: string, body: unknown = {}) {
-    if (busy || previewBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     const version = ++workspaceVersion.current
     setBusy(`${project.id}:${name}`)
@@ -189,10 +193,10 @@ export default function App() {
     finally { setBusy('') }
   }
   async function forgetWorkspace() {
-    if (busy || previewBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive()) return
     ++workspaceVersion.current
     setBusy('disconnect')
-    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); setWorkspace(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
+    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); setWorkspace(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
     catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Could not disconnect the workspace.', error: true }) }
     finally { setBusy('') }
   }
@@ -202,14 +206,39 @@ export default function App() {
     await Promise.all(current.projects.filter(project => project.dev?.status === 'running' || project.dev?.status === 'starting').map(project => projectAction(project.id, 'stop')))
   }
 
+  async function scanAllVulnerabilities() {
+    if (busy || previewBatch.isActive() || auditBatch.isActive()) return
+    if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
+    if (!workspace.projects.length) return
+    const version = ++workspaceVersion.current
+    let nextWorkspace = workspace
+    setBusy('batch-audit')
+    setNotice(undefined)
+    previewBatch.dismiss()
+    try {
+      await auditBatch.run(workspace.projects, async (project, isCurrent) => {
+        const result = await projectAction<{ audit?: PackageAudit }>(project.id, 'audit')
+        if (!isCurrent() || version !== workspaceVersion.current) return
+        if (!result.audit) throw new Error('The helper did not return an audit report.')
+        const audit = result.audit
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, audit } : current) }
+        const cached = await persist(nextWorkspace, false)
+        return { cacheWarning: !cached, vulnerable: Object.values(audit.counts).some(count => count > 0) }
+      })
+    } finally {
+      if (version === workspaceVersion.current) setBusy('')
+    }
+  }
+
   async function captureAllPreviews() {
-    if (busy || previewBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     if (!workspace.projects.length) return
     const version = ++workspaceVersion.current
     let nextWorkspace = workspace
     setBusy('batch-capture')
     setNotice(undefined)
+    auditBatch.dismiss()
     try {
       await previewBatch.run(workspace.projects, async (project, isCurrent) => {
         const result = await projectAction<Partial<RepoProject>>(project.id, 'screenshot', { source: 'auto' })
@@ -249,18 +278,19 @@ export default function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><span>{pageName}</span></div><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} />{online ? 'All local. All yours.' : 'Offline · cached workspace'}<button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button></div></header>
       <div className="page-content">
-        <section className="page-heading"><div><div className="eyebrow"><span className="orange-square" /> YOUR WORK, IN ONE PLACE</div><h1>{filter === 'favorites' ? 'The ones you come back to.' : filter === 'running' ? 'A little work in progress.' : stack ? `Made with ${stack}.` : 'A place for your projects.'}</h1><p>{filter === 'favorites' ? 'Keep your go-to projects close at hand.' : filter === 'running' ? 'Your active development servers, at a glance.' : 'Less looking. More making. Pick up where you left off.'}</p></div><div className="page-heading-actions"><Button variant="outline" disabled={!!busy || !workspace || !projects.length} onClick={captureAllPreviews} title={workspace?.mode === 'browser' ? 'Connect the local helper to capture previews' : `Capture previews for all ${projects.length} projects`}>{busy === 'batch-capture' ? <LoaderCircle size={16} className="spinning" /> : <Monitor size={16} />}Capture previews</Button><Button disabled={!!busy} onClick={() => { setConnectError(''); setConnectOpen(true) }}><Plus size={16} />{workspace ? 'Change directory' : 'Connect directory'}</Button></div></section>
+        <section className="page-heading"><div><div className="eyebrow"><span className="orange-square" /> YOUR WORK, IN ONE PLACE</div><h1>{filter === 'favorites' ? 'The ones you come back to.' : filter === 'running' ? 'A little work in progress.' : stack ? `Made with ${stack}.` : 'A place for your projects.'}</h1><p>{filter === 'favorites' ? 'Keep your go-to projects close at hand.' : filter === 'running' ? 'Your active development servers, at a glance.' : 'Less looking. More making. Pick up where you left off.'}</p></div><div className="page-heading-actions"><Button variant="outline" disabled={!!busy || !workspace || !projects.length} onClick={scanAllVulnerabilities} aria-busy={busy === 'batch-audit'} title={workspace?.mode === 'browser' ? 'Connect the local helper to scan vulnerabilities' : `Audit all ${projects.length} projects, including those hidden by filters. Package names and versions are sent to their configured registries.`}>{busy === 'batch-audit' ? <LoaderCircle size={16} className="spinning" /> : <ShieldCheck size={16} />}Scan vulnerabilities</Button><Button variant="outline" disabled={!!busy || !workspace || !projects.length} onClick={captureAllPreviews} title={workspace?.mode === 'browser' ? 'Connect the local helper to capture previews' : `Capture previews for all ${projects.length} projects`}>{busy === 'batch-capture' ? <LoaderCircle size={16} className="spinning" /> : <Monitor size={16} />}Capture previews</Button><Button disabled={!!busy} onClick={() => { setConnectError(''); setConnectOpen(true) }}><Plus size={16} />{workspace ? 'Change directory' : 'Connect directory'}</Button></div></section>
 
         <div className="workspace-strip"><div><Folder size={15} /><span className="workspace-path">{workspace?.rootPath ?? (workspace ? workspace.rootName : '~/projects / demo workspace')}</span><span className="small-divider" /><span>{projects.length} projects</span>{isDemo && <span className="sample-badge">SAMPLE</span>}</div><button onClick={resync} disabled={!!busy} className="sync-button"><RefreshCw size={13} className={busy === 'sync' ? 'spinning' : ''} /><span>{workspace ? `Synced ${relativeTime(workspace.syncedAt).toLowerCase()}` : 'Connect your own'}</span>{!workspace && <ArrowRight size={13} />}</button></div>
 
         {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
+        {auditBatch.progress && <AuditBatchProgress progress={auditBatch.progress} onStop={auditBatch.stop} onDismiss={auditBatch.dismiss} />}
 
         <div className="toolbar"><div className="search-group"><select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => setSearchScope(event.target.value as 'all' | 'packages')}><option value="all">Projects & packages</option><option value="packages">Package name</option></select><div className="search-box"><Search size={17} /><input ref={searchRef} value={query} onChange={event => setQuery(event.target.value)} placeholder={searchScope === 'packages' ? 'e.g. react, @vitejs/plugin-react…' : 'Find a project or package…'} aria-label="Search projects" />{query ? <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button> : <kbd>⌘ K</kbd>}</div></div><div className="toolbar-right"><label className="sort-control"><ArrowDownWideNarrow size={15} /><select value={sort} onChange={event => setSort(event.target.value)} aria-label="Sort projects"><option value="updated">Last updated</option><option value="name">Name A–Z</option><option value="stack">Technology</option></select><ChevronDown size={12} /></label><div className="view-toggle"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={17} /></button></div></div></div>
         {(stack || query) && <div className="filter-summary"><span>{filtered.length} {filtered.length === 1 ? 'project' : 'projects'} found{stack ? ` in ${stack}` : ''}{query.trim() && searchScope === 'packages' ? ' using matching packages · declared versions' : ''}</span><button onClick={() => { setStack(null); setQuery('') }}>Clear filters <X size={12} /></button></div>}
 
         {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <article className={`project-card ${previewBatch.progress?.current?.id === project.id ? 'is-capturing' : ''}`} key={project.id} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
           <button className="preview-button" onClick={() => openProject(project)} aria-label={`View ${project.name}`}><ProjectPreview project={project} />{previewBatch.progress?.current?.id === project.id && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
-          <div className="project-info"><div className="project-title-row"><button className="project-title" onClick={() => openProject(project)}>{project.name}</button><button className={`favorite-button ${favorites.includes(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favorites.includes(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorites.includes(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><div className="project-tags">{project.stack.slice(0, 3).map(tech => <button key={tech} onClick={() => navigate('all', tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div>{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
+          <div className="project-info"><div className="project-title-row"><button className="project-title" onClick={() => openProject(project)}>{project.name}</button><ProjectAuditBadge project={project} onClick={() => openProject(project, 'packages')} /><button className={`favorite-button ${favorites.includes(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favorites.includes(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorites.includes(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><div className="project-tags">{project.stack.slice(0, 3).map(tech => <button key={tech} onClick={() => navigate('all', tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div>{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
           <div className="project-footer"><span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><DropdownMenu><DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => openProject(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem><DropdownMenuItem onSelect={() => toggleFavorite(project.id)}><Star size={14} />{favorites.includes(project.id) ? 'Remove favorite' : 'Add to favorites'}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'vscode' })}><Code2 size={14} />Open in VS Code</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'sourcetree' })}><GitBranch size={14} />Open in Sourcetree</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'folder' })}><FolderOpen size={14} />Show in folder</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
         </article>)}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{query || stack ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{query || stack ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
         <footer className="page-footer"><span>{filtered.length.toString().padStart(2, '0')} {filtered.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span><span><ShieldCheck size={13} /> No cloud. No clutter.</span></footer>
@@ -270,7 +300,7 @@ export default function App() {
 
     <Dialog open={connectOpen} onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }}><DialogContent className="connect-dialog"><div className="dialog-symbol"><FolderOpen size={24} /></div><span className="eyebrow">A PLACE TO START</span><DialogTitle>Bring your projects together.</DialogTitle><DialogDescription>Connect the directory where your repositories live. Your files stay on your computer.</DialogDescription><Button variant="outline" className="browse-button" disabled={!!busy || !('showDirectoryPicker' in window)} onClick={() => connect('browser')}><FolderOpen size={17} />Choose a local directory<ArrowUpRight size={15} /></Button><p className="field-hint">{'showDirectoryPicker' in window ? 'Read-only folder access. Remembered in this browser for your next visit.' : 'Folder picking needs Chrome or Edge. Use the local helper below in this browser.'}</p><div className="or-divider"><span />FOR DEV SERVERS & LOCAL ACTIONS<span /></div><label className="input-label" htmlFor="directory-path">Connect with the local helper <span className={`helper-status ${helper ? 'connected' : ''}`}><span className="status-dot" />{helper ? 'Available' : 'Not connected'}</span></label><form onSubmit={event => { event.preventDefault(); void connect('helper') }}><div className="path-input"><Folder size={16} /><input id="directory-path" placeholder="/Users/you/Projects" value={path} onChange={event => setPath(event.target.value)} autoComplete="off" spellCheck={false} /></div><p className="field-hint">Enter an absolute path. The helper enables previews, dev servers, disk cleanup, package audits, and editor shortcuts.</p>{!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run dev</code>.</p>}{connectError && <p className="inline-error" role="alert">{connectError}</p>}<Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button></form><div className="dialog-privacy"><ShieldCheck size={14} />Local workspace. Audits contact your package registry.</div></DialogContent></Dialog>
 
-    <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelectedId(undefined) }}><DialogContent className="project-dialog">{selected && <><div className="detail-header"><span className="eyebrow"><FolderGit2 size={14} /> PROJECT OVERVIEW</span><DialogTitle>{selected.name}</DialogTitle><DialogDescription>{selected.description || 'Your local project, at a glance.'}</DialogDescription><div className="detail-tags">{selected.stack.map(tech => <span key={tech}>{tech}</span>)}{isDemo && <span className="sample-badge">SAMPLE PROJECT</span>}</div></div><div className="detail-tabs"><button className={detailTab === 'overview' ? 'active' : ''} onClick={() => setDetailTab('overview')}>Overview</button><button className={detailTab === 'packages' ? 'active' : ''} onClick={() => setDetailTab('packages')}>Packages</button><button className={detailTab === 'readme' ? 'active' : ''} onClick={() => setDetailTab('readme')}>README</button></div><div className="detail-body">{detailTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={name => { void action(selected, name) }} /> : detailTab === 'readme' ? <pre className="readme-content">{selected.readme || 'No README found in this project.'}</pre> : <><ProjectPreview project={selected} large /><div className="metadata-grid"><div><span>VERSION</span><strong>{selected.version ? `v${selected.version}` : 'Not specified'}</strong></div><div><span>AUTHOR</span><strong>{selected.author || 'Not specified'}</strong></div><div><span>BRANCH</span><strong><GitBranch size={14} />{selected.git?.branch || 'Not available'}</strong></div><div><span>LICENSE</span><strong>{selected.license || 'Not specified'}</strong></div></div><div className="commit-row"><GitCommitHorizontal size={18} /><div><strong>{selected.git?.message || 'No commit information available'}</strong><span>{selected.git?.commit?.slice(0, 7)} {selected.git?.committedAt && `· ${relativeTime(selected.git.committedAt)}`}{selected.git?.dirty && ' · Uncommitted changes'}</span></div>{originUrl(selected.git?.origin) && <a href={originUrl(selected.git?.origin)} target="_blank" rel="noreferrer" title="Open Git remote"><ExternalLink size={16} /></a>}</div><ProjectControls key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} logs={logs} onAction={(name, body) => { void action(selected, name, body) }} /><ProjectStoragePanel key={`storage:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={(name, body) => { void action(selected, name, body) }} /></>}</div><div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'vscode' })}><Code2 size={15} />VS Code</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'sourcetree' })}><GitBranch size={15} />Sourcetree</Button><Button variant="ghost" size="sm" onClick={() => toggleFavorite(selected.id)}><Star size={15} fill={favorites.includes(selected.id) ? 'currentColor' : 'none'} />{favorites.includes(selected.id) ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
+    <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelectedId(undefined) }}><DialogContent className="project-dialog">{selected && <><div className="detail-header"><span className="eyebrow"><FolderGit2 size={14} /> PROJECT OVERVIEW</span><DialogTitle>{selected.name}</DialogTitle><DialogDescription>{selected.description || 'Your local project, at a glance.'}</DialogDescription><div className="detail-tags">{selected.stack.map(tech => <span key={tech}>{tech}</span>)}{isDemo && <span className="sample-badge">SAMPLE PROJECT</span>}</div></div><div className="detail-tabs"><button className={detailTab === 'overview' ? 'active' : ''} onClick={() => setDetailTab('overview')}>Overview</button><button className={detailTab === 'packages' ? 'active' : ''} onClick={() => setDetailTab('packages')}>Packages</button><button className={detailTab === 'readme' ? 'active' : ''} onClick={() => setDetailTab('readme')}>README</button></div><div className="detail-body">{detailTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : busy} onAction={name => { void action(selected, name) }} /> : detailTab === 'readme' ? <pre className="readme-content">{selected.readme || 'No README found in this project.'}</pre> : <><ProjectPreview project={selected} large /><div className="metadata-grid"><div><span>VERSION</span><strong>{selected.version ? `v${selected.version}` : 'Not specified'}</strong></div><div><span>AUTHOR</span><strong>{selected.author || 'Not specified'}</strong></div><div><span>BRANCH</span><strong><GitBranch size={14} />{selected.git?.branch || 'Not available'}</strong></div><div><span>LICENSE</span><strong>{selected.license || 'Not specified'}</strong></div></div><div className="commit-row"><GitCommitHorizontal size={18} /><div><strong>{selected.git?.message || 'No commit information available'}</strong><span>{selected.git?.commit?.slice(0, 7)} {selected.git?.committedAt && `· ${relativeTime(selected.git.committedAt)}`}{selected.git?.dirty && ' · Uncommitted changes'}</span></div>{originUrl(selected.git?.origin) && <a href={originUrl(selected.git?.origin)} target="_blank" rel="noreferrer" title="Open Git remote"><ExternalLink size={16} /></a>}</div><ProjectControls key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} logs={logs} onAction={(name, body) => { void action(selected, name, body) }} /><ProjectStoragePanel key={`storage:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={(name, body) => { void action(selected, name, body) }} /></>}</div><div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'vscode' })}><Code2 size={15} />VS Code</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'sourcetree' })}><GitBranch size={15} />Sourcetree</Button><Button variant="ghost" size="sm" onClick={() => toggleFavorite(selected.id)}><Star size={15} fill={favorites.includes(selected.id) ? 'currentColor' : 'none'} />{favorites.includes(selected.id) ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
 
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent className="help-dialog"><Logo /><DialogTitle>A little order. A lot of possibility.</DialogTitle><DialogDescription>Local Repos is a quiet home for your checked-out projects.</DialogDescription><div className="help-steps"><div><span>01</span><div><h3>Connect a directory.</h3><p>Choose your projects folder. We look for repositories and package.json files up to two folders deep, skipping dependencies and build output.</p></div></div><div><span>02</span><div><h3>Find your bearings.</h3><p>README introductions, technologies, package details, and Git history come together in one place. Favorite the projects you return to.</p></div></div><div><span>03</span><div><h3>Pick up where you left off.</h3><p>The local helper opens your editor, runs your dev script, and captures a preview. Only projects you explicitly start are run.</p></div></div></div><div className="help-cache"><ShieldCheck size={20} /><p>Your directory connection and project metadata are cached in IndexedDB. Use resync to read changes. The production PWA keeps the interface available offline.</p></div>{workspace?.warnings?.length ? <details className="scan-warnings"><summary>{workspace.warnings.length} scan notes</summary><ul>{workspace.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}{workspace && <Button variant="outline" disabled={!!busy} onClick={() => { void forgetWorkspace(); setHelpOpen(false) }}><Unplug size={15} />Forget this directory</Button>}</DialogContent></Dialog>
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <CircleHelp size={18} /> : <Check size={18} />}<span>{notice.text}</span><button aria-label="Dismiss notification" onClick={() => setNotice(undefined)}><X size={15} /></button></div>}
