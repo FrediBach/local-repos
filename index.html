@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f8f9f5" />
+    <meta name="color-scheme" content="light dark" />
     <script>
       // Apply the saved or system theme before the first paint. Keep in sync with useTheme.
       (() => {
@@ -14,13 +15,13 @@
         document.querySelector('meta[name="theme-color"]').content = dark ? '#181d17' : '#f8f9f5';
       })();
     </script>
-    <meta name="description" content="A considered home for your local projects. Browse repositories, find your work, and pick up where you left off." />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <title>Local Repos — A place for your projects</title>
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
   </head>
   <body>
     <div id="root"></div>
+    <noscript>Local Repos brings your local projects together. Enable JavaScript to browse repositories and connect a directory. Your workspace is stored in this browser.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

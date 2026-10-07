@@ -148,6 +148,20 @@ The cached interface, saved project metadata, and captured previews remain usabl
 
 For a UI-only development session, use `npm run dev:browser`.
 
+## Deploy to Vercel
+
+Import this repository into Vercel with the repository root as the project directory. The checked-in `vercel.json` selects Vite, installs the lockfile with `npm ci`, runs `npm run build`, and publishes `dist/`. This deploys the browser app: demo projects, read-only directory access in supported browsers, and the installed PWA.
+
+**The local helper is not deployed.** Vercel cannot access files or start development servers on a visitor's computer. To use helper features, run Local Repos locally and open `http://127.0.0.1:5180`, or use the local production preview described above. Starting the helper alone does not connect a Vercel-hosted page to it.
+
+Set the optional **`SITE_URL`** environment variable to your preferred public HTTPS origin, such as `https://your-domain.example`, then rebuild. It must not include a subdirectory, credentials, query, or fragment. Without it, the build uses `VERCEL_PROJECT_PRODUCTION_URL`, falling back to `VERCEL_URL`. Keep Vercel's **Enable access to System Environment Variables** setting enabled; see [Vercel's system environment variables](https://vercel.com/docs/environment-variables/system-environment-variables). For another static host, copy `.env.example` to `.env.local` and set `SITE_URL` before building.
+
+The production HTML includes a description, canonical URL, Open Graph and Twitter large-image cards, and WebApplication structured data. The same public origin is used for `/og-image.png` and the single-page `/sitemap.xml`. `/robots.txt` allows the public app and excludes `/api/`. Vercel preview, development, and custom nonproduction environments receive `noindex, nofollow` and disallow crawling, with no sitemap. Local builds without a public URL also omit canonical URLs and the sitemap and are marked noindex. Rebuild for the production environment when promoting a preview.
+
+The app uses only `/`; projects and filters are local UI state. There is deliberately no catch-all rewrite, so missing assets, unknown paths, and `/api` requests remain 404s on Vercel. The service worker likewise only falls back to the app for root-page navigation. HTML, the manifest, service worker, and unversioned images revalidate; hashed `/assets/` files can be cached for a year. Response headers prevent framing and MIME sniffing, restrict referrer disclosure, and disable unused camera, microphone, and geolocation access. The configuration follows [Vercel's static configuration reference](https://vercel.com/docs/project-configuration/vercel-json).
+
+The manifest includes a stable app ID, root scope, language, categories, theme colors, and install icons. The 192px and 512px icons have an opaque background, with the mark inside the maskable safe area; a separate 180px Apple touch icon and 32px ICO cover other launchers. To regenerate the checked-in images from `public/favicon.svg` and `design/og-image.svg`, run `npm run assets:generate`. The social image uses locally installed Helvetica Neue, Helvetica, or Arial fonts; regenerate it on a machine with one of those fonts. Ordinary builds use the committed PNGs and do not need a font or image-rendering step.
+
 ## Architecture
 
 - **Interface:** React, TypeScript, Vite, Tailwind CSS, shadcn-style components built on Radix primitives, and Lucide icons.

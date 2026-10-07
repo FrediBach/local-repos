@@ -3,12 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A considered home for your local projects.",
+  "description": "Bring your local repositories together. Browse READMEs, search packages, track Git activity, and pick up where you left off.",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:browser": "vite --host 127.0.0.1",
     "helper": "tsx server/index.ts",
     "build": "tsc -b && vite build",
+    "assets:generate": "node scripts/generate-brand-assets.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "typecheck": "tsc -b"
@@ -35,6 +36,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

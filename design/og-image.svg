@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f8f9f5"/>
+  <path d="M0 8h1200" stroke="#354a2b" stroke-width="16"/>
+  <g transform="translate(72 65)">
+    <rect width="52" height="52" rx="11" fill="#252820"/>
+    <g fill="#f5f4ef" transform="scale(.8125)">
+      <rect x="17" y="17" width="7" height="30" rx="1"/>
+      <rect x="28" y="17" width="7" height="30" rx="1"/>
+      <path d="m39 18 7-1 5 29-7 1z"/>
+    </g>
+  </g>
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" fill="#262e23">
+    <text x="143" y="101" font-size="31" font-weight="600" letter-spacing="-1">Local Repos</text>
+    <rect x="74" y="180" width="9" height="9" fill="#9a461e"/>
+    <text x="97" y="190" font-size="14" font-weight="600" letter-spacing="2">YOUR WORK, IN ONE PLACE</text>
+    <text x="68" y="282" font-size="68" font-weight="500" letter-spacing="-3">A place for</text>
+    <text x="68" y="357" font-size="68" font-weight="500" letter-spacing="-3">your projects.</text>
+    <text x="73" y="412" font-size="23" fill="#58634f">Less looking. More making.</text>
+    <path d="M72 506h1056" stroke="#d1d8c9"/>
+    <text x="73" y="551" font-size="17" fill="#58634f">Repositories. READMEs. Packages. A little more order.</text>
+    <text x="1128" y="551" font-size="14" text-anchor="end" letter-spacing="1" fill="#58634f">LOCAL BY DESIGN</text>
+  </g>
+  <g transform="translate(774 170)">
+    <rect x="-20" y="-20" width="354" height="288" rx="18" fill="#eef1e9"/>
+    <g stroke="#d1d8c9" fill="#fff">
+      <rect x="-1" y="-1" width="316" height="74" rx="9"/>
+      <rect x="-1" y="87" width="316" height="74" rx="9"/>
+      <rect x="-1" y="175" width="316" height="74" rx="9"/>
+    </g>
+    <g fill="#e1ead8">
+      <rect x="16" y="17" width="38" height="38" rx="8"/>
+      <rect x="16" y="105" width="38" height="38" rx="8"/>
+      <rect x="16" y="193" width="38" height="38" rx="8"/>
+    </g>
+    <g fill="none" stroke="#354a2b" stroke-width="1.8" stroke-linejoin="round">
+      <path d="M25 43V28h8l3 4h10v11z"/>
+      <path d="m31 118-6 6 6 6m8-12 6 6-6 6"/>
+      <path d="m26 207 9-5 9 5v11l-9 5-9-5zm0 0 9 5 9-5m-9 5v11"/>
+    </g>
+    <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="500" fill="#262e23">
+      <text x="70" y="33">side-project</text>
+      <text x="70" y="121">something-good</text>
+      <text x="70" y="209">next-big-idea</text>
+    </g>
+    <g fill="#d1d8c9">
+      <rect x="70" y="44" width="128" height="5" rx="2.5"/>
+      <rect x="70" y="132" width="102" height="5" rx="2.5"/>
+      <rect x="70" y="220" width="144" height="5" rx="2.5"/>
+    </g>
+    <g fill="#3c5f2b"><circle cx="287" cy="36" r="4"/><circle cx="287" cy="124" r="4"/></g>
+    <circle cx="287" cy="212" r="4" fill="#9a461e"/>
+  </g>
+</svg>
