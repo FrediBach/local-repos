@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ThemeControl } from '@/components/theme-control'
+import { HostedNotice } from '@/components/hosted-notice'
 import { ProjectTabs } from '@/components/project-tabs'
 import { ProjectReadme } from '@/components/project-readme'
 import { ProjectPreview } from '@/components/project-preview'
@@ -24,6 +25,7 @@ import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadWorkspace, saveFavorites, saveWorkspace } from '@/lib/storage'
 import { cachePreview, preservePreviews } from '@/lib/workspace'
+import { installationUrl, isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, PackageOutdated, RepoProject, Workspace } from '@/types'
 
 type Filter = 'all' | 'favorites' | 'running'
@@ -44,6 +46,7 @@ function Logo({ small = false }: { small?: boolean }) {
 }
 
 export default function App() {
+  const hosted = isVercelHosted()
   const [workspace, setWorkspace] = useState<Workspace>()
   const [favorites, setFavorites] = useState<string[]>([])
   const [filter, setFilter] = useState<Filter>('all')
@@ -96,7 +99,7 @@ export default function App() {
         scanWithHelper(saved.rootPath).then(result => { if (active && workspaceVersion.current === initialVersion) { const next = preservePreviews({ ...result, mode: 'helper' }, saved); setWorkspace(next); void saveWorkspace(next).catch(() => {}) } }).catch(() => { if (active && workspaceVersion.current === initialVersion) setNotice({ text: 'Showing your cached workspace. Start the local helper and resync to refresh server status.', error: true }) })
       }
     }).catch(() => setNotice({ text: 'Browser storage is unavailable. You can still browse this session.', error: true }))
-    api<{ ok: boolean }>('/health').then(result => active && setHelper(result.ok)).catch(() => {})
+    if (!hosted) api<{ ok: boolean }>('/health').then(result => active && setHelper(result.ok)).catch(() => {})
     const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallEvent) }
     const onOnline = () => setOnline(navigator.onLine)
     const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); searchRef.current?.focus() } }
@@ -104,7 +107,7 @@ export default function App() {
     window.addEventListener('online', onOnline); window.addEventListener('offline', onOnline)
     window.addEventListener('keydown', onKey)
     return () => { active = false; window.removeEventListener('beforeinstallprompt', onInstall); window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOnline); window.removeEventListener('keydown', onKey) }
-  }, [])
+  }, [hosted])
 
   useEffect(() => {
     if (!notice || notice.error) return
@@ -329,7 +332,7 @@ export default function App() {
     </aside>
 
     <main className="main-content" id="projects" tabIndex={-1}>
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><span>{pageName}</span></div><div className="topbar-actions"><ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button></div></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><span>{pageName}</span></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button></div></div></header>
       <div className="page-content">
         <section className="page-heading"><div><div className="eyebrow"><span className="orange-square" /> YOUR WORK, IN ONE PLACE</div><h1>{filter === 'favorites' ? 'The ones you come back to.' : filter === 'running' ? 'A little work in progress.' : stack ? `Made with ${stack}.` : 'A place for your projects.'}</h1><p>{filter === 'favorites' ? 'Keep your go-to projects close at hand.' : filter === 'running' ? 'Your active development servers, at a glance.' : 'Less looking. More making. Pick up where you left off.'}</p></div><div className="page-heading-actions"><Button variant="outline" disabled={!!busy || !workspace || !projects.length} onClick={scanAllOutdated} aria-busy={busy === 'batch-outdated'} title={workspace?.mode === 'browser' ? 'Connect the local helper to scan outdated packages' : `Check outdated packages in all ${projects.length} projects, including those hidden by filters. Contacts their configured registries.`}>{busy === 'batch-outdated' ? <LoaderCircle size={16} className="spinning" /> : <Package size={16} />}Scan outdated packages</Button><Button variant="outline" disabled={!!busy || !workspace || !projects.length} onClick={scanAllVulnerabilities} aria-busy={busy === 'batch-audit'} title={workspace?.mode === 'browser' ? 'Connect the local helper to scan vulnerabilities' : `Audit all ${projects.length} projects, including those hidden by filters. Package names and versions are sent to their configured registries.`}>{busy === 'batch-audit' ? <LoaderCircle size={16} className="spinning" /> : <ShieldCheck size={16} />}Scan vulnerabilities</Button><Button variant="outline" disabled={!!busy || !workspace || !projects.length} onClick={captureAllPreviews} title={workspace?.mode === 'browser' ? 'Connect the local helper to capture previews' : `Capture previews for all ${projects.length} projects`}>{busy === 'batch-capture' ? <LoaderCircle size={16} className="spinning" /> : <Monitor size={16} />}Capture previews</Button><Button disabled={!!busy} onClick={() => { setConnectError(''); setConnectOpen(true) }}><Plus size={16} />{workspace ? 'Change directory' : 'Connect directory'}</Button></div></section>
 
@@ -352,7 +355,29 @@ export default function App() {
       </div>
     </main>
 
-    <Dialog open={connectOpen} onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }}><DialogContent className="connect-dialog"><div className="dialog-symbol"><FolderOpen size={24} /></div><span className="eyebrow">A PLACE TO START</span><DialogTitle>Bring your projects together.</DialogTitle><DialogDescription>Connect the directory where your repositories live. Your files stay on your computer.</DialogDescription><Button variant="outline" className="browse-button" disabled={!!busy || !('showDirectoryPicker' in window)} onClick={() => connect('browser')}><FolderOpen size={17} />Choose a local directory<ArrowUpRight size={15} /></Button><p className="field-hint">{'showDirectoryPicker' in window ? 'Read-only folder access. Remembered in this browser for your next visit.' : 'Folder picking needs Chrome or Edge. Use the local helper below in this browser.'}</p><div className="or-divider"><span />FOR DEV SERVERS & LOCAL ACTIONS<span /></div><label className="input-label" htmlFor="directory-path">Connect with the local helper <span className={`helper-status ${helper ? 'connected' : ''}`}><span className="status-dot" />{helper ? 'Available' : 'Not connected'}</span></label><form onSubmit={event => { event.preventDefault(); void connect('helper') }}><div className="path-input"><Folder size={16} /><input id="directory-path" placeholder="/Users/you/Projects" value={path} onChange={event => setPath(event.target.value)} autoComplete="off" spellCheck={false} /></div><p className="field-hint">Enter an absolute path. The helper enables previews, dev servers, disk cleanup, package scans, and editor shortcuts.</p>{!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run dev</code>.</p>}{connectError && <p className="inline-error" role="alert">{connectError}</p>}<Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button></form><div className="dialog-privacy"><ShieldCheck size={14} />Local workspace. Package scans contact your package registry.</div></DialogContent></Dialog>
+    <Dialog open={connectOpen} onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }}><DialogContent className="connect-dialog">
+      <div className="dialog-symbol"><FolderOpen size={24} /></div><span className="eyebrow">A PLACE TO START</span>
+      <DialogTitle>Bring your projects together.</DialogTitle>
+      <DialogDescription>Connect the directory where your repositories live. Your files stay on your computer.</DialogDescription>
+      <Button variant="outline" className="browse-button" disabled={!!busy || !('showDirectoryPicker' in window)} onClick={() => connect('browser')}><FolderOpen size={17} />Choose a local directory<ArrowUpRight size={15} /></Button>
+      <p className="field-hint">{'showDirectoryPicker' in window ? 'Read-only folder access. Remembered in this browser for your next visit.' : hosted ? 'Folder picking needs desktop Chrome or Edge. You can still explore the demo here.' : 'Folder picking needs Chrome or Edge. Use the local helper below in this browser.'}</p>
+      {hosted ? <div className="hosted-install-guidance">
+        <h3>Want to run servers or manage packages?</h3>
+        <p>Run Local Repos and its helper on your computer, then open the local address. This hosted page cannot connect to the helper.</p>
+        <Button asChild variant="outline"><a href={installationUrl} target="_blank" rel="noopener noreferrer">Installation on GitHub<ArrowUpRight size={16} /></a></Button>
+      </div> : <>
+        <div className="or-divider"><span />FOR DEV SERVERS & LOCAL ACTIONS<span /></div>
+        <label className="input-label" htmlFor="directory-path">Connect with the local helper <span className={`helper-status ${helper ? 'connected' : ''}`}><span className="status-dot" />{helper ? 'Available' : 'Not connected'}</span></label>
+        <form onSubmit={event => { event.preventDefault(); void connect('helper') }}>
+          <div className="path-input"><Folder size={16} /><input id="directory-path" placeholder="/Users/you/Projects" value={path} onChange={event => setPath(event.target.value)} autoComplete="off" spellCheck={false} /></div>
+          <p className="field-hint">Enter an absolute path. The helper enables previews, dev servers, disk cleanup, package scans, and editor shortcuts.</p>
+          {!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run dev</code>.</p>}
+          <Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button>
+        </form>
+      </>}
+      {connectError && <p className="inline-error" role="alert">{connectError}</p>}
+      <div className="dialog-privacy"><ShieldCheck size={14} />{hosted ? 'Read-only access. Your workspace stays in this browser.' : 'Local workspace. Package scans contact your package registry.'}</div>
+    </DialogContent></Dialog>
 
     <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelectedId(undefined) }}><DialogContent className="project-dialog" onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}>{selected && <><div className="detail-header" role="region" aria-label="Project summary" tabIndex={0}><span className="eyebrow"><FolderGit2 size={14} /> PROJECT OVERVIEW</span><DialogTitle>{selected.name}</DialogTitle><DialogDescription>{selected.description || 'Your local project, at a glance.'}</DialogDescription><div className="detail-tags">{selected.monorepo && <span>{selected.monorepo.name} / {selected.monorepo.packagePath}</span>}{!!selected.workspacePackageCount && <span>{selected.workspacePackageCount} workspace packages</span>}{selected.stack.map(tech => <span key={tech}>{tech}</span>)}{isDemo && <span className="sample-badge">SAMPLE PROJECT</span>}</div></div><ProjectTabs value={detailTab} onChange={setDetailTab}>{detailTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === selected.id ? `${selected.id}:outdated` : busy} onAction={name => { void action(selected, name) }} /> : detailTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <><ProjectPreview project={selected} large /><div className="metadata-grid"><div><span>VERSION</span><strong>{selected.version ? `v${selected.version}` : 'Not specified'}</strong></div><div><span>AUTHOR</span><strong>{selected.author || 'Not specified'}</strong></div><div><span>BRANCH</span><strong><GitBranch size={14} />{selected.git?.branch || 'Not available'}</strong></div><div><span>LICENSE</span><strong>{selected.license || 'Not specified'}</strong></div></div><div className="commit-row"><GitCommitHorizontal size={18} /><div><strong>{selected.git?.message || 'No commit information available'}</strong><span>{selected.git?.commit?.slice(0, 7)} {selected.git?.committedAt && `· ${relativeTime(selected.git.committedAt)}`}{selected.git?.dirty && ' · Uncommitted changes'}</span></div>{originUrl(selected.git?.origin) && <a href={originUrl(selected.git?.origin)} target="_blank" rel="noreferrer" title="Open Git remote"><ExternalLink size={16} /></a>}</div><ProjectControls key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} logs={logs} onAction={(name, body) => { void action(selected, name, body) }} /><ProjectStoragePanel key={`storage:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={(name, body) => { void action(selected, name, body) }} /></>}</ProjectTabs><div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'vscode' })}><Code2 size={15} />VS Code</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'sourcetree' })}><GitBranch size={15} />Sourcetree</Button><Button variant="ghost" size="sm" aria-pressed={favorites.includes(selected.id)} onClick={() => toggleFavorite(selected.id)}><Star size={15} fill={favorites.includes(selected.id) ? 'currentColor' : 'none'} />{favorites.includes(selected.id) ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
 

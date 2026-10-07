@@ -6,6 +6,10 @@ import { fileURLToPath, URL } from 'node:url'
 import { site, siteMetadataPlugin } from './config/site.ts'
 
 export default defineConfig(({ command, mode }) => ({
+  define: {
+    // Only expose the deployment flag, never the rest of the build environment.
+    'import.meta.env.VITE_VERCEL_HOSTED': JSON.stringify(command === 'build' && process.env.VERCEL === '1' ? '1' : ''),
+  },
   plugins: [react(), tailwindcss(), siteMetadataPlugin(loadEnv(mode, process.cwd(), ''), command === 'build'), VitePWA({
     registerType: 'autoUpdate',
     includeAssets: ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'],

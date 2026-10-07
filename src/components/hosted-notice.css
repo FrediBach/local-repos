@@ -1,0 +1,19 @@
+.hosted-dialog { max-width: 720px; }
+.topbar-actions.hosted-topbar-actions { flex-wrap: wrap; max-width: 100%; }
+.hosted-capabilities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+.hosted-capabilities section { padding: 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-muted); }
+.hosted-capabilities h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; font-size: 1rem; font-weight: 600; }
+.hosted-capabilities h3 svg { flex-shrink: 0; color: var(--accent); }
+.hosted-capabilities ul { margin: 0; padding-left: 19px; list-style: disc; font-size: .9375rem; line-height: 1.65; }
+.hosted-capabilities li + li { margin-top: 10px; }
+.hosted-dialog > .hosted-local-note { font-size: .9375rem; margin-bottom: 20px; }
+.hosted-dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.hosted-dialog > .hosted-privacy { margin: 18px 0 0; font-size: .8125rem; }
+.hosted-install-guidance { margin-top: 24px; padding: 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-muted); }
+.hosted-install-guidance h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+.hosted-install-guidance p { color: var(--muted-foreground); margin: 9px 0 16px; font-size: .9375rem; line-height: 1.7; }
+@media (max-width: 600px) {
+  .hosted-dialog { padding: 24px; }
+  .hosted-capabilities { grid-template-columns: 1fr; gap: 12px; }
+  .hosted-dialog-actions { flex-direction: column; }
+}
