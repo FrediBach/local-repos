@@ -264,8 +264,6 @@ svg { flex-shrink: 0; }
 .audit-result > span { display: block; font-size: 0.875rem; color: var(--muted-foreground); margin-top: 7px; }
 .audit-counts { display: flex; flex-wrap: wrap; gap: 7px; }
 .severity { display: inline-flex; gap: 5px; align-items: center; font-size: 0.875rem; padding: 4px 7px; border-radius: 4px; background: var(--surface-muted); color: var(--foreground); text-transform: capitalize; }
-.severity-critical, .severity-high { background: var(--danger-soft); color: var(--danger); }
-.severity-moderate { background: var(--warning-soft); color: var(--warning); }
 .audit-findings { list-style: none; padding: 0; margin: 17px 0; }
 .audit-findings li { padding: 14px 0; border-bottom: 1px solid var(--border); }
 .audit-findings li > div:first-child { display: flex; align-items: center; gap: 8px; }
@@ -280,11 +278,10 @@ svg { flex-shrink: 0; }
 .project-audit-badge, .project-outdated-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 3px; min-height: 24px; margin-left: auto; padding: 3px 5px; border: 1px solid currentColor; border-radius: 4px; font-size: 0.875rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .project-audit-badge + .project-outdated-badge { margin-left: 0; }
 .project-audit-badge:hover, .project-outdated-badge:hover { box-shadow: 0 0 0 1px currentColor; }
-.project-audit-badge.audit-severity-critical { color: var(--danger); background: var(--danger-soft); }
-.project-audit-badge.audit-severity-high { color: var(--danger); background: var(--danger-soft); }
-.project-audit-badge.audit-severity-moderate { color: var(--warning); background: var(--warning-soft); }
-.project-audit-badge.audit-severity-low { color: var(--info); background: var(--info-soft); }
-.project-audit-badge.audit-severity-info { color: var(--foreground); background: var(--surface-muted); }
+.audit-color-red { color: var(--danger); background: var(--danger-soft); }
+.audit-color-orange { color: var(--warning); background: var(--warning-soft); }
+.audit-color-blue { color: var(--info); background: var(--info-soft); }
+.audit-color-neutral { color: var(--foreground); background: var(--surface-muted); }
 .outdated-level-current, .outdated-level-low { color: var(--foreground); background: var(--surface-muted); }
 .outdated-level-moderate { color: var(--warning); background: var(--warning-soft); }
 .outdated-level-high { color: var(--danger); background: var(--danger-soft); }

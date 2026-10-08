@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { filterOptionCounts, matchesProjectFilters, matchesProjectSearch, projectFilterGroups, sortProjects, type ProjectFilters } from './project-filters'
 import type { PackageAudit, PackageOutdated, RepoProject } from '../types'
+import { defaultSettings } from './settings'
 
 const now = Date.parse('2026-10-08T12:00:00Z')
 const context = { favorites: ['alpha'], now }
@@ -17,6 +18,24 @@ const groups = projectFilterGroups(projects)
 const matching = (filters: ProjectFilters) => projects.filter(p => matchesProjectFilters(p, filters, groups, context)).map(p => p.id)
 
 describe('project filtering', () => {
+  it('uses configured activity and storage thresholds in both labels and matching', () => {
+    const custom = projectFilterGroups(projects, {}, { ...defaultSettings, recentActivityDays: 2, largeProjectGiB: 0.5, heavyNodeModulesMiB: 100 })
+    const p = { ...base, updatedAt: '2026-10-05T12:00:00Z', storage: { totalBytes: 600 * 1024 ** 2, nodeModulesBytes: 120 * 1024 ** 2, hasNodeModules: true, measuredAt: audit.scannedAt, partial: false } }
+    expect(matchesProjectFilters(p, { activity: ['week'] }, custom, context)).toBe(false)
+    expect(matchesProjectFilters(p, { storage: ['large'] }, custom, context)).toBe(true)
+    expect(matchesProjectFilters(p, { storage: ['heavy'] }, custom, context)).toBe(true)
+    expect(custom.find(group => group.key === 'activity')?.options[0].label).toBe('Active in the last 2 days')
+    expect(custom.find(group => group.key === 'storage')?.options.find(option => option.value === 'large')?.label).toBe('Project size ≥ 0.5 GiB')
+  })
+
+  it('matches configured vulnerability badge colors while retaining reported severity filters', () => {
+    const custom = projectFilterGroups(projects, {}, { ...defaultSettings, auditColors: { ...defaultSettings.auditColors, critical: 'blue' } })
+    expect(matchesProjectFilters(projects[0], { audit: ['red'] }, groups, context)).toBe(true)
+    expect(matchesProjectFilters(projects[0], { audit: ['red'] }, custom, context)).toBe(false)
+    expect(matchesProjectFilters(projects[0], { audit: ['critical'] }, custom, context)).toBe(true)
+    expect(matchesProjectFilters(projects[1], { audit: ['red'] }, custom, context)).toBe(false)
+  })
+
   it('combines stars, maintenance, and technologies with OR inside a group and AND between groups', () => {
     expect(matching({ stars: ['starred'], audit: ['vulnerable'], outdated: ['major'], stack: ['Vue', 'React'] })).toEqual(['alpha'])
     expect(matching({ stack: ['Vue', 'React'] })).toEqual(['alpha', 'beta', 'delta'])

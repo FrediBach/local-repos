@@ -1,9 +1,11 @@
 import { ShieldAlert } from 'lucide-react'
 import type { AuditSeverity, RepoProject } from '@/types'
+import { useSettings } from '@/hooks/use-settings'
 
 const severities: AuditSeverity[] = ['critical', 'high', 'moderate', 'low', 'info']
 
 export function ProjectAuditBadge({ project, onClick }: { project: RepoProject; onClick: () => void }) {
+  const { settings } = useSettings()
   const report = project.audit
   if (!report) return null
   const severity = severities.find(level => report.counts[level] > 0)
@@ -15,7 +17,7 @@ export function ProjectAuditBadge({ project, onClick }: { project: RepoProject; 
 
   return <button
     type="button"
-    className={`project-audit-badge audit-severity-${severity}`}
+    className={`project-audit-badge audit-severity-${severity} audit-color-${settings.auditColors[severity]}`}
     aria-label={label}
     title={`${label}\n${breakdown}\nLast scan: ${new Date(report.scannedAt).toLocaleString()}`}
     onClick={onClick}

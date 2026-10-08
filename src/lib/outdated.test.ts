@@ -1,7 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { formatOutdatedScore, outdatedLevel, scoreVersionGap, sumOutdatedScore } from './outdated'
+import { configureOutdatedReport, formatOutdatedScore, outdatedLevel, outdatedScoreExplanation, scoreVersionGap, sumOutdatedScore } from './outdated'
+import { defaultSettings } from './settings'
+import type { PackageOutdated } from '../types'
 
 describe('outdated scoring', () => {
+  it('applies custom weights and caps to stored version gaps without mutating the report', () => {
+    const report: PackageOutdated = { manager: 'npm', scannedAt: '2026-10-08T12:00:00Z', score: 21, level: 'moderate', findings: [
+      { name: 'major', current: '1.0.0', latest: '3.0.0', change: 'major', majorGap: 2, score: 20 },
+      { name: 'patch', current: '1.0.0', latest: '1.0.20', change: 'patch', majorGap: 0, score: 1 },
+    ] }
+    const settings = { ...defaultSettings, majorVersionPoints: 15, patchVersionPoints: 1, patchVersionCap: 4, outdatedRedScore: 30 }
+    const configured = configureOutdatedReport(report, settings)
+    expect(configured.score).toBe(34)
+    expect(configured.level).toBe('high')
+    expect(configured.findings.map(finding => finding.score)).toEqual([30, 4])
+    expect(report.score).toBe(21)
+    expect(report.findings[0].score).toBe(20)
+    expect(configureOutdatedReport(report, defaultSettings)).toEqual(report)
+    expect(scoreVersionGap('1.0.0', '1.5.0', { ...settings, minorVersionPoints: 2, minorVersionCap: 7 })?.score).toBe(7)
+    expect(scoreVersionGap('1.0.0-rc.1', '1.0.0', { ...settings, prereleasePoints: 2 })?.score).toBe(2)
+  })
+
+  it('supports custom color thresholds and optional major-version conditions', () => {
+    const settings = { ...defaultSettings, outdatedOrangeScore: 50, outdatedRedScore: 60, outdatedRedMajorGap: 0, majorUpdatesAreOrange: false }
+    expect(outdatedLevel([{ score: 10, majorGap: 1 }], settings)).toBe('low')
+    expect(outdatedLevel([{ score: 50, majorGap: 0 }], settings)).toBe('moderate')
+    expect(outdatedLevel([{ score: 60, majorGap: 0 }], settings)).toBe('high')
+    expect(outdatedLevel([], settings)).toBe('current')
+    expect(outdatedScoreExplanation(settings)).toContain('Red requires at least 60 points.')
+    expect(outdatedScoreExplanation(settings)).not.toContain('Any major update')
+  })
+
   it.each([
     ['1.99.99', '3.0.0', 'major', 2, 20],
     ['1.1.99', '1.3.0', 'minor', 0, 2],

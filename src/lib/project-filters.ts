@@ -1,6 +1,7 @@
 import type { RepoProject } from '../types'
 import { selectDevScript } from './dev-script'
 import { packageMatches } from './packages'
+import { defaultSettings, highestAuditSeverity, type AppSettings } from './settings'
 
 export type FilterKey = 'stars' | 'audit' | 'outdated' | 'git' | 'server' | 'activity' | 'structure' | 'storage' | 'preview' | 'readme' | 'stack' | 'manager' | 'branch' | 'license'
 export type ProjectFilters = Partial<Record<FilterKey, string[]>>
@@ -34,12 +35,16 @@ const day = 86_400_000
 const age = (p: RepoProject, context: FilterContext) => (context.now - activityTime(p)) / day
 const option = (value: string, label: string, matches: FilterOption['matches']): FilterOption => ({ value, label, matches })
 
-const fixedGroups: FilterGroup[] = [
+const fixedGroups = (settings: AppSettings): FilterGroup[] => [
   { key: 'audit', label: 'Vulnerabilities', section: 'Maintenance', options: [
     option('vulnerable', 'Has vulnerabilities', p => !!p.audit && vulnerabilityCount(p) > 0),
     option('critical', 'Critical severity', p => (p.audit?.counts.critical ?? 0) > 0),
     option('high', 'High or critical severity', p => (p.audit?.counts.high ?? 0) + (p.audit?.counts.critical ?? 0) > 0),
     option('moderate', 'Moderate or higher severity', p => (p.audit?.counts.moderate ?? 0) + (p.audit?.counts.high ?? 0) + (p.audit?.counts.critical ?? 0) > 0),
+    ...(['red', 'orange'] as const).map(color => option(color, `${color === 'red' ? 'Red' : 'Orange'} vulnerability badge`, p => {
+      const severity = p.audit && highestAuditSeverity(p.audit)
+      return !!severity && settings.auditColors[severity] === color
+    })),
     option('clean', 'No reported vulnerabilities', p => !!p.audit && vulnerabilityCount(p) === 0),
     option('unscanned', 'Not scanned for vulnerabilities', p => !p.audit),
   ] },
@@ -56,8 +61,8 @@ const fixedGroups: FilterGroup[] = [
   { key: 'storage', label: 'Disk usage', section: 'Maintenance', options: [
     option('installed', 'Has node_modules', p => p.storage?.hasNodeModules === true),
     option('missing', 'No node_modules · measured', p => p.storage?.hasNodeModules === false),
-    option('large', 'Project size ≥ 1 GiB', p => (p.storage?.totalBytes ?? 0) >= 1024 ** 3),
-    option('heavy', 'node_modules ≥ 500 MiB', p => (p.storage?.nodeModulesBytes ?? 0) >= 500 * 1024 ** 2),
+    option('large', `Project size ≥ ${settings.largeProjectGiB} GiB`, p => (p.storage?.totalBytes ?? 0) >= settings.largeProjectGiB * 1024 ** 3),
+    option('heavy', `node_modules ≥ ${settings.heavyNodeModulesMiB} MiB`, p => (p.storage?.nodeModulesBytes ?? 0) >= settings.heavyNodeModulesMiB * 1024 ** 2),
     option('unmeasured', 'Disk usage not measured', p => !p.storage),
   ] },
   { key: 'stars', label: 'Stars', section: 'Project', options: [
@@ -78,10 +83,10 @@ const fixedGroups: FilterGroup[] = [
     option('no-script', 'No development script', p => !selectDevScript(p)),
   ] },
   { key: 'activity', label: 'Last activity', section: 'Project', options: [
-    option('week', 'Active in the last 7 days', (p, c) => age(p, c) <= 7),
-    option('month', 'Active in the last 30 days', (p, c) => age(p, c) <= 30),
-    option('quarter', 'Inactive for 90+ days', (p, c) => age(p, c) >= 90),
-    option('year', 'Inactive for 1+ year', (p, c) => age(p, c) >= 365),
+    option('week', `Active in the last ${settings.recentActivityDays} days`, (p, c) => age(p, c) <= settings.recentActivityDays),
+    option('month', `Active in the last ${settings.activeActivityDays} days`, (p, c) => age(p, c) <= settings.activeActivityDays),
+    option('quarter', `Inactive for ${settings.inactiveActivityDays}+ days`, (p, c) => age(p, c) >= settings.inactiveActivityDays),
+    option('year', settings.dormantActivityDays === 365 ? 'Inactive for 1+ year' : `Inactive for ${settings.dormantActivityDays}+ days`, (p, c) => age(p, c) >= settings.dormantActivityDays),
     option('unknown', 'Activity date unknown', p => !Number.isFinite(activityTime(p))),
   ] },
   { key: 'structure', label: 'Project structure', section: 'Metadata', options: [
@@ -100,16 +105,17 @@ const fixedGroups: FilterGroup[] = [
 ]
 
 /** Keep selected values available even when a rescan removes their last project. */
-export function projectFilterGroups(projects: readonly RepoProject[], filters: ProjectFilters = {}): FilterGroup[] {
+export function projectFilterGroups(projects: readonly RepoProject[], filters: ProjectFilters = {}, settings: AppSettings = defaultSettings): FilterGroup[] {
+  const fixed = fixedGroups(settings)
   const dynamic = (key: FilterKey, label: string, values: string[], read: (p: RepoProject) => string[], multiple = false): FilterGroup => ({
     key, label, section: 'Metadata', multiple,
     options: [...new Set([...values, ...filters[key] ?? []])].filter(Boolean).sort((a, b) => a.localeCompare(b)).map(value => option(value, value, p => read(p).includes(value))),
   })
   return [
-    ...fixedGroups.filter(group => group.section !== 'Metadata'),
+    ...fixed.filter(group => group.section !== 'Metadata'),
     dynamic('stack', 'Technologies', projects.flatMap(p => p.stack), p => p.stack, true),
     dynamic('manager', 'Package managers', ['npm', 'pnpm', 'yarn', 'bun'], p => [p.packageManager], true),
-    ...fixedGroups.filter(group => group.section === 'Metadata'),
+    ...fixed.filter(group => group.section === 'Metadata'),
     dynamic('branch', 'Branch', projects.flatMap(p => p.git?.branch ? [p.git.branch] : []), p => [p.git?.branch ?? '']),
     dynamic('license', 'License', projects.flatMap(p => p.license ? [p.license] : []), p => [p.license ?? '']),
   ]

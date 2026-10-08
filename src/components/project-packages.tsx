@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ProjectOutdated } from '@/components/project-outdated'
 import { dependencyKindLabel, packageMatches } from '@/lib/packages'
 import type { AuditSeverity, RepoProject } from '@/types'
+import { useSettings } from '@/hooks/use-settings'
 
 const severities: AuditSeverity[] = ['critical', 'high', 'moderate', 'low', 'info']
 
@@ -12,17 +13,19 @@ function advisoryUrl(value?: string) {
 }
 
 export function PackageMatches({ project, query }: { project: RepoProject; query: string }) {
+  const { settings } = useSettings()
   const matches = packageMatches(project, query)
   if (!matches.length) return null
   return <div className="package-matches" aria-label="Matching packages">
-    {matches.slice(0, 3).map(item => <div key={`${item.kind}:${item.name}`} title={`${dependencyKindLabel(item.kind)} · declared version`}><span>{item.name}</span><code>{item.version}</code></div>)}
-    {matches.length > 3 && <span>+{matches.length - 3} more in Packages</span>}
+    {matches.slice(0, settings.packageMatchLimit).map(item => <div key={`${item.kind}:${item.name}`} title={`${dependencyKindLabel(item.kind)} · declared version`}><span>{item.name}</span><code>{item.version}</code></div>)}
+    {matches.length > settings.packageMatchLimit && <span>+{matches.length - settings.packageMatchLimit} more in Packages</span>}
   </div>
 }
 
 export function ProjectPackages({ project, helper, demo, busy, onAction }: {
   project: RepoProject; helper: boolean; demo: boolean; busy: string; onAction: (name: string) => void
 }) {
+  const { settings } = useSettings()
   const [query, setQuery] = useState('')
   const dependencies = project.dependencies ?? []
   const visible = query.trim() ? packageMatches(project, query) : dependencies
@@ -38,9 +41,9 @@ export function ProjectPackages({ project, helper, demo, busy, onAction }: {
       <p className="maintenance-hint">{demo ? 'Connect a directory to audit your packages.' : helper ? `Runs ${project.packageManager} audit against ${project.monorepo ? 'the shared workspace lockfile (all workspace packages)' : 'the lockfile'}, including development dependencies. Package names and versions are sent to the configured registry. No fixes are applied.` : 'Connect with the local helper to run package audits.'}</p>
       {report ? <>
         <p className="audit-result" role="status">{total ? `${total} reported ${total === 1 ? 'vulnerability' : 'vulnerabilities'}` : 'No known vulnerabilities reported'}<span>Last scan · {new Date(report.scannedAt).toLocaleString()} · {report.manager}</span></p>
-        <div className="audit-counts">{severities.map(severity => <span key={severity} className={`severity severity-${severity}`}><b>{report.counts[severity]}</b> {severity}</span>)}</div>
+        <div className="audit-counts">{severities.map(severity => <span key={severity} className={`severity severity-${severity} audit-color-${settings.auditColors[severity]}`}><b>{report.counts[severity]}</b> {severity}</span>)}</div>
         {!!report.findings.length && <ul className="audit-findings">{report.findings.map((finding, index) => <li key={`${finding.name}:${index}`}>
-          <div><strong>{finding.name}</strong><span className={`severity severity-${finding.severity}`}>{finding.severity}</span></div>
+          <div><strong>{finding.name}</strong><span className={`severity severity-${finding.severity} audit-color-${settings.auditColors[finding.severity]}`}>{finding.severity}</span></div>
           <p>{finding.title}</p>
           <div className="finding-detail">{finding.range && <code>{finding.range}</code>}{finding.direct !== undefined && <span>{finding.direct ? 'Direct dependency' : 'Transitive dependency'}</span>}{finding.fixAvailable !== undefined && <span>{finding.fixAvailable ? 'Fix available' : 'No fix reported'}</span>}{advisoryUrl(finding.url) && <a href={advisoryUrl(finding.url)} target="_blank" rel="noreferrer">Advisory <ExternalLink size={11} /></a>}</div>
         </li>)}</ul>}

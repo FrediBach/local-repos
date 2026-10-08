@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ThemeControl } from '@/components/theme-control'
+import { SettingsDialog } from '@/components/settings-dialog'
+import { SettingsProvider, useSettings } from '@/hooks/use-settings'
+import { configureOutdatedReport } from '@/lib/outdated'
 import { HostedNotice } from '@/components/hosted-notice'
 import { ProjectTabs } from '@/components/project-tabs'
 import { ProjectReadme } from '@/components/project-readme'
@@ -49,6 +52,11 @@ function Logo({ small = false }: { small?: boolean }) {
 }
 
 export default function App() {
+  return <SettingsProvider><WorkspaceApp /></SettingsProvider>
+}
+
+function WorkspaceApp() {
+  const { settings } = useSettings()
   const hosted = isVercelHosted()
   const [workspace, setWorkspace] = useState<Workspace>()
   const [favorites, setFavorites] = useState<string[]>([])
@@ -78,14 +86,15 @@ export default function App() {
   const previewBatch = usePreviewBatch()
   const auditBatch = useAuditBatch()
   const outdatedBatch = useOutdatedBatch()
-  const projects = workspace?.projects ?? demoProjects
+  const rawProjects = workspace?.projects ?? demoProjects
+  const projects = useMemo(() => rawProjects.map(project => project.outdated ? { ...project, outdated: configureOutdatedReport(project.outdated, settings) } : project), [rawProjects, settings])
   const selected = projects.find(p => p.id === selectedId)
   const isDemo = !workspace
   const running = projects.filter(isRunning).length
   const favoriteCount = projects.filter(p => favorites.includes(p.id)).length
-  const stacks = useMemo(() => [...new Set(projects.flatMap(p => p.stack))].sort((a, b) => projects.filter(p => p.stack.includes(b)).length - projects.filter(p => p.stack.includes(a)).length).slice(0, 7), [projects])
+  const stacks = useMemo(() => [...new Set(projects.flatMap(p => p.stack))].sort((a, b) => projects.filter(p => p.stack.includes(b)).length - projects.filter(p => p.stack.includes(a)).length).slice(0, settings.sidebarTechnologyLimit), [projects, settings.sidebarTechnologyLimit])
   const filterContext = useMemo(() => ({ favorites, now: Date.now() }), [favorites, projects])
-  const filterGroups = useMemo(() => projectFilterGroups(projects, filters), [projects, filters])
+  const filterGroups = useMemo(() => projectFilterGroups(projects, filters, settings), [projects, filters, settings])
   const searched = useMemo(() => projects.filter(p => matchesProjectSearch(p, query, searchScope)), [projects, query, searchScope])
   const filtered = useMemo(() => sortProjects(searched.filter(p => matchesProjectFilters(p, filters, filterGroups, filterContext)), sort, favorites), [searched, filters, filterGroups, filterContext, sort, favorites])
   const hasFilters = Object.values(filters).some(values => values.length > 0)
@@ -112,10 +121,10 @@ export default function App() {
   }, [hosted])
 
   useEffect(() => {
-    if (!notice || notice.error) return
-    const timer = setTimeout(() => setNotice(undefined), 5500)
+    if (!notice || notice.error || settings.notificationSeconds === 0) return
+    const timer = setTimeout(() => setNotice(undefined), settings.notificationSeconds * 1000)
     return () => clearTimeout(timer)
-  }, [notice])
+  }, [notice, settings.notificationSeconds])
 
   useEffect(() => {
     if (workspace?.mode !== 'helper' || !running || busy) return
@@ -125,9 +134,9 @@ export default function App() {
       for (const project of workspace.projects.filter(p => p.dev?.status === 'running' || p.dev?.status === 'starting')) {
         api<Pick<RepoProject, 'dev'>>(`/projects/${encodeURIComponent(project.id)}/status`).then(update => { if (active && version === workspaceVersion.current) setWorkspace(current => current && ({ ...current, projects: current.projects.map(p => p.id === project.id ? { ...p, ...update } : p) })) }).catch(() => {})
       }
-    }, 4000)
+    }, settings.statusPollSeconds * 1000)
     return () => { active = false; clearInterval(timer) }
-  }, [workspace?.mode, workspace?.projects, running, busy])
+  }, [workspace?.mode, workspace?.projects, running, busy, settings.statusPollSeconds])
 
   async function persist(next: Workspace, reportError = true) {
     setWorkspace(next)
@@ -289,7 +298,7 @@ export default function App() {
         const outdated = result.outdated
         nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, outdated } : current) }
         const cached = await persist(nextWorkspace, false)
-        return { cacheWarning: !cached, outdated: outdated.findings.length > 0, score: outdated.score, skipped: outdated.skipped?.length ?? 0 }
+        return { cacheWarning: !cached, outdated: outdated.findings.length > 0, score: outdated.score, report: outdated, skipped: outdated.skipped?.length ?? 0 }
       })
     } finally {
       if (version === workspaceVersion.current) setBusy('')
@@ -345,7 +354,7 @@ export default function App() {
     </aside>
 
     <main className="main-content" id="projects" tabIndex={-1}>
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button></div></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button><SettingsDialog /></div></div></header>
       <div className="page-content">
         <section className="workspace-toolbar" aria-label="Workspace controls">
           <div className="workspace-details">
@@ -369,7 +378,7 @@ export default function App() {
 
         {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <article className={`project-card ${previewBatch.progress?.current?.id === project.id ? 'is-capturing' : ''}`} key={project.id} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
           <button className="preview-button" onClick={() => openProject(project)} aria-label={`View ${project.name}`}><ProjectPreview project={project} />{previewBatch.progress?.current?.id === project.id && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
-          <div className="project-info"><div className="project-title-row"><button id={`project-open-${project.id}`} className="project-title" onClick={() => openProject(project)}>{project.name}</button><ProjectAiBadge project={project} /><ProjectAuditBadge project={project} onClick={() => openProject(project, 'packages')} /><ProjectOutdatedBadge project={project} onClick={() => openProject(project, 'packages')} /><button className={`favorite-button ${favorites.includes(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favorites.includes(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorites.includes(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><div className="project-tags">{project.monorepo && <span title={project.monorepo.packagePath}>{project.monorepo.name} workspace</span>}{!!project.workspacePackageCount && <span>{project.workspacePackageCount} workspace packages</span>}{project.stack.slice(0, 3).map(tech => <button key={tech} onClick={() => toggleTechnology(tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div>{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
+          <div className="project-info"><div className="project-title-row"><button id={`project-open-${project.id}`} className="project-title" onClick={() => openProject(project)}>{project.name}</button><ProjectAiBadge project={project} /><ProjectAuditBadge project={project} onClick={() => openProject(project, 'packages')} /><ProjectOutdatedBadge project={project} onClick={() => openProject(project, 'packages')} /><button className={`favorite-button ${favorites.includes(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favorites.includes(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorites.includes(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><div className="project-tags">{project.monorepo && <span title={project.monorepo.packagePath}>{project.monorepo.name} workspace</span>}{!!project.workspacePackageCount && <span>{project.workspacePackageCount} workspace packages</span>}{project.stack.slice(0, settings.projectTagLimit).map(tech => <button key={tech} onClick={() => toggleTechnology(tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div>{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
           <div className="project-footer"><span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><DropdownMenu modal={false}><DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => openProject(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem><DropdownMenuItem onSelect={() => toggleFavorite(project.id)}><Star size={14} />{favorites.includes(project.id) ? 'Remove favorite' : 'Add to favorites'}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'vscode' })}><Code2 size={14} />Open in VS Code</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'sourcetree' })}><GitBranch size={14} />Open in Sourcetree</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'folder' })}><FolderOpen size={14} />Show in folder</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
         </article>)}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{hasRefinements ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{hasRefinements ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
         <footer className="page-footer"><span>{filtered.length.toString().padStart(2, '0')} {filtered.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span><span><ShieldCheck size={13} /> No cloud. No clutter.</span></footer>

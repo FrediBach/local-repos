@@ -1,6 +1,10 @@
-import type { OutdatedFinding, OutdatedLevel } from '../types'
+import type { OutdatedFinding, OutdatedLevel, PackageOutdated } from '../types'
+import { defaultSettings, type AppSettings } from './settings'
 
-export const OUTDATED_SCORE_EXPLANATION = 'Scores use the highest changed version component: 10 points per major version; 1 per minor version (maximum 5 per package); 0.1 per patch (maximum 1 per package); 0.1 for a prerelease update. Scores are summed. Red requires at least 100 points and a package at least 2 major versions behind. Any major update or 10 points is amber; smaller updates stay neutral.'
+export function outdatedScoreExplanation(settings: AppSettings = defaultSettings): string {
+  return `Scores use the highest changed version component: ${settings.majorVersionPoints} points per major version; ${settings.minorVersionPoints} per minor version (maximum ${settings.minorVersionCap} per package); ${settings.patchVersionPoints} per patch (maximum ${settings.patchVersionCap} per package); ${settings.prereleasePoints} for a prerelease update. Scores are summed. Red requires at least ${settings.outdatedRedScore} points${settings.outdatedRedMajorGap ? ` and a package at least ${settings.outdatedRedMajorGap} major versions behind` : ''}. ${settings.majorUpdatesAreOrange ? 'Any major update or ' : ''}${settings.outdatedOrangeScore} points is orange; smaller updates stay neutral.`
+}
+export const OUTDATED_SCORE_EXPLANATION = outdatedScoreExplanation()
 
 interface Version { core: number[]; prerelease: string[] }
 
@@ -28,7 +32,7 @@ function comparePrerelease(left: string[], right: string[]): number {
 }
 
 /** Undefined means unscorable; null means current or ahead of the latest tag. */
-export function scoreVersionGap(current: string, latest: string): Pick<OutdatedFinding, 'change' | 'majorGap' | 'score'> | null | undefined {
+export function scoreVersionGap(current: string, latest: string, settings: AppSettings = defaultSettings): Pick<OutdatedFinding, 'change' | 'majorGap' | 'score'> | null | undefined {
   const from = parseVersion(current), to = parseVersion(latest)
   if (!from || !to) return undefined
   for (let index = 0; index < 3; index++) {
@@ -37,21 +41,27 @@ export function scoreVersionGap(current: string, latest: string): Pick<OutdatedF
     if (gap > 0) return {
       change: (['major', 'minor', 'patch'] as const)[index],
       majorGap: index === 0 ? gap : 0,
-      score: index === 0 ? gap * 10 : index === 1 ? Math.min(gap, 5) : Math.min(gap, 10) / 10,
+      score: Math.round((index === 0 ? gap * settings.majorVersionPoints : index === 1 ? Math.min(gap * settings.minorVersionPoints, settings.minorVersionCap) : Math.min(gap * settings.patchVersionPoints, settings.patchVersionCap)) * 10) / 10,
     }
   }
-  return comparePrerelease(from.prerelease, to.prerelease) < 0 ? { change: 'prerelease', majorGap: 0, score: 0.1 } : null
+  return comparePrerelease(from.prerelease, to.prerelease) < 0 ? { change: 'prerelease', majorGap: 0, score: settings.prereleasePoints } : null
 }
 
 export function sumOutdatedScore(findings: Pick<OutdatedFinding, 'score'>[]): number {
   return Math.round(findings.reduce((sum, finding) => sum + finding.score, 0) * 10) / 10
 }
 
-export function outdatedLevel(findings: Pick<OutdatedFinding, 'score' | 'majorGap'>[]): OutdatedLevel {
+export function outdatedLevel(findings: Pick<OutdatedFinding, 'score' | 'majorGap'>[], settings: AppSettings = defaultSettings): OutdatedLevel {
   if (!findings.length) return 'current'
   const score = sumOutdatedScore(findings)
-  if (score >= 100 && findings.some(finding => finding.majorGap >= 2)) return 'high'
-  return score >= 10 || findings.some(finding => finding.majorGap > 0) ? 'moderate' : 'low'
+  if (score >= settings.outdatedRedScore && findings.some(finding => finding.majorGap >= settings.outdatedRedMajorGap)) return 'high'
+  return score >= settings.outdatedOrangeScore || (settings.majorUpdatesAreOrange && findings.some(finding => finding.majorGap > 0)) ? 'moderate' : 'low'
+}
+
+/** Recalculate the presentation of cached reports without changing scan data. */
+export function configureOutdatedReport(report: PackageOutdated, settings: AppSettings): PackageOutdated {
+  const findings = report.findings.map(finding => ({ ...finding, ...scoreVersionGap(finding.current, finding.latest, settings) }))
+  return { ...report, findings, score: sumOutdatedScore(findings), level: outdatedLevel(findings, settings) }
 }
 
 export function formatOutdatedScore(score: number): string {

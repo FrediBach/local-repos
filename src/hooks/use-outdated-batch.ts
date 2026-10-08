@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RepoProject } from '../types'
+import type { PackageOutdated, RepoProject } from '../types'
 
 export interface OutdatedBatchProgress {
   status: 'running' | 'stopping' | 'completed' | 'stopped'
@@ -8,13 +8,14 @@ export interface OutdatedBatchProgress {
   succeeded: number
   outdated: number
   score: number
+  reports?: PackageOutdated[]
   skipped: number
   current?: Pick<RepoProject, 'id' | 'name'>
   failures: { id: string; name: string; message: string }[]
   cacheWarnings: number
 }
 
-type Scan = (project: RepoProject, isCurrent: () => boolean) => Promise<{ cacheWarning?: boolean; outdated?: boolean; score?: number; skipped?: number } | void>
+type Scan = (project: RepoProject, isCurrent: () => boolean) => Promise<{ cacheWarning?: boolean; outdated?: boolean; score?: number; skipped?: number; report?: PackageOutdated } | void>
 
 /** Scan every queued project sequentially and stop only after the active request. */
 export function useOutdatedBatch() {
@@ -35,7 +36,7 @@ export function useOutdatedBatch() {
     const job = { stop: false }
     active.current = job
     const queue = [...projects]
-    let state: OutdatedBatchProgress = { status: 'running', total: queue.length, completed: 0, succeeded: 0, outdated: 0, score: 0, skipped: 0, failures: [], cacheWarnings: 0 }
+    let state: OutdatedBatchProgress = { status: 'running', total: queue.length, completed: 0, succeeded: 0, outdated: 0, score: 0, reports: [], skipped: 0, failures: [], cacheWarnings: 0 }
     const isCurrent = () => mounted.current && active.current === job
     const publish = () => {
       if (isCurrent()) setProgress({ ...state, status: job.stop && state.status === 'running' ? 'stopping' : state.status })
@@ -53,6 +54,7 @@ export function useOutdatedBatch() {
             succeeded: state.succeeded + 1,
             outdated: state.outdated + (result?.outdated ? 1 : 0),
             score: Math.round((state.score + (result?.score ?? 0)) * 10) / 10,
+            reports: result?.report ? [...state.reports ?? [], result.report] : state.reports,
             skipped: state.skipped + (result?.skipped ?? 0),
             // A successful save stores the whole workspace, including earlier results.
             cacheWarnings: result?.cacheWarning ? state.cacheWarnings + 1 : 0,

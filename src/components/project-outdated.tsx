@@ -1,12 +1,14 @@
 import { ArrowUpCircle, LoaderCircle, PackageSearch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { formatOutdatedScore, OUTDATED_SCORE_EXPLANATION } from '@/lib/outdated'
+import { formatOutdatedScore, outdatedScoreExplanation } from '@/lib/outdated'
+import { useSettings } from '@/hooks/use-settings'
 import type { RepoProject } from '@/types'
 import { DependencyUpdates } from '@/components/dependency-updates'
 
 export function ProjectOutdated({ project, helper, demo, busy, onAction }: {
   project: RepoProject; helper: boolean; demo: boolean; busy: string; onAction: (name: string) => void
 }) {
+  const { settings } = useSettings()
   const report = project.outdated
   const scanning = busy === `${project.id}:outdated`
   const updating = busy === `${project.id}:update-minor` || busy === `${project.id}:update-patches`
@@ -40,7 +42,7 @@ export function ProjectOutdated({ project, helper, demo, busy, onAction }: {
         <div><span>{count ? `${count} outdated ${count === 1 ? 'package' : 'packages'}` : skipped.length ? 'No outdated packages found among checked packages' : 'All checked packages are up to date'}</span><span className={`outdated-score outdated-level-${report.level}`}>Update score <strong>{formatOutdatedScore(report.score)}</strong></span></div>
         <p>Last scan · {new Date(report.scannedAt).toLocaleString()} · {report.manager}</p>
       </div>
-      <p className="maintenance-hint outdated-explanation">{OUTDATED_SCORE_EXPLANATION}</p>
+      <p className="maintenance-hint outdated-explanation">{outdatedScoreExplanation(settings)}</p>
       {!!count && <DependencyUpdates findings={report.findings} />}
       {!!skipped.length && <details className="outdated-skipped"><summary>{skipped.length} {skipped.length === 1 ? 'package was' : 'packages were'} not compared</summary><p>Skipped packages do not contribute to the score.</p><ul>{skipped.map((item, index) => <li key={`${item.name}:${index}`}><strong>{item.name}</strong><span>{item.reason}</span></li>)}</ul></details>}
       <p className="maintenance-hint">Result saved from the last successful scan. Check again after dependency changes.</p>

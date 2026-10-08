@@ -1,0 +1,129 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import App from './App'
+import { defaultSettings, SETTINGS_STORAGE_KEY } from './lib/settings'
+import type { RepoProject } from './types'
+
+const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), clearWorkspace: vi.fn() }))
+vi.mock('./lib/storage', () => storage)
+const project: RepoProject = {
+  id: 'alpha', name: 'Alpha', dirName: 'alpha', relativePath: '.', description: '', stack: ['React', 'TypeScript', 'Vite'], scripts: {}, packageManager: 'npm', scannedAt: '2026-10-08T12:00:00Z',
+  audit: { manager: 'npm', scannedAt: '2026-10-08T12:00:00Z', counts: { critical: 0, high: 1, moderate: 0, low: 0, info: 0 }, findings: [{ name: 'example', severity: 'high', title: 'Example finding' }] },
+  outdated: { manager: 'npm', scannedAt: '2026-10-08T12:00:00Z', score: 20, level: 'moderate', findings: [{ name: 'example', current: '1.0.0', latest: '3.0.0', change: 'major', majorGap: 2, score: 20 }] },
+}
+let preferences: Map<string, string>
+let setItem: ReturnType<typeof vi.fn>
+
+beforeEach(() => {
+  vi.resetAllMocks()
+  preferences = new Map()
+  setItem = vi.fn((key: string, value: string) => { preferences.set(key, value) })
+  vi.stubGlobal('localStorage', { getItem: (key: string) => preferences.get(key) ?? null, setItem })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))
+  storage.loadWorkspace.mockResolvedValue({ rootName: 'Projects', mode: 'browser', projects: [project], syncedAt: project.scannedAt })
+  storage.loadFavorites.mockResolvedValue([])
+})
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+
+async function setup() {
+  const result = render(<App />)
+  await screen.findByRole('button', { name: 'View Alpha' })
+  return { ...result, user: userEvent.setup() }
+}
+const auditBadge = () => screen.getByRole('button', { name: /Alpha: 1 vulnerability/ })
+const outdatedBadge = () => screen.getByRole('button', { name: /Alpha: 1 outdated package/ })
+
+describe('workspace settings dialog', () => {
+  it('keeps batch totals and package badges in sync when score weights change', async () => {
+    const workspace = { rootName: 'Projects', rootPath: '/projects', mode: 'helper', projects: [project], syncedAt: project.scannedAt }
+    storage.loadWorkspace.mockResolvedValue(workspace)
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => url === '/api/scan' ? workspace : url.endsWith('/outdated') ? { outdated: project.outdated } : { ok: true } })))
+    const { user } = await setup()
+    await user.click(screen.getByRole('button', { name: 'Scan outdated packages', exact: true }))
+    await screen.findByText('Outdated-package scan complete')
+    expect(screen.getByText('20 total lag points')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByText('Score weights', { selector: 'summary' }))
+    await user.clear(screen.getByRole('spinbutton', { name: 'Points per major version' }))
+    await user.type(screen.getByRole('spinbutton', { name: 'Points per major version' }), '15')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByText('30 total lag points')).toBeTruthy()
+    expect(outdatedBadge().textContent).toBe('30')
+  })
+
+  it('updates cached badge colors, details and filter results, and persists across reloads', async () => {
+    const { user, unmount } = await setup()
+    expect(auditBadge().classList.contains('audit-color-red')).toBe(true)
+    expect(outdatedBadge().classList.contains('outdated-level-moderate')).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    const dialog = screen.getByRole('dialog', { name: 'Settings' })
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: 'High severity color' }), 'orange')
+    await user.clear(within(dialog).getByRole('spinbutton', { name: 'Red at score' }))
+    await user.type(within(dialog).getByRole('spinbutton', { name: 'Red at score' }), '20')
+    await user.click(within(dialog).getByRole('button', { name: 'Save settings' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Settings', exact: true }))
+    expect(auditBadge().classList.contains('audit-color-orange')).toBe(true)
+    expect(outdatedBadge().classList.contains('outdated-level-high')).toBe(true)
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ outdatedRedScore: 20, auditColors: { high: 'orange' } })
+    await user.click(screen.getByRole('button', { name: /^All filters/ }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Outdated packages' }), 'high')
+    expect(screen.getAllByRole('article')).toHaveLength(1)
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Vulnerabilities' }), 'red')
+    expect(screen.queryAllByRole('article')).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Clear filters', exact: true }))
+    await user.click(outdatedBadge())
+    const details = screen.getByRole('dialog', { name: 'Alpha' })
+    expect(details.querySelector('.severity-high')?.classList.contains('audit-color-orange')).toBe(true)
+    expect(within(details).getByText(/Red requires at least 20 points/)).toBeTruthy()
+    unmount()
+    await setup()
+    expect(auditBadge().classList.contains('audit-color-orange')).toBe(true)
+    expect(outdatedBadge().classList.contains('outdated-level-high')).toBe(true)
+  })
+
+  it('keeps drafts isolated, validates hidden categories, and restores defaults only when saved', async () => {
+    const { user } = await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.clear(screen.getByRole('spinbutton', { name: 'Red at score' }))
+    await user.type(screen.getByRole('spinbutton', { name: 'Red at score' }), '5')
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByRole('tab', { name: 'Badges & scores' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('spinbutton', { name: 'Red at score' }).getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByRole('alert').textContent).toContain('Correct')
+    expect(preferences.has(SETTINGS_STORAGE_KEY)).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    expect((screen.getByRole('spinbutton', { name: 'Red at score' }) as HTMLInputElement).value).toBe('100')
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    await user.clear(screen.getByRole('spinbutton', { name: 'Technology tags per project' }))
+    await user.type(screen.getByRole('spinbutton', { name: 'Technology tags per project' }), '0')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByRole('article').querySelectorAll('.project-tags button')).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Reset defaults' }))
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByRole('article').querySelectorAll('.project-tags button')).toHaveLength(3)
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toEqual(defaultSettings)
+  })
+
+  it('reports persistence failures without applying unsaved changes and supports keyboard tab navigation', async () => {
+    const { user } = await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    screen.getByRole('tab', { name: 'Badges & scores' }).focus()
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Filter thresholds' }))
+    await user.keyboard('{End}')
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Interface' }))
+    await user.keyboard('{Home}')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'High severity color' }), 'blue')
+    setItem.mockImplementation(() => { throw new Error('Storage blocked') })
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByRole('alert').textContent).toContain('Could not save settings')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(auditBadge().classList.contains('audit-color-red')).toBe(true)
+  })
+})
