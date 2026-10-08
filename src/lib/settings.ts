@@ -5,6 +5,7 @@ export type BadgeColor = 'red' | 'orange' | 'blue' | 'neutral'
 export const badgeColors: BadgeColor[] = ['red', 'orange', 'blue', 'neutral']
 export const auditSeverities: AuditSeverity[] = ['critical', 'high', 'moderate', 'low', 'info']
 export const SETTINGS_STORAGE_KEY = 'local-repos:settings:v1'
+export const PREFERENCES_CHANGED_EVENT = 'local-repos:preferences-changed'
 export type WatcherMode = 'manual' | 'periodic' | 'changes'
 
 export const numericSettings = {

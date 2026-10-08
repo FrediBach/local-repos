@@ -6,6 +6,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ThemeControl } from '@/components/theme-control'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { SettingsProvider, useSettings } from '@/hooks/use-settings'
+import { readThemePreference } from '@/hooks/use-theme'
+import { PREFERENCES_CHANGED_EVENT } from '@/lib/settings'
+import { createConfigBackup, mergeConfigProjects, type ConfigBackup } from '@/lib/config-backup'
 import { configureOutdatedReport } from '@/lib/outdated'
 import { HostedNotice } from '@/components/hosted-notice'
 import { ProjectTabs } from '@/components/project-tabs'
@@ -34,7 +37,7 @@ import { ProjectOutdatedBadge } from '@/components/project-outdated-badge'
 import { api, originUrl, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
-import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveFavorites, saveProjectTags, saveWorkspace } from '@/lib/storage'
+import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveConfigPreferences, saveFavorites, saveProjectTags, saveWorkspace } from '@/lib/storage'
 import { cachePreview, preservePreviews } from '@/lib/workspace'
 import { installationUrl, isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, PackageOutdated, RepoProject, Workspace } from '@/types'
@@ -67,6 +70,7 @@ function WorkspaceApp() {
   const [favorites, setFavorites] = useState<string[]>([])
   const [projectTags, setProjectTags] = useState<ProjectTags>({})
   const [tagsReady, setTagsReady] = useState(false)
+  const [cacheReady, setCacheReady] = useState(false)
   const [tagProjectId, setTagProjectId] = useState<string>()
   const tagOpener = useRef<HTMLElement | null>(null)
   const [filters, setFilters] = useState<FilterState>({})
@@ -113,6 +117,8 @@ function WorkspaceApp() {
   const hasFilters = Object.values(filters).some(values => values.length > 0)
   const hasRefinements = !!query.trim() || Object.entries(filters).some(([key, values]) => values.length > 0 && !(key === 'stars' && values[0] === 'starred') && !(key === 'server' && values[0] === 'running')) || (filter === 'favorites' && !!filters.server?.length)
   const watcher = useWorkspaceWatcher({ workspace, settings, busy: !!busy, online, run: runAutomaticScan })
+  const configContext = useRef({ workspace, favorites, projectTags, busy, ready: tagsReady && cacheReady })
+  configContext.current = { workspace, favorites, projectTags, busy, ready: tagsReady && cacheReady }
 
   useEffect(() => {
     let active = true
@@ -125,7 +131,9 @@ function WorkspaceApp() {
     let active = true
     const initialVersion = workspaceVersion.current
     Promise.all([loadWorkspace(), loadFavorites()]).then(([saved, stars]) => {
-      if (!active || workspaceVersion.current !== initialVersion) return
+      if (!active) return
+      setCacheReady(true)
+      if (workspaceVersion.current !== initialVersion) return
       setWorkspace(saved); if (!favoritesVersion.current) setFavorites(stars); setPath(saved?.rootPath ?? '')
       setHelperWorkspacePath(saved?.mode === 'helper' ? saved.rootPath : undefined)
     }).catch(() => setNotice({ text: 'Browser storage is unavailable. You can still browse this session.', error: true }))
@@ -232,6 +240,20 @@ function WorkspaceApp() {
     if (!next[id].length) delete next[id]
     await saveProjectTags(next)
     setProjectTags(next)
+  }
+  async function importConfig(backup: ConfigBackup) {
+    // File reading is asynchronous: match against the current directory and preferences.
+    const current = configContext.current
+    if (!current.ready || current.busy) throw new Error('Wait for the workspace and saved preferences to finish loading, then try importing again.')
+    const result = mergeConfigProjects(backup, current.workspace?.projects ?? [], current.favorites, current.projectTags)
+    setBusy('config-import')
+    try {
+      await saveConfigPreferences(backup, result.favorites, result.tags)
+      favoritesVersion.current += 1
+      setFavorites(result.favorites); setProjectTags(result.tags)
+      window.dispatchEvent(new Event(PREFERENCES_CHANGED_EVENT))
+      return result
+    } finally { setBusy('') }
   }
   function restoreTagFocus() {
     if (tagOpener.current?.isConnected) tagOpener.current.focus()
@@ -449,7 +471,7 @@ function WorkspaceApp() {
     </aside>
 
     <main className="main-content" id="projects" tabIndex={-1}>
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button><SettingsDialog /></div></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button><SettingsDialog backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} /></div></div></header>
       <div className="page-content">
         <section className="workspace-toolbar" aria-label="Workspace controls">
           <div className="workspace-details">

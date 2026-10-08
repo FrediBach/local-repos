@@ -1,5 +1,8 @@
 import type { Workspace } from '../types'
 import { readProjectTags, type ProjectTags } from './project-tags'
+import { SETTINGS_STORAGE_KEY } from './settings'
+import { THEME_STORAGE_KEY } from '@/hooks/use-theme'
+import type { ConfigBackup } from './config-backup'
 
 const DATABASE = 'local-repos'
 const STORE = 'preferences'
@@ -57,3 +60,39 @@ export async function loadFavorites(): Promise<string[]> {
 export const saveFavorites = (ids: string[]): Promise<void> => write('favorites', [...new Set(ids)])
 export const loadProjectTags = async (): Promise<ProjectTags> => readProjectTags(await read<unknown>('project-tags'))
 export const saveProjectTags = (tags: ProjectTags): Promise<void> => write('project-tags', readProjectTags(tags))
+
+/** Commit stars and tags together; restore localStorage if either storage area fails. */
+export async function saveConfigPreferences(backup: ConfigBackup, favorites: string[], tags: ProjectTags): Promise<void> {
+  const database = await openDatabase()
+  const previous = new Map([SETTINGS_STORAGE_KEY, THEME_STORAGE_KEY].map(key => [key, localStorage.getItem(key)]))
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE, 'readwrite')
+    const store = transaction.objectStore(STORE)
+    const written: string[] = []
+    let failure: unknown
+    store.put([...new Set(favorites)], 'favorites')
+    const request = store.put(readProjectTags(tags), 'project-tags')
+    request.onsuccess = () => {
+      try {
+        for (const [key, value] of [[SETTINGS_STORAGE_KEY, JSON.stringify(backup.settings)], [THEME_STORAGE_KEY, backup.theme]]) {
+          localStorage.setItem(key, value)
+          written.push(key)
+        }
+      } catch (error) { failure = error; transaction.abort() }
+    }
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => {
+      let rollbackFailed = false
+      for (const key of written) {
+        try {
+          const value = previous.get(key)
+          if (value === null || value === undefined) localStorage.removeItem(key)
+          else localStorage.setItem(key, value)
+        } catch { rollbackFailed = true }
+      }
+      reject(new Error(rollbackFailed
+        ? 'Import failed and some appearance settings could not be restored. Check browser storage permissions and reload.'
+        : `Could not save the configuration. Your preferences were kept. ${failure instanceof Error ? failure.message : transaction.error?.message ?? 'Check browser storage permissions and try again.'}`))
+    }
+  })
+}

@@ -77,6 +77,16 @@ The cog beside the top-right help icon opens **Settings**:
 
 Settings are stored in localStorage for this browser and app origin, independently of the connected directory, and changes synchronize between open tabs. If storage is unavailable, the dialog reports the failure and keeps the previously applied settings. Package lag measures version distance, not release age in days; vulnerability labels and counts continue to reflect the package manager's report.
 
+### Export and import configuration
+
+Open **Settings → Backup → Export JSON** to download your saved settings (including watcher rules and color scheme), System/Light/Dark preference, favorites, and project tags. Save pending settings edits before exporting. The versioned JSON contains project identifiers, relative paths, and Git remotes for matching; it excludes remote credentials, absolute workspace paths, directory permissions, project files, previews, and scan results.
+
+On the destination, connect your projects directory, then choose **Settings → Backup → Import JSON**. Settings and theme apply immediately. Favorites and tags merge with existing preferences, so importing never removes a local favorite or tag and additional repositories keep their preferences. The connected directory and scanned project metadata are preserved.
+
+Matching uses compatible local IDs, Git remotes (including renamed or moved checkouts), and relative paths. Monorepo members are matched separately by their package paths. A different Git remote at the same location is skipped; multiple possible matches are skipped unless an ID or relative path resolves them. The result reports matched, missing, different, and ambiguous projects. Repositories without a remote need a matching ID or relative path; display names alone are never used.
+
+Missing repositories do not prevent import. Add them and import the same file again to restore their preferences; skipped preferences are not automatically applied later. Importing without a connected directory restores global settings and theme only. Preferences retained from previously connected directories are also exported, but have only their saved IDs available for matching. Malformed or unsupported backups are rejected before saving, and failed saves keep the prior preferences. Files must be smaller than 5 MB.
+
 ## Automatic scans
 
 Configure **Settings → Watcher**:

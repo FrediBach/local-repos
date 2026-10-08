@@ -203,7 +203,7 @@ describe('workspace settings dialog', () => {
     await user.keyboard('{ArrowRight}')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Filter thresholds' }))
     await user.keyboard('{End}')
-    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Interface' }))
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Backup' }))
     await user.keyboard('{Home}')
     await user.selectOptions(screen.getByRole('combobox', { name: 'High severity color' }), 'blue')
     setItem.mockImplementation(() => { throw new Error('Storage blocked') })

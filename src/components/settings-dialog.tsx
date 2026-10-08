@@ -6,20 +6,22 @@ import { useSettings } from '@/hooks/use-settings'
 import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
 import { colorSchemes } from '@/lib/color-schemes'
+import { ConfigBackupPanel, type ConfigBackupControls } from './config-backup'
 import './settings-dialog.css'
 
-const tabs = ['badges', 'filters', 'watcher', 'interface'] as const
+const tabs = ['badges', 'filters', 'watcher', 'interface', 'backup'] as const
 type SettingsTab = typeof tabs[number]
-const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface' }
+const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface', backup: 'Backup' }
 const fieldTabs = (key: NumericSettingKey): SettingsTab => key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
 
-export function SettingsDialog() {
+export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
   const { settings, saveSettings } = useSettings()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(settings)
   const [tab, setTab] = useState<SettingsTab>('badges')
   const [submitted, setSubmitted] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [transferring, setTransferring] = useState(false)
   const id = useId()
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   const errors = validateSettings(draft)
@@ -37,6 +39,7 @@ export function SettingsDialog() {
   }
 
   function changeOpen(value: boolean) {
+    if (transferring) return
     if (value) { setDraft({ ...settings, auditColors: { ...settings.auditColors } }); setTab('badges'); setSubmitted(false); setSaveError('') }
     setOpen(value)
   }
@@ -55,7 +58,7 @@ export function SettingsDialog() {
       <div className="settings-header"><DialogTitle><Settings size={20} />Settings</DialogTitle><DialogDescription>Appearance, badge rules, and workspace preferences.</DialogDescription></div>
       <form noValidate onSubmit={event => { event.preventDefault(); save() }}>
         <div className="settings-tabs" role="tablist" aria-label="Settings categories">
-          {tabs.map((value, index) => <button key={value} type="button" role="tab" id={`${id}-${value}`} aria-controls={`${id}-panel`} aria-selected={tab === value} tabIndex={tab === value ? 0 : -1}
+          {tabs.map((value, index) => <button key={value} type="button" role="tab" disabled={transferring} id={`${id}-${value}`} aria-controls={`${id}-panel`} aria-selected={tab === value} tabIndex={tab === value ? 0 : -1}
             ref={node => { buttons.current[index] = node }} onClick={() => setTab(value)} onKeyDown={event => {
               const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : undefined
               if (next === undefined) return
@@ -63,6 +66,7 @@ export function SettingsDialog() {
             }}>{labels[value]}</button>)}
         </div>
         <div className="settings-body" role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`} tabIndex={0} key={tab}>
+          {tab === 'backup' && <ConfigBackupPanel {...backup} onWorkingChange={setTransferring} onImported={value => { setDraft(value.settings); setSubmitted(false); setSaveError('') }} />}
           {tab === 'badges' && <>
             <fieldset className="settings-section"><legend>Vulnerability colors</legend><p>The project badge uses the highest reported severity. Severity labels and counts stay as reported by the package manager.</p>
               <div className="settings-color-grid">{auditSeverities.map(severity => <label className="settings-field" key={severity}>
@@ -125,11 +129,11 @@ export function SettingsDialog() {
             </fieldset>
           </>}
         </div>
-        <div className="settings-footer">
+        {tab === 'backup' ? <div className="settings-footer"><Button type="button" variant="outline" size="sm" disabled={transferring} onClick={() => changeOpen(false)}>Close</Button><p>Backups contain preferences and repository identifiers. Project files, previews, and scan results stay on this device.</p></div> : <div className="settings-footer">
           {(saveError || submitted && Object.keys(errors).length > 0) && <p role="alert" className="settings-save-error">{saveError || 'Correct the highlighted values before saving.'}</p>}
           <div className="settings-footer-actions"><Button type="button" variant="ghost" size="sm" onClick={() => { setDraft({ ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }); setSubmitted(false); setSaveError('') }}><RotateCcw size={14} />Reset defaults</Button><div><Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" size="sm">Save settings</Button></div></div>
           <p>Saved in this browser. Changes apply immediately after saving.</p>
-        </div>
+        </div>}
       </form>
     </DialogContent>
   </Dialog>

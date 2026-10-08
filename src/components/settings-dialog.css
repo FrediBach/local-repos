@@ -57,6 +57,7 @@
 .settings-footer-actions > div { display: flex; gap: 8px; }
 .settings-footer > p:last-child { font-size: .75rem; color: var(--muted-foreground); margin: 8px 0 0; }
 .settings-save-error { font-size: .8125rem; margin: 0 0 10px; }
+.config-backup-message { font-size: .8125rem; line-height: 1.6; color: var(--muted-foreground); margin: 12px 0 0; }
 @media (max-width: 600px) {
   .settings-header, .settings-body { padding: 18px 16px; }
   .settings-tabs { padding-inline: 16px; gap: 16px; }
