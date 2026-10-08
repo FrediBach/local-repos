@@ -125,6 +125,10 @@ describe('workspace vulnerability scans', () => {
     expect(auditRequests()[2][0]).toBe('/api/projects/charlie/audit')
     await complete('charlie')
 
+    const criticalAlert = screen.getByRole('alertdialog', { name: 'New critical vulnerabilities' })
+    expect(within(criticalAlert).getByText('Charlie tools')).toBeTruthy()
+    await user.click(within(criticalAlert).getByRole('button', { name: 'Dismiss alert' }))
+
     await waitFor(() => expect(scanButton().disabled).toBe(false))
     expect(progress().getAttribute('aria-valuenow')).toBe('3')
     expect(progressSection().getByText('Vulnerability scan complete')).toBeTruthy()
@@ -152,6 +156,8 @@ describe('workspace vulnerability scans', () => {
     await waitFor(() => expect(auditRequests()).toHaveLength(3))
     expect(progressSection().getByText(/could not be saved in browser storage/)).toBeTruthy()
     await complete('charlie')
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss alert' }))
 
     expect(progressSection().getByText('2 scanned')).toBeTruthy()
     expect(progressSection().getByText('1 vulnerable')).toBeTruthy()

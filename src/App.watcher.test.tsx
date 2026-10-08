@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { defaultSettings } from './lib/settings'
@@ -34,6 +34,56 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
 async function setup() { await act(async () => { render(<App />) }) }
 
 describe('automatic workspace scans', () => {
+  it('alerts immediately for new critical findings, groups projects, and does not repeat identical results', async () => {
+    const critical = { ...audit, counts: { ...audit.counts, high: 0, critical: 1 }, findings: [{ name: 'unsafe-package', severity: 'critical', title: 'Example critical advisory' }] }
+    const original = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string) => url.endsWith('/audit') ? Promise.resolve(response({ audit: critical })) : original(url))
+    await setup()
+    await advance(60_000)
+    const alert = screen.getByRole('alertdialog', { name: 'New critical vulnerabilities' })
+    expect(within(alert).getByRole('region', { name: 'Critical findings in alpha' })).toBeTruthy()
+    expect(within(alert).getByRole('region', { name: 'Critical findings in bravo' })).toBeTruthy()
+    expect(within(alert).getAllByText('unsafe-package')).toHaveLength(2)
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/outdated'))).toHaveLength(2)
+    fireEvent.click(within(alert).getByRole('button', { name: 'Dismiss alert' }))
+    await advance(60_000)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/audit'))).toHaveLength(4)
+  })
+
+  it('alerts on a new critical advisory at the same count, but not on loading cached findings', async () => {
+    const critical = { ...audit, counts: { ...audit.counts, high: 0, critical: 1 }, findings: [{ name: 'unsafe-package', severity: 'critical', title: 'Old advisory' }] }
+    storage.loadWorkspace.mockResolvedValue({ ...workspace, projects: workspace.projects.map(project => ({ ...project, audit: critical })) })
+    const original = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string) => url.endsWith('/audit') ? Promise.resolve(response({ audit: { ...critical, findings: [{ ...critical.findings[0], title: 'New advisory' }] } })) : original(url))
+    await setup()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await advance(60_000)
+    const alert = screen.getByRole('alertdialog')
+    expect(within(alert).getAllByText('New advisory')).toHaveLength(2)
+    expect(within(alert).queryByText('Old advisory')).toBeNull()
+    fireEvent.click(within(alert).getByRole('button', { name: 'Review audit for alpha' }))
+    await advance(0)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    const details = screen.getByRole('dialog', { name: 'alpha' })
+    expect(within(details).getByRole('tab', { name: 'Packages' }).getAttribute('aria-selected')).toBe('true')
+    expect(within(details).getByText('New advisory')).toBeTruthy()
+  })
+
+  it('keeps critical alerts visible despite cache failures and suppresses repeats for the session', async () => {
+    const critical = { ...audit, counts: { ...audit.counts, critical: 1 }, findings: [] }
+    storage.saveWorkspace.mockRejectedValue(new Error('Quota exceeded'))
+    const original = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string) => url.endsWith('/audit') ? Promise.resolve(response({ audit: critical })) : original(url))
+    await setup()
+    await advance(60_000)
+    const alert = screen.getByRole('alertdialog')
+    expect(within(alert).getAllByText(/1 additional critical issue/)).toHaveLength(2)
+    fireEvent.click(within(alert).getByRole('button', { name: 'Dismiss alert' }))
+    await advance(60_000)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
   it('refreshes metadata and selected reports sequentially, and saves results', async () => {
     await setup()
     expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/health'])

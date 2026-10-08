@@ -25,6 +25,8 @@ import { ProjectAiBadge } from '@/components/project-ai-badge'
 import { useAuditBatch } from '@/hooks/use-audit-batch'
 import { useOutdatedBatch } from '@/hooks/use-outdated-batch'
 import { useWorkspaceWatcher } from '@/hooks/use-workspace-watcher'
+import { CriticalVulnerabilityDialog } from '@/components/critical-vulnerability-dialog'
+import { mergeCriticalAlerts, newCriticalVulnerabilities, type CriticalVulnerabilityAlert } from '@/lib/critical-vulnerabilities'
 import { OutdatedBatchProgress } from '@/components/outdated-batch-progress'
 import { ProjectOutdatedBadge } from '@/components/project-outdated-badge'
 import { api, originUrl, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
@@ -76,6 +78,8 @@ function WorkspaceApp() {
   const [busy, setBusy] = useState('')
   const [connectError, setConnectError] = useState('')
   const [notice, setNotice] = useState<{ text: string; error?: boolean }>()
+  const [criticalAlerts, setCriticalAlerts] = useState<CriticalVulnerabilityAlert[]>([])
+  const auditHistory = useRef(new Map<string, PackageAudit>())
   const [detailTab, setDetailTab] = useState<'overview' | 'packages' | 'readme'>('overview')
   const [logs, setLogs] = useState<string>()
   const [installPrompt, setInstallPrompt] = useState<InstallEvent>()
@@ -144,6 +148,14 @@ function WorkspaceApp() {
     try { await saveWorkspace(next); return true } catch { if (reportError) setNotice({ text: 'Projects loaded, but browser storage could not save this workspace.', error: true }); return false }
   }
 
+  function reportCriticalVulnerabilities(project: RepoProject, audit: PackageAudit) {
+    const changes = newCriticalVulnerabilities(auditHistory.current.get(project.id) ?? project.audit, audit)
+    auditHistory.current.set(project.id, audit)
+    if (changes.findings.length || changes.additionalCount) {
+      setCriticalAlerts(current => mergeCriticalAlerts(current, { projectId: project.id, projectName: project.name, ...changes }))
+    }
+  }
+
   async function runAutomaticScan(changedIds: string[] | undefined, isCurrent: () => boolean, progress: (message: string) => void) {
     if (!workspace || busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
     const version = ++workspaceVersion.current
@@ -173,6 +185,7 @@ function WorkspaceApp() {
               const update = await projectAction<Partial<RepoProject>>(project.id, check)
               if (!current()) return
               if (!update[check as 'audit' | 'outdated' | 'storage']) throw new Error('The helper returned no report.')
+              if (check === 'audit' && update.audit) reportCriticalVulnerabilities({ ...project, audit: workspace.projects.find(item => item.id === project.id)?.audit }, update.audit)
               next = { ...next, projects: next.projects.map(item => item.id === project.id ? { ...item, ...update } : item) }
               cacheFailed = !await persist(next, false)
             } catch (error) {
@@ -224,6 +237,7 @@ function WorkspaceApp() {
       }
       if (version !== workspaceVersion.current) return
       if (workspace?.mode === 'helper' && (next.mode !== 'helper' || next.rootPath !== workspace.rootPath)) await stopWorkspaceServers(workspace)
+      auditHistory.current.clear(); setCriticalAlerts([])
       next = preservePreviews(next, workspace)
       const cached = await persist(next); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); navigate('all'); setConnectOpen(false)
       if (cached) setNotice({ text: `Connected ${next.rootName}. Found ${next.projects.length} project${next.projects.length === 1 ? '' : 's'}.${next.warnings?.length ? ` ${next.warnings.length} scan note(s) — see workspace info.` : ''}` })
@@ -260,6 +274,7 @@ function WorkspaceApp() {
       const result = await projectAction<Partial<RepoProject>>(project.id, updateLevel ? 'update-packages' : name, updateLevel ? { level: updateLevel } : body)
       if (name === 'screenshot' && result.screenshot) result.screenshot = await cachePreview(result.screenshot)
       if (version !== workspaceVersion.current) return
+      if (name === 'audit' && result.audit) reportCriticalVulnerabilities(project, result.audit)
       const cached = name === 'open' || name === 'run-script' || await persist({ ...workspace, projects: workspace.projects.map(p => p.id === project.id ? { ...p, ...result } : p) })
       if (name === 'screenshot' && cached) {
         const kind = result.preview?.kind
@@ -289,7 +304,7 @@ function WorkspaceApp() {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
     ++workspaceVersion.current
     setBusy('disconnect')
-    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); setWorkspace(undefined); setHelperWorkspacePath(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
+    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); auditHistory.current.clear(); setCriticalAlerts([]); setWorkspace(undefined); setHelperWorkspacePath(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
     catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Could not disconnect the workspace.', error: true }) }
     finally { setBusy('') }
   }
@@ -315,6 +330,7 @@ function WorkspaceApp() {
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.audit) throw new Error('The helper did not return an audit report.')
         const audit = result.audit
+        reportCriticalVulnerabilities(project, audit)
         nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, audit } : current) }
         const cached = await persist(nextWorkspace, false)
         return { cacheWarning: !cached, vulnerable: Object.values(audit.counts).some(count => count > 0) }
@@ -458,6 +474,7 @@ function WorkspaceApp() {
     <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelectedId(undefined) }}><DialogContent className="project-dialog" onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}>{selected && <><div className="detail-header" role="region" aria-label="Project summary" tabIndex={0}><span className="eyebrow"><FolderGit2 size={14} /> PROJECT OVERVIEW</span><DialogTitle>{selected.name}</DialogTitle><DialogDescription>{selected.description || 'Your local project, at a glance.'}</DialogDescription><div className="detail-tags"><ProjectAiBadge project={selected} />{selected.monorepo && <span>{selected.monorepo.name} / {selected.monorepo.packagePath}</span>}{!!selected.workspacePackageCount && <span>{selected.workspacePackageCount} workspace packages</span>}{selected.stack.map(tech => <span key={tech}>{tech}</span>)}{isDemo && <span className="sample-badge">SAMPLE PROJECT</span>}</div></div><ProjectTabs value={detailTab} onChange={setDetailTab}>{detailTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === selected.id ? `${selected.id}:outdated` : busy} onAction={name => { void action(selected, name) }} /> : detailTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <><ProjectPreview project={selected} large /><div className="metadata-grid"><div><span>VERSION</span><strong>{selected.version ? `v${selected.version}` : 'Not specified'}</strong></div><div><span>AUTHOR</span><strong>{selected.author || 'Not specified'}</strong></div><div><span>BRANCH</span><strong><GitBranch size={14} />{selected.git?.branch || 'Not available'}</strong></div><div><span>LICENSE</span><strong>{selected.license || 'Not specified'}</strong></div></div><div className="commit-row"><GitCommitHorizontal size={18} /><div><strong>{selected.git?.message || 'No commit information available'}</strong><span>{selected.git?.commit?.slice(0, 7)} {selected.git?.committedAt && `· ${relativeTime(selected.git.committedAt)}`}{selected.git?.dirty && ' · Uncommitted changes'}</span></div>{originUrl(selected.git?.origin) && <a href={originUrl(selected.git?.origin)} target="_blank" rel="noreferrer" title="Open Git remote"><ExternalLink size={16} /></a>}</div><ProjectHistory key={`history:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} /><ProjectControls key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} logs={logs} onAction={(name, body) => { void action(selected, name, body) }} /><ProjectStoragePanel key={`storage:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={(name, body) => { void action(selected, name, body) }} /></>}</ProjectTabs><div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'vscode' })}><Code2 size={15} />VS Code</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'sourcetree' })}><GitBranch size={15} />Sourcetree</Button><Button variant="ghost" size="sm" aria-pressed={favorites.includes(selected.id)} onClick={() => toggleFavorite(selected.id)}><Star size={15} fill={favorites.includes(selected.id) ? 'currentColor' : 'none'} />{favorites.includes(selected.id) ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
 
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent className="help-dialog"><Logo /><DialogTitle>A little order. A lot of possibility.</DialogTitle><DialogDescription>Local Repos is a quiet home for your checked-out projects.</DialogDescription><div className="help-steps"><div><span>01</span><div><h3>Connect a directory.</h3><p>Choose your projects folder. We look for repositories and package.json files up to two folders deep, including declared monorepo workspaces and skipping dependencies and build output.</p></div></div><div><span>02</span><div><h3>Find your bearings.</h3><p>README introductions, technologies, package details, and Git history come together in one place. Favorite the projects you return to.</p></div></div><div><span>03</span><div><h3>Pick up where you left off.</h3><p>The local helper opens your editor, runs your dev script, and captures a preview. Only projects you explicitly start are run.</p></div></div></div><div className="help-cache"><ShieldCheck size={20} /><p>Your directory connection and project metadata are cached in IndexedDB. Use resync to read changes or configure automatic scans in Settings → Watcher. The production PWA keeps the interface available offline.</p></div>{workspace?.warnings?.length ? <details className="scan-warnings"><summary>{workspace.warnings.length} scan notes</summary><ul>{workspace.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}{workspace && <Button variant="outline" disabled={!!busy} onClick={() => { void forgetWorkspace(); setHelpOpen(false) }}><Unplug size={15} />Forget this directory</Button>}</DialogContent></Dialog>
+    <CriticalVulnerabilityDialog alerts={criticalAlerts} onDismiss={() => setCriticalAlerts([])} onReview={id => { const project = projects.find(item => item.id === id); setCriticalAlerts([]); if (project) openProject(project, 'packages') }} />
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <CircleHelp size={18} /> : <Check size={18} />}<span>{notice.text}</span><button aria-label="Dismiss notification" onClick={() => setNotice(undefined)}><X size={15} /></button></div>}
   </div>
 }

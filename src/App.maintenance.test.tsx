@@ -75,6 +75,22 @@ async function openProject(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('workspace package search', () => {
+  it('opens a critical alert for a manual project audit and suppresses an unchanged rescan', async () => {
+    const user = await renderConnected()
+    const critical = { ...report, counts: { ...report.counts, high: 0, critical: 1 }, findings: [{ ...report.findings[0], severity: 'critical' }] }
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((url: string) => url.endsWith('/audit') ? response({ audit: critical }) : original(url))
+    const details = await openProject(user)
+    await user.click(within(details).getByRole('tab', { name: 'Packages' }))
+    await user.click(within(details).getByRole('button', { name: 'Scan for vulnerabilities' }))
+    const alert = await screen.findByRole('alertdialog', { name: 'New critical vulnerabilities' })
+    expect(within(alert).getByText('Example advisory')).toBeTruthy()
+    await user.click(within(alert).getByRole('button', { name: 'Dismiss alert' }))
+    await user.click(within(details).getByRole('button', { name: 'Scan again' }))
+    expect(actionRequests('audit')).toHaveLength(2)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
   it('includes declared package names in general search and displays the declared version in grid and list results', async () => {
     const user = await renderConnected()
     await user.type(screen.getByRole('textbox', { name: 'Search projects' }), '@ACME/WIDGETS')
