@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Tag, Terminal, Unplug, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Tag, Terminal, Unplug, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -14,6 +14,7 @@ import { HostedNotice } from '@/components/hosted-notice'
 import { ProjectTabs } from '@/components/project-tabs'
 import { ProjectReadme } from '@/components/project-readme'
 import { ProjectHistory } from '@/components/project-history'
+import { DailySummary } from '@/components/daily-summary'
 import { ProjectPreview } from '@/components/project-preview'
 import { ProjectControls } from '@/components/project-controls'
 import { PackageMatches, ProjectPackages } from '@/components/project-packages'
@@ -80,6 +81,7 @@ function WorkspaceApp() {
   const [searchScope, setSearchScope] = useState<'all' | 'packages'>('all')
   const [sort, setSort] = useState<ProjectSort>('updated')
   const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [page, setPage] = useState<'projects' | 'summary'>('projects')
   const [connectOpen, setConnectOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string>()
@@ -140,7 +142,7 @@ function WorkspaceApp() {
     if (!hosted) api<{ ok: boolean }>('/health').then(result => active && setHelper(result.ok)).catch(() => {})
     const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallEvent) }
     const onOnline = () => setOnline(navigator.onLine)
-    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); searchRef.current?.focus() } }
+    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); setPage('projects'); requestAnimationFrame(() => searchRef.current?.focus()) } }
     window.addEventListener('beforeinstallprompt', onInstall)
     window.addEventListener('online', onOnline); window.addEventListener('offline', onOnline)
     window.addEventListener('keydown', onKey)
@@ -225,6 +227,7 @@ function WorkspaceApp() {
 
   function clearFilters() { setFilters({}); setQuery('') }
   function toggleTechnology(technology: string) {
+    setPage('projects')
     setFilters(current => ({ ...current, stack: current.stack?.includes(technology) ? current.stack.filter(value => value !== technology) : [...current.stack ?? [], technology] }))
   }
   function toggleTag(tag: string) {
@@ -261,10 +264,11 @@ function WorkspaceApp() {
     else (document.getElementById(`project-open-${tagProjectId}`) ?? searchRef.current)?.focus()
   }
   function navigate(next: Filter) {
+    setPage('projects')
     if (next === 'all') { clearFilters(); return }
     const key = next === 'favorites' ? 'stars' : 'server'
     const value = next === 'favorites' ? 'starred' : 'running'
-    setFilters(current => ({ ...current, [key]: current[key]?.includes(value) ? [] : [value] }))
+    setFilters(current => ({ ...current, [key]: page !== 'summary' && current[key]?.includes(value) ? [] : [value] }))
   }
   function openProject(project: RepoProject, tab: 'overview' | 'packages' = 'overview') {
     const active = document.activeElement
@@ -448,17 +452,18 @@ function WorkspaceApp() {
     }
   }
 
-  const pageName = stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
+  const pageName = page === 'summary' ? 'Daily summary' : stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
   const workspacePath = workspace?.rootPath ?? (workspace ? workspace.rootName : '~/projects / demo workspace')
   return <div className="app-shell">
-    <a className="skip-link" href="#projects">Skip to projects</a>
+    <a className="skip-link" href="#projects">{page === 'summary' ? 'Skip to daily summary' : 'Skip to projects'}</a>
     <aside className="sidebar">
       <a className="brand" href="#" onClick={event => { event.preventDefault(); navigate('all') }}><Logo /><span>local repos<span className="brand-period">.</span></span></a>
       <div className="sidebar-section-label">WORKSPACE</div>
       <nav className="main-nav" aria-label="Workspace">
-        <button aria-current={!hasFilters ? 'page' : undefined} className={!hasFilters ? 'active' : ''} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projects.length}</span></button>
-        <button aria-current={filter === 'favorites' ? 'page' : undefined} className={filter === 'favorites' ? 'active' : ''} onClick={() => navigate('favorites')}><Star size={17} /><span>Favorites</span><span className="nav-count">{favoriteCount.toString().padStart(2, '0')}</span></button>
-        <button aria-current={filters.server?.includes('running') ? 'page' : undefined} className={filters.server?.includes('running') ? 'active' : ''} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</button>
+        <button aria-current={page === 'projects' && !hasFilters ? 'page' : undefined} className={page === 'projects' && !hasFilters ? 'active' : ''} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projects.length}</span></button>
+        <button aria-current={page === 'projects' && filter === 'favorites' ? 'page' : undefined} className={page === 'projects' && filter === 'favorites' ? 'active' : ''} onClick={() => navigate('favorites')}><Star size={17} /><span>Favorites</span><span className="nav-count">{favoriteCount.toString().padStart(2, '0')}</span></button>
+        <button aria-current={page === 'projects' && filters.server?.includes('running') ? 'page' : undefined} className={page === 'projects' && filters.server?.includes('running') ? 'active' : ''} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</button>
+        <button aria-current={page === 'summary' ? 'page' : undefined} className={page === 'summary' ? 'active' : ''} onClick={() => setPage('summary')}><CalendarDays size={17} /><span>Daily summary</span></button>
       </nav>
       <div className="sidebar-divider" />
       <div className="sidebar-section-label technology-label">TECHNOLOGIES <span>{stacks.length.toString().padStart(2, '0')}</span></div>
@@ -473,6 +478,7 @@ function WorkspaceApp() {
     <main className="main-content" id="projects" tabIndex={-1}>
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button><SettingsDialog backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} /></div></div></header>
       <div className="page-content">
+        {page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
         <section className="workspace-toolbar" aria-label="Workspace controls">
           <div className="workspace-details">
             <div className="workspace-directory"><Folder size={15} /><span className="workspace-path" title={workspacePath}>{workspacePath}</span>{isDemo && <span className="sample-badge">SAMPLE</span>}</div>
@@ -504,6 +510,7 @@ function WorkspaceApp() {
         </article>})}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{hasRefinements ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{hasRefinements ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
         <footer className="page-footer"><span>{filtered.length.toString().padStart(2, '0')} {filtered.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span><span><ShieldCheck size={13} /> No cloud. No clutter.</span></footer>
         {isDemo && <div className="demo-note"><span>You’re looking at an example workspace.</span><button onClick={() => setConnectOpen(true)}>Make it yours <ArrowRight size={13} /></button></div>}
+        </>}
       </div>
     </main>
 

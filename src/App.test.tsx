@@ -77,6 +77,31 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it('opens a workspace-wide daily summary independently of project search and returns to the library', async () => {
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper' })
+    fetchMock.mockImplementation((url: string) => {
+      if (url.endsWith('/daily-summary')) return response({ available: true, shallow: false, commits: [{ hash: 'abc123abc123', message: 'Daily notebook work', author: 'Ada', email: 'ada@example.com', committedAt: '2026-10-08T10:00:00Z', branches: [] }] })
+      if (url === '/api/health') return response({ ok: true })
+      throw new Error('Unexpected API request: ' + url)
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('button', { name: `View ${project.name}` })
+    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'no match')
+    await user.click(screen.getByRole('button', { name: 'Daily summary' }))
+    expect(await screen.findByRole('region', { name: 'Commit timeline' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Daily summary' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Daily summary' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('textbox', { name: 'Search projects' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^All projects/ }))
+    expect(screen.getByRole('button', { name: `View ${project.name}` })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: `Favorite ${project.name}`, exact: true }))
+    await user.click(screen.getByRole('button', { name: /^Favorites/ }))
+    await user.click(screen.getByRole('button', { name: 'Daily summary' }))
+    await screen.findByRole('region', { name: 'Commit timeline' })
+    await user.click(screen.getByRole('button', { name: /^Favorites/ }))
+    expect(screen.getByRole('heading', { name: 'Favorites' })).toBeTruthy()
+  })
   it('shows AI badges only for marked projects in grid, list, and project details', async () => {
     storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'browser', projects: [
       { ...project, aiInstructionFiles: ['AGENTS.md', 'CLAUDE.md'] },

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readGitHistory } from './git-history'
+import { readGitDay } from './git-daily-summary'
 import type { RegisteredProject } from './scanner'
 
 const exec = promisify(execFile)
@@ -22,6 +23,72 @@ beforeEach(async () => {
   await mkdir(directory)
   entry = { directory, root, project: { id: 'fixture', name: 'fixture', dirName: 'project', relativePath: 'project', description: '', stack: [], scripts: {}, packageManager: 'npm', scannedAt: now.toISOString() } }
   await git('init', '-b', 'main')
+})
+
+describe('daily Git summary', () => {
+  const query = { from: '2026-10-06T22:00:00.000Z', to: '2026-10-07T22:00:00.000Z' }
+
+  it('uses the selected local day, an exclusive end, and all commits beyond a history page', async () => {
+    await commit('Before day', undefined, undefined, '2026-10-06T21:59:59Z')
+    await commit('At start', undefined, undefined, query.from)
+    for (let index = 0; index < 28; index++) await commit(`Work ${index}`)
+    await commit('At end', undefined, undefined, query.to)
+    const result = await readGitDay(entry, query)
+    expect(result.commits).toHaveLength(29)
+    expect(result.commits[0].message).toBe('At start')
+    expect(result.commits.some(commit => ['At end', 'Before day'].includes(commit.message))).toBe(false)
+    expect(result.commits.every(commit => commit.branches.map(branch => branch.name).join() === 'main')).toBe(true)
+  })
+
+  it('counts shared ancestry once and identifies each containing local or remote branch', async () => {
+    await commit('Shared')
+    await git('checkout', '-b', 'feature')
+    await commit('Feature', 'Bob', 'bob@example.com')
+    const feature = (await git('rev-parse', 'HEAD')).stdout.trim()
+    await git('update-ref', 'refs/remotes/origin/feature', feature)
+    await git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/feature')
+    await git('checkout', 'main')
+    await commit('Main')
+    const result = await readGitDay(entry, query)
+    expect(result.commits).toHaveLength(3)
+    expect(result.commits.find(commit => commit.message === 'Shared')?.branches.map(branch => branch.ref)).toEqual(['refs/heads/feature', 'refs/heads/main', 'refs/remotes/origin/feature'])
+    expect(result.commits.find(commit => commit.message === 'Feature')?.branches.map(branch => branch.name)).toEqual(['feature', 'origin/feature'])
+    expect(result.commits.find(commit => commit.message === 'Main')?.branches.map(branch => branch.name)).toEqual(['main'])
+  })
+
+  it('does not skip matching ancestors behind older commits and includes detached HEAD work', async () => {
+    await commit('In day')
+    await commit('Clock skew', undefined, undefined, '2020-01-01T00:00:00Z')
+    await git('checkout', '--detach')
+    await commit('Detached')
+    const result = await readGitDay(entry, query)
+    expect(result.commits.map(commit => commit.message).sort()).toEqual(['Detached', 'In day'])
+    expect(result.commits.find(commit => commit.message === 'Detached')?.branches).toEqual([])
+  })
+
+  it('handles empty repositories, monorepos, shallow clones and selected-root boundaries', async () => {
+    expect(await readGitDay(entry, query)).toEqual({ available: true, shallow: false, commits: [] })
+    await commit('Root work')
+    const child = path.join(directory, 'packages/web')
+    await mkdir(child, { recursive: true })
+    expect((await readGitDay({ ...entry, directory: child, workspaceDirectory: directory }, query)).commits).toHaveLength(1)
+    expect((await readGitDay({ ...entry, directory: child, root: child }, query)).available).toBe(false)
+    const shallow = path.join(root, 'shallow')
+    await git('clone', '--depth=1', `file://${directory}`, shallow)
+    expect((await readGitDay({ ...entry, directory: shallow }, query)).shallow).toBe(true)
+    const plain = path.join(root, 'plain')
+    await mkdir(plain)
+    expect((await readGitDay({ ...entry, directory: plain }, query)).available).toBe(false)
+  })
+
+  it('accepts daylight-saving day lengths and rejects malformed or unbounded ranges', async () => {
+    for (const hours of [23, 25]) {
+      expect((await readGitDay(entry, { from: query.from, to: new Date(Date.parse(query.from) + hours * 3_600_000).toISOString() })).available).toBe(true)
+    }
+    for (const input of [{}, { from: '--all', to: query.to }, { from: [], to: query.to }, { from: query.to, to: query.from }, { from: '2026-02-30T00:00:00.000Z', to: query.to }, { from: query.from, to: '2026-11-01T00:00:00.000Z' }]) {
+      await expect(readGitDay(entry, input)).rejects.toMatchObject({ status: 400 })
+    }
+  })
 })
 afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 

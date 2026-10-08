@@ -27,6 +27,20 @@ export interface GitHistory {
   shallow: boolean
 }
 
+export interface GitDayQuery {
+  from: string
+  to: string
+}
+export interface GitDayCommit extends GitCommit {
+  /** Branches containing the commit now; Git does not record its original branch. */
+  branches: GitHistory['branches']
+}
+export interface GitDay {
+  available: boolean
+  shallow: boolean
+  commits: GitDayCommit[]
+}
+
 export interface ProjectDependency {
   name: string
   version: string

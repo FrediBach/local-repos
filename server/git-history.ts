@@ -4,7 +4,7 @@ import { HelperError, isWithin, type RegisteredProject } from './scanner'
 import type { GitCommit, GitHistory, GitHistoryQuery } from '../src/types'
 
 const execFileAsync = promisify(execFile)
-const gitOptions = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-c', 'log.showSignature=false']
+export const gitOptions = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-c', 'log.showSignature=false']
 const PAGE_SIZE = 25
 
 function queryOptions(input: Record<string, unknown>): GitHistoryQuery {
@@ -16,10 +16,10 @@ function queryOptions(input: Record<string, unknown>): GitHistoryQuery {
 }
 
 /** Read NUL-delimited Git records incrementally; large repositories do not fill memory. */
-async function readCommits(directory: string, revisions: string[], visit: (commit: GitCommit) => void): Promise<void> {
+export async function readCommits(directory: string, revisions: string[], visit: (commit: GitCommit) => void, signal?: AbortSignal): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn('git', [...gitOptions, 'log', '--date-order', '--no-color', '--no-decorate', '--encoding=UTF-8', '--format=%H%x00%aN%x00%aE%x00%cI%x00%s%x00', ...revisions, '--'], {
-      cwd: directory, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' }, stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: directory, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' }, stdio: ['ignore', 'pipe', 'pipe'], signal,
     })
     const timeout = setTimeout(() => { child.kill(); reject(new HelperError('Reading Git history timed out. Try a specific branch.', 504)) }, 30_000)
     let pending = '', fields: string[] = []
@@ -38,7 +38,7 @@ async function readCommits(directory: string, revisions: string[], visit: (commi
       if (pending.length > 1_048_576) { child.kill(); reject(new HelperError('A Git history record is too large to read.', 422)) }
     })
     child.stderr.resume()
-    child.once('error', () => { clearTimeout(timeout); reject(new HelperError('Git is unavailable. Install Git and restart the local helper.', 503)) })
+    child.once('error', error => { clearTimeout(timeout); reject(new HelperError(error.name === 'AbortError' ? 'Reading Git history timed out. Try again.' : 'Git is unavailable. Install Git and restart the local helper.', error.name === 'AbortError' ? 504 : 503)) })
     child.once('close', code => {
       clearTimeout(timeout)
       if (code !== 0) reject(new HelperError('Could not read Git history. Sync the project and try again.', 422))

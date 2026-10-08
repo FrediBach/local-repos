@@ -49,6 +49,17 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
 }
 
 describe('local helper API security', () => {
+  it('serves daily summaries only for registered projects with a valid day and app origin', async () => {
+    const query = { from: '2026-10-07T22:00:00.000Z', to: '2026-10-08T22:00:00.000Z' }
+    expect((await post('/api/projects/unknown/daily-summary', query)).status).toBe(404)
+    const project = await createProject()
+    const endpoint = `/api/projects/${project.id}/daily-summary`
+    expect(await (await post(endpoint, query)).json()).toEqual({ available: false, shallow: false, commits: [] })
+    expect((await post(endpoint, {})).status).toBe(400)
+    expect((await post(endpoint, query, { Origin: 'https://untrusted.example' })).status).toBe(403)
+    await rename(path.join(directory, 'project'), path.join(directory, 'moved'))
+    expect((await post(endpoint, query)).status).toBe(404)
+  })
   it('checks package changes only in registered workspaces and includes shared monorepo lockfiles', async () => {
     expect(await (await post('/api/package-changes', { path: directory })).json()).toEqual({ fingerprints: null })
     const root = path.join(directory, 'repo')

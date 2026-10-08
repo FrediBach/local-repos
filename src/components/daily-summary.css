@@ -1,0 +1,62 @@
+.daily-summary { padding-top: 10px; }
+.daily-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 12px 0 30px; }
+.daily-heading .eyebrow { display: flex; align-items: center; gap: 7px; }
+.daily-heading h2 { margin: 13px 0 9px; font-size: clamp(1.5rem, 2.2vw, 2rem); letter-spacing: -.7px; font-weight: 500; line-height: 1.3; }
+.daily-heading p, .daily-footnote { color: var(--muted-foreground); font-size: .9375rem; line-height: 1.7; margin: 0; }
+.daily-export { display: flex; gap: 6px; flex-shrink: 0; }
+.daily-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 15px; border-top: 1px solid var(--border); padding-top: 22px; }
+.daily-controls label { display: flex; flex-direction: column; gap: 8px; font-size: .8125rem; color: var(--muted-foreground); min-width: 0; }
+.daily-controls > label { flex: 1; min-width: 145px; max-width: 280px; }
+.daily-controls select, .daily-date input { min-height: 38px; width: 100%; color: var(--foreground); background: var(--surface); border: 1px solid var(--control-border); border-radius: 5px; padding: 7px 9px; font: inherit; font-size: .875rem; }
+.daily-controls > .button { min-height: 38px; margin-left: auto; }
+.daily-date > div { display: flex; align-items: center; gap: 3px; margin-top: 8px; }
+.daily-date input { width: 150px; }
+.daily-date .button-icon { width: 30px; }
+.daily-timezone { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 16px 0 25px; color: var(--muted-foreground); font-size: .8125rem; }
+.daily-stats { display: grid; grid-template-columns: 1fr 1fr 1fr 1.65fr; margin: 0 0 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+.daily-stats > div { padding: 20px 22px; min-width: 0; }
+.daily-stats > div + div { border-left: 1px solid var(--border); }
+.daily-stats dt { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: .8125rem; }
+.daily-stats dd { margin: 12px 0 0; font-size: 1.875rem; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.daily-stats .daily-time-range { font-size: 1.5rem; padding-top: 4px; white-space: nowrap; }
+.daily-time-range span { color: var(--muted-foreground); font-size: 1.125rem; }
+.daily-body { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; gap: 34px; }
+.daily-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px; }
+.daily-section-heading h3 { margin: 0; font-size: 1rem; font-weight: 500; }
+.daily-section-heading > span, .daily-project-heading > span { font-size: .8125rem; color: var(--muted-foreground); white-space: nowrap; }
+.daily-project { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 20px; margin-bottom: 14px; }
+.daily-project-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.daily-project h4 { margin: 0; color: var(--foreground); font-size: 1.0625rem; font-weight: 500; overflow-wrap: anywhere; }
+.daily-project-path { margin: 5px 0 13px; color: var(--muted-foreground); font-size: .8125rem; overflow-wrap: anywhere; }
+.daily-branches { display: flex; flex-wrap: wrap; gap: 5px; }
+.daily-branches > span { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-muted); border: 1px solid var(--border); color: var(--muted-foreground); font-size: .75rem; padding: 3px 6px; border-radius: 4px; min-width: 0; overflow-wrap: anywhere; }
+.daily-branches svg { flex-shrink: 0; }
+.daily-project ul { padding-left: 17px; margin: 16px 0; font-size: .875rem; line-height: 1.65; }
+.daily-project li { margin: 6px 0; padding-left: 3px; overflow-wrap: anywhere; }
+.daily-project li::marker { color: var(--accent); }
+.daily-project-time { display: flex; align-items: center; gap: 6px; padding-top: 12px; margin: 0; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.daily-timeline ol { list-style: none; margin: 0; padding: 0; }
+.daily-timeline li { display: grid; grid-template-columns: 45px 28px minmax(0, 1fr); column-gap: 10px; position: relative; padding: 4px 0 24px; }
+.daily-timeline li::before { content: ''; position: absolute; left: 68px; top: 29px; bottom: -4px; width: 1px; background: var(--border); }
+.daily-timeline li:last-child::before { display: none; }
+.daily-timeline time { padding-top: 5px; font-size: .8125rem; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.daily-timeline-marker { display: flex; align-items: center; justify-content: center; height: 28px; border: 1px solid var(--border); border-radius: 50%; color: var(--accent); background: var(--surface); }
+.daily-timeline-content { min-width: 0; padding: 3px 0 2px; }
+.daily-timeline-project { font-size: .8125rem; color: var(--accent); font-weight: 500; overflow-wrap: anywhere; }
+.daily-timeline-content p { margin: 7px 0 8px; font-size: .9375rem; line-height: 1.55; overflow-wrap: anywhere; }
+.daily-commit-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; font-size: .75rem; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.daily-commit-meta code { font-size: .75rem; }
+.daily-footnote { border-top: 1px solid var(--border); padding-top: 18px; margin-top: 16px; font-size: .8125rem; }
+.daily-loading, .daily-empty { padding: 60px 24px; text-align: center; color: var(--muted-foreground); border: 1px dashed var(--border); border-radius: 7px; }
+.daily-loading { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: .9375rem; }
+.daily-empty > svg { margin: 0 auto 13px; color: var(--accent); }
+.daily-empty h3 { font-size: 1.125rem; font-weight: 500; color: var(--foreground); margin: 0 0 10px; }
+.daily-empty p { font-size: .9375rem; line-height: 1.7; max-width: 500px; margin: 0 auto 20px; }
+.daily-warning { padding: 16px; border: 1px solid var(--warning); border-radius: 6px; color: var(--foreground); background: var(--surface); margin-bottom: 20px; font-size: .875rem; line-height: 1.65; overflow-wrap: anywhere; }
+.daily-warning strong { font-weight: 500; color: var(--warning); }
+.daily-warning ul { margin: 7px 0 12px; padding-left: 18px; }
+.daily-copy-status { color: var(--accent); font-size: .875rem; }
+.daily-copy-fallback { margin-top: 20px; font-size: .875rem; }
+.daily-copy-fallback textarea { width: 100%; height: 220px; border: 1px solid var(--control-border); border-radius: 5px; background: var(--surface); color: var(--foreground); padding: 12px; font: inherit; }
+@media (max-width: 1100px) { .daily-heading { flex-direction: column; gap: 16px; } .daily-stats > div { padding: 17px 14px; } .daily-body { grid-template-columns: minmax(0, 1fr); gap: 22px; } }
+@media (max-width: 650px) { .main-nav { flex-wrap: wrap; } .daily-controls { gap: 13px; } .daily-date { width: 100%; } .daily-date input { flex: 1; } .daily-controls > label { min-width: 120px; } .daily-stats { grid-template-columns: 1fr 1fr; } .daily-stats > div:nth-child(3) { border-left: 0; } .daily-stats > div:nth-child(n + 3) { border-top: 1px solid var(--border); } .daily-stats .daily-time-range { font-size: 1.25rem; } .daily-heading h2 { font-size: 1.625rem; } .daily-project { padding: 16px; } .daily-timezone { line-height: 1.7; } }

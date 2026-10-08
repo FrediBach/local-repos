@@ -50,6 +50,16 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 
 Only one workspace is displayed at a time. Metadata, captured previews, favorites, project tags, and the browser directory handle are stored in IndexedDB for this browser and app origin. Tags are saved independently of scanned metadata and survive rescans, helper restarts, and reconnecting the same directory using the same connection method. They belong to individual projects, including workspace members; repository files are never edited. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
 
+## Daily summary
+
+Choose **Daily summary** in the workspace sidebar to review a workday across all connected projects, including projects hidden by library filters. This feature needs a **local helper** connection. It opens on today; choose another date, use the previous/next arrows, or choose **Today** to return. **Refresh** reads new commits without a full workspace rescan.
+
+The summary includes commit, project, and branch totals, a project-by-project list of commit subjects, and a chronological timeline with exact times, authors, short hashes, and containing branches. Filter by **Project** and **Author** to prepare your own report. **Copy summary** and **Download** export the selected view as plain text for status reports or booking notes; if clipboard access is unavailable, a selectable report is provided.
+
+Dates and times use your browser’s local timezone, including daylight-saving changes, and the day is determined by the commit’s committer timestamp. First and last commit times are reference points, **not measured working or billable hours**. Uncommitted work is excluded. History includes locally available local branches, remote-tracking branches, and detached HEAD commits; no fetch or remote request is made. A commit shared by several branches appears once per repository, with all containing branches listed. Branch labels describe the current history, since Git does not record which branch originally created a commit. Branch totals count each containing local or remote-tracking ref per repository.
+
+Monorepo packages are grouped under their outermost workspace root and their repository history is counted once. Shallow clones and repositories that fail to load are identified in both the view and the export; a failed project does not hide successful results. Use **Retry summary** after resolving a failure. Summaries are read on demand and are not saved to the offline cache.
+
 ## Filter and prioritize projects
 
 Use the quick filters below search, or open **All filters**, to combine:
