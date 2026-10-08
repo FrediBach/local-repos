@@ -10,7 +10,7 @@ const storage = vi.hoisted(() => ({
   saveWorkspace: vi.fn(),
   clearWorkspace: vi.fn(),
   loadFavorites: vi.fn(),
-  saveFavorites: vi.fn(),
+  saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(),
 }))
 const previews = vi.hoisted(() => ({ cachePreview: vi.fn() }))
 

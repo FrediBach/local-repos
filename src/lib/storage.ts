@@ -1,4 +1,5 @@
 import type { Workspace } from '../types'
+import { readProjectTags, type ProjectTags } from './project-tags'
 
 const DATABASE = 'local-repos'
 const STORE = 'preferences'
@@ -54,3 +55,5 @@ export async function loadFavorites(): Promise<string[]> {
   return Array.isArray(values) ? values.filter((value): value is string => typeof value === 'string') : []
 }
 export const saveFavorites = (ids: string[]): Promise<void> => write('favorites', [...new Set(ids)])
+export const loadProjectTags = async (): Promise<ProjectTags> => readProjectTags(await read<unknown>('project-tags'))
+export const saveProjectTags = (tags: ProjectTags): Promise<void> => write('project-tags', readProjectTags(tags))

@@ -5,7 +5,7 @@ import App from './App'
 import { defaultSettings } from './lib/settings'
 import type { Workspace } from './types'
 
-const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), clearWorkspace: vi.fn() }))
+const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
 const filesystem = vi.hoisted(() => ({ canReadDirectory: vi.fn(), scanDirectory: vi.fn(), chooseDirectory: vi.fn() }))
 vi.mock('./lib/storage', () => storage)
 vi.mock('./lib/filesystem', () => filesystem)

@@ -41,21 +41,22 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 - Search names, descriptions, technologies, folder names, branches, and package names. Choose **Package name & version** beside search to find only projects that declare a matching dependency. Use `next@16.2.1` for an exact version or `next@16.*.*` for a wildcard range. Matching declared versions appear on the project cards. Use `⌘K` or `Ctrl+K` to focus search.
 - Switch between grid and list views. Combine quick filters for starred projects, vulnerabilities, outdated packages, uncommitted changes, and running servers, or open **All filters** for the full set.
 - Open a project for its README, package metadata, current branch, latest commit, and origin link.
+- Use **Add tags** on a project, or **Edit tags** in its actions menu or details, to organize projects with labels such as **work**, **private**, and **contributing**. Choose a suggestion or type a custom tag, then **Save tags**. Tags appear in both grid and list views; click one to filter, or use the **Tags** menu to select several or find **Untagged** projects. Tags also appear in **All filters** and general search.
 - Use **Synced …** to rescan, or configure automatic rescans in **Settings → Watcher**. The default is manual only; reopening the app restores cached projects without rescanning. After a helper restart, opening project history or invoking a helper action reconnects the workspace on demand.
 - Browser folder permissions can expire; resync may request read permission again.
 - Use **How it works → Forget this directory** to remove the saved workspace. This does not delete project files.
 
-Only one workspace is displayed at a time. Metadata, captured previews, favorites, and the browser directory handle are stored in IndexedDB for this browser and app origin. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
+Only one workspace is displayed at a time. Metadata, captured previews, favorites, project tags, and the browser directory handle are stored in IndexedDB for this browser and app origin. Tags are saved independently of scanned metadata and survive rescans, helper restarts, and reconnecting the same directory using the same connection method. They belong to individual projects, including workspace members; repository files are never edited. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
 
 ## Filter and prioritize projects
 
 Use the quick filters below search, or open **All filters**, to combine:
 
 - **Maintenance:** vulnerability severity, clean or unscanned audits; outdated packages, major/minor/patch updates, high package lag, complete up-to-date scans, skipped packages, or unscanned projects; measured disk usage and dependency folders.
-- **Project:** starred or unstarred projects, Git working-tree status, development servers and scripts, and recent or inactive projects.
+- **Project:** tags or untagged projects, starred or unstarred projects, Git working-tree status, development servers and scripts, and recent or inactive projects.
 - **Metadata:** every detected technology, package managers, workspace roots or members, captured previews, README availability, branch, and license.
 
-Different filters narrow each other. Multiple technologies or package managers match **any** selected value within that group. Sidebar favorites, running servers, and technology shortcuts use the same filters and preserve your other selections and search. General search also includes paths, authors, licenses, package managers, Git origins, and parent workspace names; package-only search retains its name and version syntax.
+Different filters narrow each other. Multiple tags, technologies, or package managers match **any** selected value within that group. Sidebar favorites, running servers, and technology shortcuts use the same filters and preserve your other selections and search. General search also includes paths, authors, licenses, package managers, Git origins, and parent workspace names; package-only search retains its name and version syntax.
 
 Option counts reflect your search and the other filter groups, ignoring the current group so you can compare alternatives. Active filter chips stay visible when the panel is closed: remove one chip to broaden the results, or use **Clear filters** / **All projects** to reset filters and search. Filters apply equally to grid and list views and remain active while project metadata or stars change. Filter selections last for the current session.
 

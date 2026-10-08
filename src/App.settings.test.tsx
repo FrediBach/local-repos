@@ -6,7 +6,7 @@ import App from './App'
 import { defaultSettings, SETTINGS_STORAGE_KEY } from './lib/settings'
 import type { RepoProject } from './types'
 
-const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), clearWorkspace: vi.fn() }))
+const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
 vi.mock('./lib/storage', () => storage)
 const project: RepoProject = {
   id: 'alpha', name: 'Alpha', dirName: 'alpha', relativePath: '.', description: '', stack: ['React', 'TypeScript', 'Vite'], scripts: {}, packageManager: 'npm', scannedAt: '2026-10-08T12:00:00Z',
@@ -128,11 +128,11 @@ describe('workspace settings dialog', () => {
     await user.clear(screen.getByRole('spinbutton', { name: 'Technology tags per project' }))
     await user.type(screen.getByRole('spinbutton', { name: 'Technology tags per project' }), '0')
     await user.click(screen.getByRole('button', { name: 'Save settings' }))
-    expect(screen.getByRole('article').querySelectorAll('.project-tags button')).toHaveLength(0)
+    expect(screen.getByRole('article').querySelectorAll('.project-tags .technology-tag')).toHaveLength(0)
     await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
     await user.click(screen.getByRole('button', { name: 'Reset defaults' }))
     await user.click(screen.getByRole('button', { name: 'Save settings' }))
-    expect(screen.getByRole('article').querySelectorAll('.project-tags button')).toHaveLength(3)
+    expect(screen.getByRole('article').querySelectorAll('.project-tags .technology-tag')).toHaveLength(3)
     expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toEqual(defaultSettings)
   })
 

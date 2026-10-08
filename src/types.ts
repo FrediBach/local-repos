@@ -107,6 +107,8 @@ export interface RepoProject {
   previewUrl?: string
   aiInstructionFiles?: string[]
   stack: string[]
+  /** User labels, attached from browser preferences rather than repository scans. */
+  tags?: string[]
   scripts: Record<string, string>
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun'
   dependencies?: ProjectDependency[]

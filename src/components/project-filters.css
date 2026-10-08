@@ -6,6 +6,15 @@
 .filter-expand { margin-left: auto; color: var(--foreground); }
 .filter-expand .is-open { transform: rotate(180deg); }
 .filter-count { font-variant-numeric: tabular-nums; font-size: .75rem; opacity: .85; }
+.tag-filter-trigger[data-active="true"], .tag-filter-trigger[data-state="open"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.tag-filter-menu { min-width: 230px; max-width: min(340px, calc(100vw - 32px)); max-height: min(420px, var(--radix-dropdown-menu-content-available-height)); overflow-y: auto; }
+.tag-filter-heading { padding: 8px 10px; color: var(--muted-foreground); font-size: .75rem; }
+.dropdown-checkbox-indicator { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; border: 1px solid var(--control-border); border-radius: 3px; }
+.dropdown-checkbox-item[data-state="checked"] { color: var(--accent); }
+.dropdown-checkbox-item[data-state="checked"] .dropdown-checkbox-indicator { background: var(--accent-soft); border-color: var(--accent); }
+.tag-filter-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tag-filter-clear { border-top: 1px solid var(--border); margin-top: 4px; }
+.tag-filter-hint { margin: 8px 10px; max-width: 220px; font-size: .8125rem; color: var(--muted-foreground); }
 .filter-panel { margin-top: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .filter-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
 .filter-panel-heading h2 { margin: 0 0 5px; font-size: 1rem; font-weight: 600; }
@@ -26,6 +35,8 @@
 .filter-choice { display: inline-flex; align-items: center; min-height: 36px; gap: 6px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: .8125rem; color: var(--muted-foreground); cursor: pointer; }
 .filter-choice:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .filter-choice input { margin: 0; accent-color: var(--accent); }
+.filter-choice { max-width: 100%; }
+.filter-choice > span:not(.filter-count) { min-width: 0; overflow-wrap: anywhere; }
 .active-project-filters { margin-top: 14px; }
 .active-project-filters .filter-summary { margin: 0 0 6px; gap: 12px; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }

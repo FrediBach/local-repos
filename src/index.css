@@ -370,6 +370,8 @@ select option { color: var(--foreground); background: var(--surface); }
 .filter-summary { font-size: .875rem; }
 .filter-summary button { min-height: 36px; }
 .projects-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); gap: 24px; }
+.projects-grid .project-card { display: flex; flex-direction: column; }
+.projects-grid .project-info { flex: 1; }
 .project-title { font-size: 1.0625rem; line-height: 1.5; min-height: 32px; }
 .project-title-row { gap: 6px; }
 .project-ai-badge, .detail-tags > .project-ai-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--accent-soft); color: var(--accent); }

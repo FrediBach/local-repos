@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import App from './App'
 import type { RepoProject } from './types'
 
-const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), clearWorkspace: vi.fn() }))
+const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
 vi.mock('./lib/storage', () => storage)
 const base: RepoProject = { id: 'alpha', name: 'Alpha', dirName: 'alpha', relativePath: 'alpha', description: 'Workspace app', stack: ['React'], scripts: {}, packageManager: 'npm', scannedAt: '2026-10-08T10:00:00Z' }
 const projects: RepoProject[] = [

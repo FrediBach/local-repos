@@ -1,9 +1,10 @@
 import type { RepoProject } from '../types'
 import { selectDevScript } from './dev-script'
 import { packageMatches } from './packages'
+import { tagFilterValue } from './project-tags'
 import { defaultSettings, highestAuditSeverity, type AppSettings } from './settings'
 
-export type FilterKey = 'stars' | 'audit' | 'outdated' | 'git' | 'server' | 'activity' | 'structure' | 'storage' | 'preview' | 'readme' | 'stack' | 'manager' | 'branch' | 'license'
+export type FilterKey = 'tags' | 'stars' | 'audit' | 'outdated' | 'git' | 'server' | 'activity' | 'structure' | 'storage' | 'preview' | 'readme' | 'stack' | 'manager' | 'branch' | 'license'
 export type ProjectFilters = Partial<Record<FilterKey, string[]>>
 export interface FilterContext { favorites: readonly string[]; now: number }
 export interface FilterOption {
@@ -112,6 +113,11 @@ export function projectFilterGroups(projects: readonly RepoProject[], filters: P
     options: [...new Set([...values, ...filters[key] ?? []])].filter(Boolean).sort((a, b) => a.localeCompare(b)).map(value => option(value, value, p => read(p).includes(value))),
   })
   return [
+    { key: 'tags', label: 'Tags', section: 'Project', multiple: true, options: [
+      ...[...new Set([...projects.flatMap(p => p.tags ?? []), ...(filters.tags ?? []).filter(value => value.startsWith('tag:')).map(value => value.slice(4))])]
+        .sort((a, b) => a.localeCompare(b)).map(tag => option(tagFilterValue(tag), tag, p => p.tags?.includes(tag) ?? false)),
+      option('untagged', 'Untagged', p => !p.tags?.length),
+    ] },
     ...fixed.filter(group => group.section !== 'Metadata'),
     dynamic('stack', 'Technologies', projects.flatMap(p => p.stack), p => p.stack, true),
     dynamic('manager', 'Package managers', ['npm', 'pnpm', 'yarn', 'bun'], p => [p.packageManager], true),
@@ -131,7 +137,7 @@ export function matchesProjectSearch(project: RepoProject, query: string, scope:
   if (!term) return true
   if (packageMatches(project, query).length) return true
   if (scope === 'packages') return false
-  return [project.name, project.description, ...project.stack, project.dirName, project.relativePath, project.git?.branch, project.git?.origin, project.author, project.license, project.packageManager, project.monorepo?.name, project.monorepo?.packagePath]
+  return [project.name, project.description, ...project.stack, ...project.tags ?? [], project.dirName, project.relativePath, project.git?.branch, project.git?.origin, project.author, project.license, project.packageManager, project.monorepo?.name, project.monorepo?.packagePath]
     .filter(Boolean).join(' ').toLowerCase().includes(term)
 }
 

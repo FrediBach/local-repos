@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import { ChevronDown, GitBranch, Package, Play, ShieldAlert, SlidersHorizontal, Star, X } from 'lucide-react'
+import { ChevronDown, GitBranch, Package, Play, ShieldAlert, SlidersHorizontal, Star, Tag, X } from 'lucide-react'
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { filterOptionCounts, type FilterContext, type FilterGroup, type FilterKey, type ProjectFilters as Filters } from '@/lib/project-filters'
 import type { RepoProject } from '@/types'
 import './project-filters.css'
@@ -34,6 +35,7 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
   const technologyTerm = (groups.find(group => group.key === 'stack')?.options.length ?? 0) > 8 ? technologyQuery.trim().toLowerCase() : ''
   const counts = useMemo(() => filterOptionCounts(projects, filters, groups, context), [projects, filters, groups, context])
   const active = groups.flatMap(group => group.options.filter(option => filters[group.key]?.includes(option.value)).map(option => ({ group, option })))
+  const tagOptions = groups.find(group => group.key === 'tags')?.options ?? []
   const set = (key: FilterKey, values: string[]) => {
     const next = { ...filters }
     if (values.length) next[key] = values
@@ -44,6 +46,12 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
 
   return <div className="project-filters">
     <div className="filter-shortcuts" role="group" aria-label="Quick filters">
+      <DropdownMenu modal={false}><DropdownMenuTrigger asChild><button type="button" className="filter-shortcut tag-filter-trigger" data-active={!!filters.tags?.length}><Tag size={14} aria-hidden="true" /><span>Tags</span>{!!filters.tags?.length && <span className="filter-count">{filters.tags.length}</span>}<ChevronDown size={13} /></button></DropdownMenuTrigger><DropdownMenuContent className="tag-filter-menu" align="start" aria-label="Filter by tags">
+        <div className="tag-filter-heading">Match any tag</div>
+        {tagOptions.map(option => <DropdownMenuCheckboxItem key={option.value} checked={filters.tags?.includes(option.value) ?? false} onSelect={event => event.preventDefault()} onCheckedChange={() => toggle('tags', option.value)}><span className="tag-filter-name">{option.label}</span><span className="filter-count" aria-hidden="true">{counts.tags[option.value]}</span></DropdownMenuCheckboxItem>)}
+        {tagOptions.length === 1 && <p className="tag-filter-hint">Use Add tags on a project to get started.</p>}
+        {!!filters.tags?.length && <DropdownMenuItem className="tag-filter-clear" onSelect={() => set('tags', [])}><X size={14} />Clear tag filters</DropdownMenuItem>}
+      </DropdownMenuContent></DropdownMenu>
       {shortcuts.map(({ key, value, label, icon: Icon }) => <button key={key} type="button" className="filter-shortcut" aria-pressed={filters[key]?.includes(value) ?? false} onClick={() => set(key, filters[key]?.includes(value) ? [] : [value])}>
         <Icon size={14} aria-hidden="true" /><span>{label}</span><span className="filter-count" aria-hidden="true">{counts[key][value]}</span>
       </button>)}
