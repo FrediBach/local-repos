@@ -72,6 +72,10 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
     await runtime.open(request.params.id, request.body?.app)
     response.json({ ok: true })
   })
+  app.post('/api/projects/:id/run-script', async (request, response) => {
+    await runtime.runScript(request.params.id, request.body?.name, request.body?.command)
+    response.json({ ok: true })
+  })
   app.get('/api/screenshots/:filename', async (request, response) => {
     const match = /^([a-f\d]{20})\.png$/.exec(request.params.filename)
     if (!match) throw new HelperError('Screenshot not found.', 404)

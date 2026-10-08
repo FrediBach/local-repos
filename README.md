@@ -102,6 +102,16 @@ Updated dependencies are **pinned to exact versions** in package.json. The insta
 
 Commands use [npm install](https://docs.npmjs.com/cli/install/), [pnpm add](https://pnpm.io/cli/add), [Yarn add](https://yarnpkg.com/cli/add), or [Bun add](https://bun.sh/docs/pm/cli/add), depending on the project. No major version updates, forced peer-dependency overrides, or automatic updates are performed. Following the initial outdated scan, registry lookups and installs have a combined four-minute deadline, a two-minute per-command timeout, and an 8 MiB output limit.
 
+## Frontend project scripts
+
+Open a project’s overview to find **Project scripts**, grouped into development, Storybook, tests, checks and formatting, builds, previews, scaffolding/code generation, and documentation. All variants remain available, such as `test:watch`, `test:e2e`, `lint:fix`, and `generate:component`. Unrecognized commands appear under **Other scripts**. The primary development server keeps its existing start, stop, and log controls.
+
+The heuristic uses whole words in colon, dash, underscore, and camelCase script names, then recognizes commands for custom names. It understands common frontend tools and simple environment/package-runner wrappers. Task modifiers distinguish `build:storybook` from `storybook` and `test-storybook`. Empty scripts, npm’s placeholder test, lifecycle hooks, and pre/post hooks paired with another script are omitted. Discovery only reads metadata; it never runs scripts or installs tools.
+
+**Run in terminal** uses the project’s detected npm, pnpm, Yarn, or Bun from that package’s directory, including individual monorepo members. It opens macOS Terminal or an available Linux terminal, preserving interactive generator prompts and test watch controls. The helper checks that the displayed script still matches the current manifest; resync after editing scripts. Normal package-manager lifecycle behavior applies. **Copy command** also works when browsing without the helper or on platforms without terminal launching.
+
+Terminal processes are independent of Local Repos: read their output and stop them in the terminal. They are not included in the running-server filter and do not stop when you disconnect the directory or shut down the helper. Finish terminal tasks before updating or removing their dependencies.
+
 ## Run a project and capture a preview
 
 Connect through the helper, open a project, and select **Start server** or **Capture preview**. Scanning never starts project scripts automatically.

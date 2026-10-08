@@ -10,6 +10,7 @@ import * as packageAudit from './package-audit'
 import * as packageOutdated from './package-outdated'
 import * as packageUpdate from './package-update'
 import * as projectStorage from './project-storage'
+import * as projectScripts from './project-scripts'
 
 let helper: ReturnType<typeof createApp>
 let server: Server
@@ -47,6 +48,25 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
 }
 
 describe('local helper API security', () => {
+  it('launches only a selected current script in a registered project', async () => {
+    const launch = vi.spyOn(projectScripts, 'openScriptTerminal').mockResolvedValue(undefined)
+    expect((await post('/api/projects/unknown/run-script', { name: 'test', command: 'vitest run' })).status).toBe(404)
+    const project = await createProject({ test: 'vitest run', prepare: 'husky' })
+    const endpoint = `/api/projects/${project.id}/run-script`
+    for (const body of [{}, { name: 'missing', command: 'echo unsafe' }, { name: 'test', command: 'echo unsafe' }, { name: 'prepare', command: 'husky' }]) {
+      expect((await post(endpoint, body)).ok).toBe(false)
+    }
+    expect(launch).not.toHaveBeenCalled()
+    const denied = await post(endpoint, { name: 'test', command: 'vitest run' }, { Origin: 'https://untrusted.example' })
+    expect(denied.status).toBe(403)
+    expect((await post(endpoint, { name: 'test', command: 'vitest run' })).status).toBe(200)
+    expect(launch).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), 'test')
+    expect(await helper.runtime.status(project.id)).toEqual({ status: 'stopped' })
+    await writeFile(path.join(directory, 'project/package.json'), JSON.stringify({ scripts: { test: 'node changed.js' } }))
+    expect((await post(endpoint, { name: 'test', command: 'vitest run' })).status).toBe(409)
+    expect(launch).toHaveBeenCalledOnce()
+  })
+
   it('serves Git history only for registered, still-accessible project paths', async () => {
     expect((await post('/api/projects/unknown/history')).status).toBe(404)
     const project = await createProject()
@@ -127,6 +147,7 @@ describe('project storage and package actions', () => {
     const updating = helper.runtime.updatePackages(web.id, 'patch')
     await vi.waitFor(() => expect(update).toHaveBeenCalledOnce())
     await expect(helper.runtime.start(admin.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.runScript(admin.id, 'test', 'vitest run')).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.outdated(admin.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.deleteNodeModules(admin.id, true)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.updatePackages(admin.id, 'minor')).rejects.toMatchObject({ status: 409 })

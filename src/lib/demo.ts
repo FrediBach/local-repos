@@ -18,7 +18,7 @@ function sampleDependencies(stack: string[], hours: number): ProjectDependency[]
 }
 const sample = (id: string, name: string, description: string, stack: string[], hours: number, branch = 'main'): RepoProject => ({
   id, name, description, stack, dirName: name, relativePath: name,
-  version: '0.1.0', author: 'You', license: 'MIT', scripts: { dev: 'vite', build: 'vite build' }, packageManager: 'npm',
+  version: '0.1.0', author: 'You', license: 'MIT', scripts: { dev: 'vite', build: 'vite build', test: 'vitest run', 'test:watch': 'vitest', storybook: 'storybook dev -p 6006', lint: 'eslint .', 'generate:component': 'plop component' }, packageManager: 'npm',
   dependencies: sampleDependencies(stack, hours),
   git: { branch, commit: '8f2a6c1', message: 'A little progress, every day.', committedAt: new Date(now - hours * 3_600_000).toISOString() },
   updatedAt: new Date(now - hours * 3_600_000).toISOString(), scannedAt: new Date(now).toISOString(),

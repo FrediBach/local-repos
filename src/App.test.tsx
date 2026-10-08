@@ -77,6 +77,28 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it('sends a script terminal request without caching the launch response as project metadata', async () => {
+    const scriptsProject = { ...project, scripts: { dev: 'vite', 'test:watch': 'vitest' } }
+    const scriptsScan = { ...scan, projects: [scriptsProject] }
+    storage.loadWorkspace.mockResolvedValue({ ...scriptsScan, mode: 'helper' })
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/health') return response({ ok: true })
+      if (url === '/api/scan') return response(scriptsScan)
+      if (url === `/api/projects/${project.id}/run-script`) return response({ ok: true })
+      throw new Error('Unexpected API request: ' + url)
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('button', { name: `View ${project.name}` })
+    await waitFor(() => expect(storage.saveWorkspace).toHaveBeenCalled())
+    storage.saveWorkspace.mockClear()
+    await user.click(screen.getByRole('button', { name: `View ${project.name}` }))
+    await user.click(screen.getByRole('button', { name: 'Run test:watch in terminal' }))
+    await screen.findByText('Script sent to your terminal. Follow its progress and stop it there.')
+    expect(fetchMock).toHaveBeenCalledWith(`/api/projects/${project.id}/run-script`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'test:watch', command: 'vitest' }) }))
+    expect(storage.saveWorkspace).not.toHaveBeenCalled()
+  })
+
   it('returns focus to the project title after opening details from its actions menu', async () => {
     const user = userEvent.setup()
     render(<App />)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowUpRight, HardDrive, LoaderCircle, Monitor, Play, Square, Terminal } from 'lucide-react'
 import { Button } from './ui/button'
 import { selectDevScript } from '../lib/dev-script'
+import { ProjectScripts } from './project-scripts'
 import type { PreviewMode, RepoProject } from '../types'
 
 interface ProjectControlsProps {
@@ -38,6 +39,7 @@ export function ProjectControls({ project, helper, demo, busy, logs, onAction }:
       {project.dev?.error && <p className="inline-error">{project.dev.error}</p>}
       {logs !== undefined && <pre className="server-logs">{logs}</pre>}
     </div>
+    <ProjectScripts project={project} primaryScript={script?.name} busy={busy} onAction={onAction} />
     <div className="preview-section">
       <div className="dev-section-heading"><span><Monitor size={16} />Preview image</span></div>
       <div className="preview-source-controls">

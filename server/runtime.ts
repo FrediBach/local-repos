@@ -20,6 +20,7 @@ import { updateProject } from './package-update'
 import { parsePackageJson } from '../src/lib/metadata'
 import { outdatedProject } from './package-outdated'
 import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
+import { openScriptTerminal, validateProjectScript } from './project-scripts'
 
 export { devCommand } from './dev-server'
 
@@ -518,6 +519,14 @@ export class ProjectRuntime {
       if (error instanceof HelperError) throw error
       throw new HelperError(`Could not open ${app === 'vscode' ? 'VS Code' : app === 'sourcetree' ? 'Sourcetree' : 'the file browser'}. Make sure it is installed and available on this computer.`)
     }
+  }
+
+  async runScript(id: string, name: unknown, command: unknown): Promise<void> {
+    this.available(id)
+    const entry = await this.registry.get(id)
+    const selected = await validateProjectScript(entry, name, command)
+    this.available(id)
+    await openScriptTerminal(entry, selected)
   }
 
   async shutdown(): Promise<void> {
