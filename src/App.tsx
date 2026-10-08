@@ -12,7 +12,8 @@ import { ProjectPreview } from '@/components/project-preview'
 import { ProjectControls } from '@/components/project-controls'
 import { PackageMatches, ProjectPackages } from '@/components/project-packages'
 import { ProjectStoragePanel, formatBytes } from '@/components/project-storage'
-import { packageMatches } from '@/lib/packages'
+import { ProjectFilters } from '@/components/project-filters'
+import { isRunning, matchesProjectFilters, matchesProjectSearch, projectFilterGroups, projectSortOptions, sortProjects, type ProjectFilters as FilterState, type ProjectSort } from '@/lib/project-filters'
 import { PreviewBatchProgress } from '@/components/preview-batch-progress'
 import { usePreviewBatch } from '@/hooks/use-preview-batch'
 import { AuditBatchProgress } from '@/components/audit-batch-progress'
@@ -50,11 +51,12 @@ export default function App() {
   const hosted = isVercelHosted()
   const [workspace, setWorkspace] = useState<Workspace>()
   const [favorites, setFavorites] = useState<string[]>([])
-  const [filter, setFilter] = useState<Filter>('all')
-  const [stack, setStack] = useState<string | null>(null)
+  const [filters, setFilters] = useState<FilterState>({})
+  const filter: Filter = filters.stars?.includes('starred') ? 'favorites' : filters.server?.includes('running') ? 'running' : 'all'
+  const stack = filters.stack?.length === 1 ? filters.stack[0] : null
   const [query, setQuery] = useState('')
   const [searchScope, setSearchScope] = useState<'all' | 'packages'>('all')
-  const [sort, setSort] = useState('updated')
+  const [sort, setSort] = useState<ProjectSort>('updated')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [connectOpen, setConnectOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -78,17 +80,15 @@ export default function App() {
   const projects = workspace?.projects ?? demoProjects
   const selected = projects.find(p => p.id === selectedId)
   const isDemo = !workspace
-  const running = projects.filter(p => p.dev?.status === 'running' || p.dev?.status === 'starting').length
+  const running = projects.filter(isRunning).length
   const favoriteCount = projects.filter(p => favorites.includes(p.id)).length
   const stacks = useMemo(() => [...new Set(projects.flatMap(p => p.stack))].sort((a, b) => projects.filter(p => p.stack.includes(b)).length - projects.filter(p => p.stack.includes(a)).length).slice(0, 7), [projects])
-  const filtered = useMemo(() => projects.filter(p => {
-    if (filter === 'favorites' && !favorites.includes(p.id)) return false
-    if (filter === 'running' && p.dev?.status !== 'running' && p.dev?.status !== 'starting') return false
-    if (stack && !p.stack.includes(stack)) return false
-    const packageMatch = packageMatches(p, query).length > 0
-    if (searchScope === 'packages') return !query.trim() || packageMatch
-    return packageMatch || `${p.name} ${p.description} ${p.stack.join(' ')} ${p.dirName} ${p.git?.branch ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())
-  }).sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'stack' ? (a.stack[0] ?? '').localeCompare(b.stack[0] ?? '') : (Date.parse(b.updatedAt ?? b.git?.committedAt ?? b.scannedAt) || 0) - (Date.parse(a.updatedAt ?? a.git?.committedAt ?? a.scannedAt) || 0)), [projects, filter, favorites, stack, query, sort, searchScope])
+  const filterContext = useMemo(() => ({ favorites, now: Date.now() }), [favorites, projects])
+  const filterGroups = useMemo(() => projectFilterGroups(projects, filters), [projects, filters])
+  const searched = useMemo(() => projects.filter(p => matchesProjectSearch(p, query, searchScope)), [projects, query, searchScope])
+  const filtered = useMemo(() => sortProjects(searched.filter(p => matchesProjectFilters(p, filters, filterGroups, filterContext)), sort, favorites), [searched, filters, filterGroups, filterContext, sort, favorites])
+  const hasFilters = Object.values(filters).some(values => values.length > 0)
+  const hasRefinements = !!query.trim() || Object.entries(filters).some(([key, values]) => values.length > 0 && !(key === 'stars' && values[0] === 'starred') && !(key === 'server' && values[0] === 'running')) || (filter === 'favorites' && !!filters.server?.length)
 
   useEffect(() => {
     let active = true
@@ -133,7 +133,16 @@ export default function App() {
     try { await saveWorkspace(next); return true } catch { if (reportError) setNotice({ text: 'Projects loaded, but browser storage could not save this workspace.', error: true }); return false }
   }
 
-  function navigate(next: Filter, nextStack: string | null = null) { setFilter(next); setStack(nextStack); setQuery('') }
+  function clearFilters() { setFilters({}); setQuery('') }
+  function toggleTechnology(technology: string) {
+    setFilters(current => ({ ...current, stack: current.stack?.includes(technology) ? current.stack.filter(value => value !== technology) : [...current.stack ?? [], technology] }))
+  }
+  function navigate(next: Filter) {
+    if (next === 'all') { clearFilters(); return }
+    const key = next === 'favorites' ? 'stars' : 'server'
+    const value = next === 'favorites' ? 'starred' : 'running'
+    setFilters(current => ({ ...current, [key]: current[key]?.includes(value) ? [] : [value] }))
+  }
   function openProject(project: RepoProject, tab: 'overview' | 'packages' = 'overview') {
     const active = document.activeElement
     projectOpener.current = active instanceof HTMLElement && active.closest('.project-card') ? active : document.getElementById(`project-open-${project.id}`)
@@ -312,20 +321,20 @@ export default function App() {
     }
   }
 
-  const pageName = stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : 'All projects')
+  const pageName = stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
   return <div className="app-shell">
     <a className="skip-link" href="#projects">Skip to projects</a>
     <aside className="sidebar">
       <a className="brand" href="#" onClick={event => { event.preventDefault(); navigate('all') }}><Logo /><span>local repos<span className="brand-period">.</span></span></a>
       <div className="sidebar-section-label">WORKSPACE</div>
       <nav className="main-nav" aria-label="Workspace">
-        <button aria-current={filter === 'all' && !stack ? 'page' : undefined} className={filter === 'all' && !stack ? 'active' : ''} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projects.length}</span></button>
+        <button aria-current={!hasFilters ? 'page' : undefined} className={!hasFilters ? 'active' : ''} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projects.length}</span></button>
         <button aria-current={filter === 'favorites' ? 'page' : undefined} className={filter === 'favorites' ? 'active' : ''} onClick={() => navigate('favorites')}><Star size={17} /><span>Favorites</span><span className="nav-count">{favoriteCount.toString().padStart(2, '0')}</span></button>
-        <button aria-current={filter === 'running' ? 'page' : undefined} className={filter === 'running' ? 'active' : ''} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</button>
+        <button aria-current={filters.server?.includes('running') ? 'page' : undefined} className={filters.server?.includes('running') ? 'active' : ''} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</button>
       </nav>
       <div className="sidebar-divider" />
       <div className="sidebar-section-label technology-label">TECHNOLOGIES <span>{stacks.length.toString().padStart(2, '0')}</span></div>
-      <nav className="stack-nav" aria-label="Filter by technology">{stacks.map(tech => <button key={tech} aria-pressed={stack === tech} className={stack === tech ? 'active' : ''} onClick={() => navigate('all', stack === tech ? null : tech)}><span className={`tech-dot tech-${tech.toLowerCase().replace(/[^a-z]/g, '')}`} /><span>{tech}</span><span className="tech-count">{projects.filter(p => p.stack.includes(tech)).length}</span></button>)}</nav>
+      <nav className="stack-nav" aria-label="Filter by technology">{stacks.map(tech => <button key={tech} aria-pressed={filters.stack?.includes(tech) ?? false} className={filters.stack?.includes(tech) ? 'active' : ''} onClick={() => toggleTechnology(tech)}><span className={`tech-dot tech-${tech.toLowerCase().replace(/[^a-z]/g, '')}`} /><span>{tech}</span><span className="tech-count">{projects.filter(p => p.stack.includes(tech)).length}</span></button>)}</nav>
       <div className="sidebar-bottom"><div className="directory-card"><div className="directory-icon"><FolderOpen size={17} /><span className={isDemo ? 'status-dot neutral' : 'status-dot'} /></div><div><strong>{workspace?.rootName ?? 'Demo workspace'}</strong><span>{isDemo ? 'A look at what’s possible' : workspace.mode === 'helper' ? 'Local helper workspace' : 'Browser folder access'}</span></div><button aria-label="Change directory" disabled={!!busy} onClick={() => setConnectOpen(true)}><ChevronDown size={15} /></button></div>
         <button className="sidebar-help" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /><span>How it works</span><ArrowUpRight size={13} /></button>
         {installPrompt && <button className="sidebar-help" onClick={async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) }}><Download size={15} /><span>Install Local Repos</span></button>}
@@ -344,14 +353,14 @@ export default function App() {
         {auditBatch.progress && <AuditBatchProgress progress={auditBatch.progress} onStop={auditBatch.stop} onDismiss={auditBatch.dismiss} />}
         {outdatedBatch.progress && <OutdatedBatchProgress progress={outdatedBatch.progress} onStop={outdatedBatch.stop} onDismiss={outdatedBatch.dismiss} />}
 
-        <div className="toolbar"><div className="search-group"><select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => setSearchScope(event.target.value as 'all' | 'packages')}><option value="all">Projects & packages</option><option value="packages">Package name & version</option></select><div className="search-box"><Search size={17} /><input ref={searchRef} value={query} onChange={event => setQuery(event.target.value)} placeholder={searchScope === 'packages' ? 'e.g. next, next@16.0.0, next@16.*.*…' : 'Find a project or package…'} aria-label="Search projects" />{query ? <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button> : <kbd>⌘ K</kbd>}</div></div><div className="toolbar-right"><label className="sort-control"><ArrowDownWideNarrow size={15} /><select value={sort} onChange={event => setSort(event.target.value)} aria-label="Sort projects"><option value="updated">Last updated</option><option value="name">Name A–Z</option><option value="stack">Technology</option></select><ChevronDown size={12} /></label><div className="view-toggle"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={17} /></button></div></div></div>
-        {(stack || query) && <div className="filter-summary"><span>{filtered.length} {filtered.length === 1 ? 'project' : 'projects'} found{stack ? ` in ${stack}` : ''}{query.trim() && searchScope === 'packages' ? ' using matching packages · declared versions' : ''}</span><button onClick={() => { setStack(null); setQuery('') }}>Clear filters <X size={12} /></button></div>}
+        <div className="toolbar"><div className="search-group"><select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => setSearchScope(event.target.value as 'all' | 'packages')}><option value="all">Projects & packages</option><option value="packages">Package name & version</option></select><div className="search-box"><Search size={17} /><input ref={searchRef} value={query} onChange={event => setQuery(event.target.value)} placeholder={searchScope === 'packages' ? 'e.g. next, next@16.0.0, next@16.*.*…' : 'Find a project or package…'} aria-label="Search projects" />{query ? <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button> : <kbd>⌘ K</kbd>}</div></div><div className="toolbar-right"><label className="sort-control"><ArrowDownWideNarrow size={15} /><select value={sort} onChange={event => setSort(event.target.value as ProjectSort)} aria-label="Sort projects">{projectSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={12} /></label><div className="view-toggle"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={17} /></button></div></div></div>
+        <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
         {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <article className={`project-card ${previewBatch.progress?.current?.id === project.id ? 'is-capturing' : ''}`} key={project.id} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
           <button className="preview-button" onClick={() => openProject(project)} aria-label={`View ${project.name}`}><ProjectPreview project={project} />{previewBatch.progress?.current?.id === project.id && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
-          <div className="project-info"><div className="project-title-row"><button id={`project-open-${project.id}`} className="project-title" onClick={() => openProject(project)}>{project.name}</button><ProjectAuditBadge project={project} onClick={() => openProject(project, 'packages')} /><ProjectOutdatedBadge project={project} onClick={() => openProject(project, 'packages')} /><button className={`favorite-button ${favorites.includes(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favorites.includes(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorites.includes(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><div className="project-tags">{project.monorepo && <span title={project.monorepo.packagePath}>{project.monorepo.name} workspace</span>}{!!project.workspacePackageCount && <span>{project.workspacePackageCount} workspace packages</span>}{project.stack.slice(0, 3).map(tech => <button key={tech} onClick={() => navigate('all', tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div>{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
+          <div className="project-info"><div className="project-title-row"><button id={`project-open-${project.id}`} className="project-title" onClick={() => openProject(project)}>{project.name}</button><ProjectAuditBadge project={project} onClick={() => openProject(project, 'packages')} /><ProjectOutdatedBadge project={project} onClick={() => openProject(project, 'packages')} /><button className={`favorite-button ${favorites.includes(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favorites.includes(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorites.includes(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><div className="project-tags">{project.monorepo && <span title={project.monorepo.packagePath}>{project.monorepo.name} workspace</span>}{!!project.workspacePackageCount && <span>{project.workspacePackageCount} workspace packages</span>}{project.stack.slice(0, 3).map(tech => <button key={tech} onClick={() => toggleTechnology(tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div>{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
           <div className="project-footer"><span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><DropdownMenu modal={false}><DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => openProject(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem><DropdownMenuItem onSelect={() => toggleFavorite(project.id)}><Star size={14} />{favorites.includes(project.id) ? 'Remove favorite' : 'Add to favorites'}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'vscode' })}><Code2 size={14} />Open in VS Code</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'sourcetree' })}><GitBranch size={14} />Open in Sourcetree</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'folder' })}><FolderOpen size={14} />Show in folder</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
-        </article>)}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{query || stack ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{query || stack ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
+        </article>)}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{hasRefinements ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{hasRefinements ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
         <footer className="page-footer"><span>{filtered.length.toString().padStart(2, '0')} {filtered.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span><span><ShieldCheck size={13} /> No cloud. No clutter.</span></footer>
         {isDemo && <div className="demo-note"><span>You’re looking at an example workspace.</span><button onClick={() => setConnectOpen(true)}>Make it yours <ArrowRight size={13} /></button></div>}
       </div>

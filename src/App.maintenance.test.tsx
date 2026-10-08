@@ -103,7 +103,7 @@ describe('workspace package search', () => {
     expect(screen.queryByRole('button', { name: 'View react-handbook' })).toBeNull()
     expect(screen.getByText('^19.0.0')).toBeTruthy()
     expect(screen.getByText('^18.3.1')).toBeTruthy()
-    expect(screen.getByText(/2 projects found using matching packages · declared versions/)).toBeTruthy()
+    expect(screen.getByText(/2 of 3 projects · matching declared packages/)).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Clear search' }))
     expect(screen.getAllByRole('article')).toHaveLength(3)
   })

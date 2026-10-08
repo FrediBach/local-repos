@@ -39,13 +39,27 @@ Choose **Connect directory**, then use either connection method:
 The browser cannot reveal an absolute path or launch local processes. To enable local actions for a folder selected through the browser, reconnect it by entering its path in the helper form.
 
 - Search names, descriptions, technologies, folder names, branches, and package names. Choose **Package name & version** beside search to find only projects that declare a matching dependency. Use `next@16.2.1` for an exact version or `next@16.*.*` for a wildcard range. Matching declared versions appear on the project cards. Use `⌘K` or `Ctrl+K` to focus search.
-- Switch between grid and list views; filter by technology, favorites, or running servers.
+- Switch between grid and list views. Combine quick filters for starred projects, vulnerabilities, outdated packages, uncommitted changes, and running servers, or open **All filters** for the full set.
 - Open a project for its README, package metadata, current branch, latest commit, and origin link.
 - Use **Synced …** to rescan. Changes are not watched continuously. A saved helper connection also rescans on app startup when the helper is available.
 - Browser folder permissions can expire; resync may request read permission again.
 - Use **How it works → Forget this directory** to remove the saved workspace. This does not delete project files.
 
 Only one workspace is displayed at a time. Metadata, captured previews, favorites, and the browser directory handle are stored in IndexedDB for this browser and app origin. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
+
+## Filter and prioritize projects
+
+Use the quick filters below search, or open **All filters**, to combine:
+
+- **Maintenance:** vulnerability severity, clean or unscanned audits; outdated packages, major/minor/patch updates, high package lag, complete up-to-date scans, skipped packages, or unscanned projects; measured disk usage and dependency folders.
+- **Project:** starred or unstarred projects, Git working-tree status, development servers and scripts, and recent or inactive projects.
+- **Metadata:** every detected technology, package managers, workspace roots or members, captured previews, README availability, branch, and license.
+
+Different filters narrow each other. Multiple technologies or package managers match **any** selected value within that group. Sidebar favorites, running servers, and technology shortcuts use the same filters and preserve your other selections and search. General search also includes paths, authors, licenses, package managers, Git origins, and parent workspace names; package-only search retains its name and version syntax.
+
+Option counts reflect your search and the other filter groups, ignoring the current group so you can compare alternatives. Active filter chips stay visible when the panel is closed: remove one chip to broaden the results, or use **Clear filters** / **All projects** to reset filters and search. Filters apply equally to grid and list views and remain active while project metadata or stars change. Filter selections last for the current session.
+
+Sort by vulnerability severity (then count), package lag, project or node_modules size, starred projects, name, technology, or newest/oldest activity. Missing reports, measurements, and activity dates sort last. Maintenance filters use the last saved results; an unscanned audit is never clean, and an outdated scan with skipped packages is never labeled fully up to date. Git cleanliness and missing node_modules require explicit metadata. Activity uses the last project update or commit, never the scan time. Disk thresholds include partial measurements when their measured lower bound already exceeds the threshold.
 
 ## Commit history
 
