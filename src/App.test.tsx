@@ -77,6 +77,23 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it('shows AI badges only for marked projects in grid, list, and project details', async () => {
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'browser', projects: [
+      { ...project, aiInstructionFiles: ['AGENTS.md', 'CLAUDE.md'] },
+      { ...project, id: 'unmarked', name: 'unmarked-project' },
+    ] })
+    const user = userEvent.setup()
+    render(<App />)
+    const label = `${project.name}: developed with AI`
+    const badge = await screen.findByRole('img', { name: label })
+    expect(badge.title).toBe('Developed with AI\nRoot files: AGENTS.md, CLAUDE.md')
+    expect(screen.queryByRole('img', { name: 'unmarked-project: developed with AI' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'List view' }))
+    expect(screen.getByRole('img', { name: label })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: `View ${project.name}` }))
+    expect(within(screen.getByRole('dialog')).getByRole('img', { name: label })).toBeTruthy()
+  })
+
   it('sends a script terminal request without caching the launch response as project metadata', async () => {
     const scriptsProject = { ...project, scripts: { dev: 'vite', 'test:watch': 'vitest' } }
     const scriptsScan = { ...scan, projects: [scriptsProject] }

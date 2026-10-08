@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { extractReadmeIntro, normalizeGitOrigin, parsePackageJson } from '../src/lib/metadata'
+import { aiInstructionFileNames, extractReadmeIntro, normalizeGitOrigin, parsePackageJson } from '../src/lib/metadata'
 import { matchesWorkspace, workspacePatterns } from '../src/lib/monorepo'
 import type { RepoProject, ScanResult } from '../src/types'
 
@@ -98,6 +98,14 @@ async function inspectProject(directory: string, root: string, names: string[], 
   const readmeName = names.find((name) => /^readme(?:\.(?:md|mdx|markdown|txt))?$/i.test(name))
   const readme = readmeName ? await readBounded(directory, readmeName) : undefined
   const gitInfo = names.includes('.git') ? await readGit(directory) : undefined
+  const aiInstructionFiles: string[] = []
+  for (const name of aiInstructionFileNames) {
+    if (!names.includes(name)) continue
+    try {
+      const resolved = await realpath(path.join(directory, name))
+      if (isWithin(directory, resolved) && (await stat(resolved)).isFile()) aiInstructionFiles.push(name)
+    } catch { /* A missing or inaccessible marker does not prevent scanning the project. */ }
+  }
   const directoryStat = await stat(directory)
   const project: RepoProject = {
     id: createHash('sha256').update(directory).digest('hex').slice(0, 20),
@@ -111,6 +119,7 @@ async function inspectProject(directory: string, root: string, names: string[], 
     license: metadata?.license,
     homepage: metadata?.homepage,
     previewUrl: metadata?.previewUrl,
+    aiInstructionFiles,
     stack: [...new Set([...(metadata?.stack ?? []), ...Object.entries(markerStack).filter(([name]) => names.includes(name)).map(([, tech]) => tech), ...(names.includes('components.json') ? ['shadcn/ui'] : []), ...(names.includes('tsconfig.json') ? ['TypeScript'] : [])])],
     scripts: metadata?.scripts ?? {},
     dependencies: metadata?.dependencies ?? [],

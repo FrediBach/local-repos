@@ -1,5 +1,7 @@
 import type { ProjectDependency, RepoProject } from '../types'
 
+export const aiInstructionFileNames = ['AGENTS.md', 'AGENTS.m', 'CLAUDE.md'] as const
+
 export interface PackageMetadata {
   name?: string
   version?: string

@@ -98,6 +98,7 @@ export interface RepoProject {
   license?: string
   homepage?: string
   previewUrl?: string
+  aiInstructionFiles?: string[]
   stack: string[]
   scripts: Record<string, string>
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun'

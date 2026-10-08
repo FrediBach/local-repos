@@ -28,6 +28,26 @@ function directory(name: string, tree: Tree): FileSystemDirectoryHandle {
 }
 
 describe('read-only folder scan', () => {
+  it.each(['AGENTS.md', 'AGENTS.m', 'CLAUDE.md'])('detects a root %s file without reading its content', async filename => {
+    const root = directory('assisted', { 'package.json': '{}', [filename]: '' })
+    const marker = await root.getFileHandle(filename)
+    marker.getFile = vi.fn().mockRejectedValue(new Error('File contents must not be read'))
+    expect((await scanDirectory(root)).projects[0].aiInstructionFiles).toEqual([filename])
+    expect(marker.getFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps AI markers local to each project root and ignores directories with marker names', async () => {
+    const root = directory('studio', {
+      'package.json': JSON.stringify({ name: 'studio', workspaces: ['apps/*'] }),
+      'AGENTS.md': '', 'CLAUDE.md': '',
+      apps: { web: { 'package.json': '{"name":"web"}', 'AGENTS.md': {}, docs: { 'CLAUDE.md': '' } } },
+    })
+    const result = await scanDirectory(root)
+    expect(result.projects.find(project => project.name === 'studio')?.aiInstructionFiles).toEqual(['AGENTS.md', 'CLAUDE.md'])
+    expect(result.projects.find(project => project.name === 'web')?.aiInstructionFiles).toEqual([])
+    expect((await scanDirectory(directory('studio', { 'package.json': '{}' }))).projects[0].aiInstructionFiles).toEqual([])
+  })
+
   it.each(['npm', 'pnpm'])('discovers %s workspace apps below repository boundaries', async manager => {
     const result = await scanDirectory(directory('Projects', { studio: {
       'package.json': JSON.stringify({ name: 'studio', packageManager: `${manager}@10.0.0`, ...(manager === 'npm' ? { workspaces: ['apps/*', '!apps/ignored'] } : {}) }),

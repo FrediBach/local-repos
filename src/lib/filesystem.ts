@@ -1,6 +1,6 @@
 import { matchesWorkspace, workspacePatterns } from './monorepo'
 import type { RepoProject, ScanResult } from '../types'
-import { extractReadmeIntro, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
+import { aiInstructionFileNames, extractReadmeIntro, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
 
 const ignoredDirectories = new Set(['node_modules', 'vendor', 'dist', 'build', 'coverage', 'target', 'venv', '__pycache__'])
 const markerStack: Record<string, string> = {
@@ -155,6 +155,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
         license: pkg?.license,
         homepage: pkg?.homepage,
         previewUrl: pkg?.previewUrl,
+        aiInstructionFiles: aiInstructionFileNames.filter(name => entries.get(name)?.kind === 'file'),
         stack,
         scripts: pkg?.scripts ?? {},
         dependencies: pkg?.dependencies ?? [],

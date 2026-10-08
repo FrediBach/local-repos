@@ -27,6 +27,40 @@ async function fixture(name: string, metadata: unknown = { name }): Promise<stri
 }
 
 describe('local directory scanning', () => {
+  it.each(['AGENTS.md', 'AGENTS.m', 'CLAUDE.md'])('detects a root %s file, including empty files', async filename => {
+    const directory = await fixture('assisted')
+    await writeFile(path.join(directory, filename), '')
+    expect((await scanDirectory(directory)).result.projects[0].aiInstructionFiles).toEqual([filename])
+  })
+
+  it('keeps AI markers local to each project root and ignores directories with marker names', async () => {
+    const monorepo = await fixture('studio', { name: 'studio', workspaces: ['apps/*'] })
+    await writeFile(path.join(monorepo, 'AGENTS.md'), 'Root instructions')
+    await writeFile(path.join(monorepo, 'CLAUDE.md'), 'Root instructions')
+    const child = await fixture('studio/apps/web', { name: 'web' })
+    await mkdir(path.join(child, 'AGENTS.md'))
+    await mkdir(path.join(child, 'docs'))
+    await writeFile(path.join(child, 'docs', 'CLAUDE.md'), 'Nested instructions')
+    const { result } = await scanDirectory(monorepo)
+    expect(result.projects.find(project => project.name === 'studio')?.aiInstructionFiles).toEqual(['AGENTS.md', 'CLAUDE.md'])
+    expect(result.projects.find(project => project.name === 'web')?.aiInstructionFiles).toEqual([])
+  })
+
+  it('detects internal marker symlinks and clears removed markers on rescan', async () => {
+    const directory = await fixture('assisted')
+    await writeFile(path.join(directory, 'CLAUDE.md'), 'Instructions')
+    await symlink('CLAUDE.md', path.join(directory, 'AGENTS.md'))
+    await writeFile(path.join(temporary, 'outside.md'), 'Outside instructions')
+    await symlink(path.join(temporary, 'outside.md'), path.join(directory, 'AGENTS.m'))
+    const registry = new ProjectRegistry()
+    const first = (await scanDirectory(root)).registered
+    registry.register(first)
+    expect(first[0].project.aiInstructionFiles).toEqual(['AGENTS.md', 'CLAUDE.md'])
+    await rm(path.join(directory, 'CLAUDE.md'))
+    registry.register((await scanDirectory(root)).registered)
+    expect(registry.lookup(first[0].project.id).project.aiInstructionFiles).toEqual([])
+  })
+
   it('discovers multiple workspace apps, inherits their manager and excludes nonmembers', async () => {
     const monorepo = await fixture('studio', { name: 'studio', packageManager: 'pnpm@10.0.0' })
     await writeFile(path.join(monorepo, 'pnpm-workspace.yaml'), 'packages:\n  - "apps/*"\n  - "packages/*"\n  - "!apps/ignored"\n')
