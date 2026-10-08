@@ -24,6 +24,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "express": "^5.2.1",
+    "knip": "6.40.0",
     "lucide-react": "^1.52.0",
     "minimatch": "^10.2.6",
     "playwright": "^1.63.0",

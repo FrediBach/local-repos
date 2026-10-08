@@ -283,6 +283,7 @@ function WorkspaceApp() {
       }
       if (name === 'delete-node-modules' && cached) setNotice({ text: `Deleted root node_modules for ${project.name}. Reinstall dependencies before running it again.` })
       if (name === 'outdated' && cached) setNotice({ text: `Outdated-package scan completed for ${project.name}.` })
+      if (name === 'unused' && cached) setNotice({ text: `Unused-package scan completed for ${project.name}.` })
       if (name === 'audit' && cached) setNotice({ text: `Package audit completed for ${project.name}.` })
       if (updateLevel && result.packageUpdate) setNotice({ text: result.packageUpdate.packages.length ? `Updated ${result.packageUpdate.packages.length} packages in ${project.name}.` : `No eligible ${updateLevel} updates found for ${project.name}.` })
       if (name === 'open') setNotice({ text: 'Open request sent to your computer.' })
@@ -291,7 +292,7 @@ function WorkspaceApp() {
     finally {
       if (updateLevel && workspace.rootPath) {
         const repositoryId = project.monorepo?.id ?? project.id
-        const cleared = { ...workspace, projects: workspace.projects.map(item => (item.monorepo?.id ?? item.id) === repositoryId ? { ...item, outdated: undefined, audit: undefined, storage: undefined } : item) }
+        const cleared = { ...workspace, projects: workspace.projects.map(item => (item.monorepo?.id ?? item.id) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, storage: undefined } : item) }
         try {
           const refreshed = await scanWithHelper(workspace.rootPath)
           if (version === workspaceVersion.current) await persist(preservePreviews({ ...refreshed, mode: 'helper' }, cleared), false)

@@ -10,7 +10,7 @@ export async function api<T>(path: string, body?: unknown, retry = true): Promis
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Local-Repos': '1' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(path.endsWith('update-packages') ? 420_000 : path.endsWith('screenshot') ? 240_000 : /(?:audit|outdated|delete-node-modules)$/.test(path) ? 150_000 : 60_000),
+    signal: AbortSignal.timeout(path.endsWith('update-packages') ? 420_000 : path.endsWith('screenshot') ? 240_000 : /(?:audit|outdated|unused|delete-node-modules)$/.test(path) ? 150_000 : 60_000),
   })
   const data = await response.json().catch(() => null)
   // Manual mode restores cached browsing without scanning on startup. Register

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import type { PackageAudit, ProjectStorage, RepoProject, ScanResult, Workspace } from './types'
+import type { PackageAudit, PackageUnused, ProjectStorage, RepoProject, ScanResult, Workspace } from './types'
 
 const storage = vi.hoisted(() => ({
   loadWorkspace: vi.fn(), saveWorkspace: vi.fn(), clearWorkspace: vi.fn(), loadFavorites: vi.fn(), saveFavorites: vi.fn(),
@@ -75,6 +75,31 @@ async function openProject(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('workspace package search', () => {
+  it('runs Knip on demand, saves findings across resync, and keeps them when a rescan fails', async () => {
+    const unused: PackageUnused = { scannedAt: '2026-10-08T12:00:00Z', knipVersion: '6.40.0', findings: [{ name: 'unused-package', version: '^1.0.0', kind: 'devDependencies', line: 12 }] }
+    const user = await renderConnected()
+    const original = fetchMock.getMockImplementation()!
+    let failure = false
+    fetchMock.mockImplementation((url: string) => url.endsWith('/unused') ? failure ? response({ error: 'Knip configuration failed' }, false) : response({ unused }) : original(url))
+    const details = await openProject(user)
+    await user.click(within(details).getByRole('tab', { name: 'Packages' }))
+    expect(actionRequests('unused')).toHaveLength(0)
+    await user.click(within(details).getByRole('button', { name: 'Scan for unused packages' }))
+    await within(details).findByText('unused-package')
+    expect(actionRequests('unused')).toHaveLength(1)
+    expect(storage.saveWorkspace).toHaveBeenLastCalledWith(expect.objectContaining({ projects: expect.arrayContaining([expect.objectContaining({ id: 'alpha', unused })]) }))
+    failure = true
+    await user.click(within(details).getByRole('button', { name: 'Scan unused again' }))
+    await screen.findByText('Knip configuration failed')
+    expect(within(details).getByText('unused-package')).toBeTruthy()
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: /Synced/ }))
+    await waitFor(() => expect(actionRequests('scan')).toHaveLength(1))
+    const reopened = await openProject(user)
+    await user.click(within(reopened).getByRole('tab', { name: 'Packages' }))
+    expect(within(reopened).getByText('unused-package')).toBeTruthy()
+  })
+
   it('opens a critical alert for a manual project audit and suppresses an unchanged rescan', async () => {
     const user = await renderConnected()
     const critical = { ...report, counts: { ...report.counts, high: 0, critical: 1 }, findings: [{ ...report.findings[0], severity: 'critical' }] }

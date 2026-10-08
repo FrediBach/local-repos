@@ -13,6 +13,7 @@ export function preservePreviews(next: Workspace, previous?: Workspace): Workspa
       ...(project.storage === undefined && cached.storage ? { storage: cached.storage } : {}),
       ...(project.audit === undefined && cached.audit ? { audit: cached.audit } : {}),
       ...(project.outdated === undefined && cached.outdated ? { outdated: cached.outdated } : {}),
+      ...(project.unused === undefined && cached.unused ? { unused: cached.unused } : {}),
     }
   }) }
 }

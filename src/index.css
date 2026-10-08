@@ -242,6 +242,11 @@ svg { flex-shrink: 0; }
 .maintenance-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .maintenance-heading h3 { display: flex; align-items: center; gap: 7px; font-size: 1rem; font-weight: 500; color: var(--foreground); margin: 0; }
 .maintenance-hint { font-size: 0.875rem; color: var(--muted-foreground); line-height: 1.7; margin: 10px 0 15px; }
+.unused-section .maintenance-hint a { display: inline-flex; align-items: center; gap: 4px; text-decoration: underline; text-underline-offset: 3px; }
+.unused-notes { margin: 15px 0; color: var(--muted-foreground); font-size: 0.875rem; }
+.unused-notes summary { cursor: pointer; color: var(--foreground); }
+.unused-notes pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.8125rem; line-height: 1.6; }
+.unused-section .dependency-table { min-width: 560px; }
 .maintenance-empty { padding: 16px; border: 1px dashed var(--border); border-radius: 5px; font-size: 0.9375rem; color: var(--muted-foreground); }
 .storage-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .storage-stats > div { padding: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-muted); display: flex; flex-direction: column; gap: 8px; }

@@ -24,8 +24,12 @@ describe('captured preview persistence', () => {
     const storage = { totalBytes: 2048, nodeModulesBytes: 1024, hasNodeModules: true, measuredAt: '2026-10-07T10:00:00Z', partial: false }
     const audit = { manager: 'npm' as const, scannedAt: '2026-10-07T10:00:00Z', counts: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 }, findings: [] }
     const outdated = { manager: 'npm' as const, scannedAt: '2026-10-07T10:00:00Z', findings: [], score: 0, level: 'current' as const }
-    const previous = workspace([{ ...project('one'), storage, audit, outdated }])
-    expect(preservePreviews(workspace([project('one')]), previous).projects[0]).toMatchObject({ storage, audit, outdated })
+    const unused = { scannedAt: '2026-10-08T10:00:00Z', knipVersion: '6.40.0', findings: [] }
+    const previous = workspace([{ ...project('one'), storage, audit, outdated, unused }])
+    expect(preservePreviews(workspace([project('one')]), previous).projects[0]).toMatchObject({ storage, audit, outdated, unused })
+    const freshUnused = { ...unused, scannedAt: '2026-10-08T11:00:00Z' }
+    expect(preservePreviews(workspace([{ ...project('one'), unused: freshUnused }]), previous).projects[0].unused).toEqual(freshUnused)
+    expect(preservePreviews(workspace([project('two')]), previous).projects[0].unused).toBeUndefined()
     const freshStorage = { ...storage, totalBytes: 1024, nodeModulesBytes: 0, hasNodeModules: false }
     expect(preservePreviews(workspace([{ ...project('one'), storage: freshStorage }]), previous).projects[0].storage).toEqual(freshStorage)
     expect(preservePreviews(workspace([project('two')]), previous).projects[0].audit).toBeUndefined()

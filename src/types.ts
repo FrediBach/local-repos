@@ -84,6 +84,13 @@ export interface PackageOutdated {
   skipped?: { name: string; reason: string }[]
 }
 
+export interface PackageUnused {
+  scannedAt: string
+  knipVersion: string
+  findings: (ProjectDependency & { line?: number })[]
+  warning?: string
+}
+
 export interface RepoProject {
   id: string
   name: string
@@ -108,6 +115,7 @@ export interface RepoProject {
   storage?: ProjectStorage
   audit?: PackageAudit
   outdated?: PackageOutdated
+  unused?: PackageUnused
   packageUpdate?: PackageUpdate
   git?: {
     branch?: string

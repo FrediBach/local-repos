@@ -1,6 +1,6 @@
 # Local Repos
 
-A local project library with README introductions, package search, vulnerability audits, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a restrained interface inspired by Dieter Rams, in light and dark themes.
+A local project library with README introductions, package search, vulnerability audits, unused-package scans with Knip, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a restrained interface inspired by Dieter Rams, in light and dark themes.
 
 ## Run locally
 
@@ -150,6 +150,18 @@ Each action refreshes resolved versions and queries published releases, includin
 Updated dependencies are **pinned to exact versions** in package.json. The installed package manager updates its lockfile and dependency tree; a workspace member uses the shared lockfile. Lifecycle scripts are disabled. Other dependencies may be resolved by the package manager as part of installation. An installation failure can leave partial changes, so inspect the files before retrying. Outdated, audit, and storage reports are cleared for the related repository after an update attempt, and project metadata is refreshed. Scan again for fresh reports.
 
 Commands use [npm install](https://docs.npmjs.com/cli/install/), [pnpm add](https://pnpm.io/cli/add), [Yarn add](https://yarnpkg.com/cli/add), or [Bun add](https://bun.sh/docs/pm/cli/add), depending on the project. No major version updates, forced peer-dependency overrides, or automatic updates are performed. Following the initial outdated scan, registry lookups and installs have a combined four-minute deadline, a two-minute per-command timeout, and an 8 MiB output limit.
+
+### Unused packages with Knip
+
+Open **Packages → Unused packages → Scan for unused packages** on a helper-connected project. Local Repos includes a pinned version of [Knip](https://knip.dev/), so the target project does not need its own Knip installation. Restart `npm run dev` after updating Local Repos to load the new endpoint.
+
+The scan analyzes source files and tooling using the project's existing Knip configuration and reports potentially unused `dependencies` and `devDependencies`. Findings include the declared version, dependency type, and package.json line when available. Peer and optional dependencies are outside this report; Knip's referenced optional-peer findings are not unused packages.
+
+Monorepos are analyzed from the workspace root, with only the selected project's package.json findings displayed. This preserves shared dependency usage across workspace members. Existing ignore rules and entry-point configuration apply. Review findings before removing packages: dynamic imports and custom entry points can require [Knip configuration](https://knip.dev/overview/configuration). Install the project's dependencies first so its tooling configuration can load. Knip may evaluate project configuration code, so use this action for projects you trust.
+
+Scans run only when requested, with a two-minute timeout and an 8 MiB output limit. The helper runs its bundled CLI directly with JSON reporting; it does not install Knip into the project, apply fixes, or remove packages. Dependency updates and node_modules deletion in the same repository are blocked until the scan completes. No registry lookup is part of this action, though project configuration code runs with the helper's permissions.
+
+Results and their timestamps are saved for cached browsing and survive metadata rescans and helper restarts. A failed scan retains the last successful report and displays the error; an unscanned project is never presented as having no unused packages. Scan again after source, configuration, or dependency changes. Package update attempts clear saved unused-package results for the related repository. Browser-only connections need the local helper for this feature.
 
 ## Frontend project scripts
 

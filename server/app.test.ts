@@ -5,9 +5,10 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from './app'
 import { devCommand } from './runtime'
-import type { PackageAudit, PackageOutdated, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageAudit, PackageOutdated, PackageUnused, ProjectStorage, RepoProject } from '../src/types'
 import * as packageAudit from './package-audit'
 import * as packageOutdated from './package-outdated'
+import * as packageUnused from './package-unused'
 import * as packageUpdate from './package-update'
 import * as projectStorage from './project-storage'
 import * as projectScripts from './project-scripts'
@@ -168,6 +169,7 @@ describe('project storage and package actions', () => {
     await expect(helper.runtime.start(admin.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.runScript(admin.id, 'test', 'vitest run')).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.outdated(admin.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.unused(admin.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.deleteNodeModules(admin.id, true)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.updatePackages(admin.id, 'minor')).rejects.toMatchObject({ status: 409 })
     finish(updateResult)
@@ -182,10 +184,12 @@ describe('project storage and package actions', () => {
     const entry = helper.registry.lookup(project.id)
     entry.project.outdated = outdatedResult
     entry.project.audit = auditResult
+    entry.project.unused = unusedResult
     vi.spyOn(packageUpdate, 'updateProject').mockRejectedValueOnce(new Error('Install failed'))
     await expect(helper.runtime.updatePackages(project.id, 'minor')).rejects.toThrow('Install failed')
     expect(entry.project.outdated).toBeUndefined()
     expect(entry.project.audit).toBeUndefined()
+    expect(entry.project.unused).toBeUndefined()
     vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
     expect(await helper.runtime.outdated(project.id)).toEqual(outdatedResult)
   })
@@ -200,11 +204,51 @@ describe('project storage and package actions', () => {
     manager: 'npm', scannedAt: '2026-10-07T12:00:00.000Z', score: 0.1, level: 'low',
     findings: [{ name: 'fixture-package', current: '1.0.0', wanted: '1.0.1', latest: '1.0.1', change: 'patch', majorGap: 0, score: 0.1 }],
   }
+  const unusedResult: PackageUnused = { scannedAt: '2026-10-08T12:00:00.000Z', knipVersion: '6.40.0', findings: [{ name: 'fixture-package', version: '^1.0.0', kind: 'devDependencies', line: 5 }] }
+
+  it('saves unused results across rescans, preserves them after failures, and permits retries', async () => {
+    const project = await createProject()
+    const unused = vi.spyOn(packageUnused, 'unusedProject').mockResolvedValueOnce(unusedResult)
+    const endpoint = `/api/projects/${project.id}/unused`
+    expect((await post(endpoint, {}, { Origin: 'https://untrusted.example' })).status).toBe(403)
+    const response = await post(endpoint)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ unused: unusedResult })
+    expect(unused).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect((await (await post('/api/scan', { path: directory })).json()).projects[0].unused).toEqual(unusedResult)
+    unused.mockRejectedValueOnce(new Error('Configuration failed'))
+    await expect(helper.runtime.unused(project.id)).rejects.toThrow('Configuration failed')
+    expect(helper.registry.lookup(project.id).project.unused).toEqual(unusedResult)
+    unused.mockResolvedValueOnce({ ...unusedResult, findings: [] })
+    expect((await (await post(endpoint)).json()).unused.findings).toEqual([])
+  })
+
+  it('deduplicates unused scans and prevents sibling dependency changes until they finish', async () => {
+    await mkdir(path.join(directory, 'packages/member'), { recursive: true })
+    await writeFile(path.join(directory, 'package.json'), '{"name":"root","workspaces":["packages/*"]}')
+    await writeFile(path.join(directory, 'packages/member/package.json'), '{"name":"member"}')
+    const scan = await (await post('/api/scan', { path: directory })).json()
+    const root = scan.projects.find((project: RepoProject) => project.name === 'root')!
+    const member = scan.projects.find((project: RepoProject) => project.name === 'member')!
+    let finish!: (result: PackageUnused) => void
+    const unused = vi.spyOn(packageUnused, 'unusedProject').mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const first = helper.runtime.unused(member.id)
+    const second = helper.runtime.unused(member.id)
+    await vi.waitFor(() => expect(unused).toHaveBeenCalledOnce())
+    await expect(helper.runtime.deleteNodeModules(root.id, true)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.updatePackages(root.id, 'patch')).rejects.toMatchObject({ status: 409 })
+    finish(unusedResult)
+    expect(await first).toEqual(unusedResult)
+    expect(await second).toEqual(unusedResult)
+    vi.spyOn(packageUpdate, 'updateProject').mockResolvedValue({ level: 'patch', packages: [], skipped: [], updatedAt: new Date().toISOString() })
+    await helper.runtime.updatePackages(root.id, 'patch')
+    expect(helper.registry.lookup(member.id).project.unused).toBeUndefined()
+  })
 
   it('rejects unknown ids for every maintenance action', async () => {
     const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
     const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
-    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated', 'update-packages']) {
+    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated', 'unused', 'update-packages']) {
       expect((await post(`/api/projects/unknown/${action}`, { confirm: true })).status).toBe(404)
     }
     expect(audit).not.toHaveBeenCalled()
