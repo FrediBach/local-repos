@@ -159,6 +159,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
         stack,
         scripts: pkg?.scripts ?? {},
         dependencies: pkg?.dependencies ?? [],
+        hasPackageJson: entries.has('package.json'),
         packageManager: workspace?.project.packageManager ?? packageManager,
         git: git ?? workspace?.project.git,
         ...(workspace ? { monorepo: { id: workspace.project.id, name: workspace.project.name, relativePath: workspace.project.relativePath, packagePath: memberPath } } : {}),

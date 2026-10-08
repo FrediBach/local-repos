@@ -103,6 +103,8 @@ export interface RepoProject {
   scripts: Record<string, string>
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun'
   dependencies?: ProjectDependency[]
+  hasPackageJson?: boolean
+  packageFingerprint?: string
   storage?: ProjectStorage
   audit?: PackageAudit
   outdated?: PackageOutdated

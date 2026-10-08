@@ -2,6 +2,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { ProjectRuntime } from './runtime'
 import { HelperError, ProjectRegistry, scanDirectory } from './scanner'
 import { readGitHistory } from './git-history'
+import { packageFingerprint, repositoryFingerprint } from './package-fingerprint'
+import type { RegisteredProject } from './scanner'
 
 export const HELPER_PORT = 4318
 
@@ -23,6 +25,7 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   const app = express()
   const registry = new ProjectRegistry()
   const runtime = new ProjectRuntime(registry)
+  const workspaces = new Map<string, RegisteredProject[]>()
   const configuredOrigin = process.env.LOCAL_REPOS_UI_ORIGIN
   const allowedOrigins = new Set(options.allowedOrigins ?? [...defaultOrigins, ...(configuredOrigin ? [configuredOrigin] : [])])
   app.disable('x-powered-by')
@@ -46,8 +49,28 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   app.post('/api/scan', async (request, response) => {
     const { result, registered } = await scanDirectory(request.body?.path)
     registry.register(registered)
+    workspaces.set(result.rootPath!, registered)
     result.projects = registered.map((entry) => entry.project)
     response.json(result)
+  })
+  app.post('/api/package-changes', async (request, response) => {
+    const entries = workspaces.get(request.body?.path)
+    // After a helper restart the client must first register its workspace again.
+    if (!entries) { response.json({ fingerprints: null }); return }
+    const fingerprints: Record<string, string> = {}
+    const directories = new Map<string, Promise<string>>()
+    const fingerprint = (directory: string) => {
+      let pending = directories.get(directory)
+      if (!pending) { pending = packageFingerprint(directory); directories.set(directory, pending) }
+      return pending
+    }
+    const byDirectory = new Map(entries.map(entry => [entry.directory, entry]))
+    const combined = async (entry: RegisteredProject): Promise<string> => {
+      const parent = entry.workspaceDirectory && byDirectory.get(entry.workspaceDirectory)
+      return repositoryFingerprint(await fingerprint(entry.directory), parent ? await combined(parent) : undefined)
+    }
+    for (const entry of entries) fingerprints[entry.project.id] = await combined(entry)
+    response.json({ fingerprints })
   })
   app.get('/api/projects/:id/status', async (request, response) => response.json({ dev: await runtime.status(request.params.id) }))
   app.get('/api/projects/:id/logs', async (request, response) => response.json({ logs: await runtime.logs(request.params.id) }))

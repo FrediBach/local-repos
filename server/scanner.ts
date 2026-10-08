@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { aiInstructionFileNames, extractReadmeIntro, normalizeGitOrigin, parsePackageJson } from '../src/lib/metadata'
 import { matchesWorkspace, workspacePatterns } from '../src/lib/monorepo'
 import type { RepoProject, ScanResult } from '../src/types'
+import { packageFingerprint, repositoryFingerprint } from './package-fingerprint'
 
 const execFileAsync = promisify(execFile)
 const MAX_METADATA_BYTES = 256 * 1024
@@ -86,6 +87,7 @@ async function readGit(directory: string): Promise<RepoProject['git']> {
 }
 
 async function inspectProject(directory: string, root: string, names: string[], warnings: string[]): Promise<RegisteredProject> {
+  const fingerprint = await packageFingerprint(directory)
   const packageText = names.includes('package.json') ? await readBounded(directory, 'package.json') : undefined
   let metadata: ReturnType<typeof parsePackageJson> | undefined
   if (packageText) {
@@ -123,6 +125,8 @@ async function inspectProject(directory: string, root: string, names: string[], 
     stack: [...new Set([...(metadata?.stack ?? []), ...Object.entries(markerStack).filter(([name]) => names.includes(name)).map(([, tech]) => tech), ...(names.includes('components.json') ? ['shadcn/ui'] : []), ...(names.includes('tsconfig.json') ? ['TypeScript'] : [])])],
     scripts: metadata?.scripts ?? {},
     dependencies: metadata?.dependencies ?? [],
+    hasPackageJson: names.includes('package.json'),
+    packageFingerprint: fingerprint,
     packageManager: metadata?.packageManager ?? 'npm',
     git: gitInfo,
     updatedAt: gitInfo?.committedAt ?? directoryStat.mtime.toISOString(),
@@ -183,6 +187,7 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
             project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath }
             project.project.packageManager = workspace.entry.project.packageManager
             project.project.git ??= workspace.entry.project.git
+            project.project.packageFingerprint = repositoryFingerprint(project.project.packageFingerprint!, workspace.entry.project.packageFingerprint)
           }
           const patterns = workspacePatterns(await readBounded(directory, 'package.json'), await readBounded(directory, 'pnpm-workspace.yaml'))
           if (!patterns.length) return project

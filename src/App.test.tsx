@@ -107,7 +107,6 @@ describe('project workspace interactions', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: `View ${project.name}` })
-    await waitFor(() => expect(storage.saveWorkspace).toHaveBeenCalled())
     storage.saveWorkspace.mockClear()
     await user.click(screen.getByRole('button', { name: `View ${project.name}` }))
     await user.click(screen.getByRole('button', { name: 'Run test:watch in terminal' }))
@@ -305,24 +304,17 @@ describe('project workspace interactions', () => {
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
   })
 
-  it('does not restore a forgotten workspace when its startup scan finishes later', async () => {
+  it('restores and forgets a workspace without initiating a scan in manual mode', async () => {
     storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper' })
-    let finishScan!: (value: Response) => void
-    const pendingScan = new Promise<Response>(resolve => { finishScan = resolve })
-    fetchMock.mockImplementation((url: string) => url === '/api/scan' ? pendingScan : response({ ok: true }))
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: 'View my-notebook' })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/scan', expect.anything()))
-
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/scan')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'How it works' }))
     await user.click(screen.getByRole('button', { name: 'Forget this directory' }))
     await screen.findByText('You’re looking at an example workspace.')
     expect(storage.clearWorkspace).toHaveBeenCalledOnce()
-
-    await act(async () => { finishScan(await response(scan)); await pendingScan })
     expect(screen.queryByRole('button', { name: 'View my-notebook' })).toBeNull()
-    expect(screen.getAllByRole('article')).toHaveLength(6)
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
   })
 

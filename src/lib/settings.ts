@@ -4,8 +4,11 @@ export type BadgeColor = 'red' | 'orange' | 'blue' | 'neutral'
 export const badgeColors: BadgeColor[] = ['red', 'orange', 'blue', 'neutral']
 export const auditSeverities: AuditSeverity[] = ['critical', 'high', 'moderate', 'low', 'info']
 export const SETTINGS_STORAGE_KEY = 'local-repos:settings:v1'
+export type WatcherMode = 'manual' | 'periodic' | 'changes'
 
 export const numericSettings = {
+  watcherIntervalMinutes: { label: 'Scan interval (minutes)', default: 60, min: 1, max: 10080, step: 1 },
+  watcherPollSeconds: { label: 'Check for package changes (seconds)', default: 15, min: 5, max: 300, step: 1 },
   outdatedOrangeScore: { label: 'Orange at score', default: 10, min: 0.1, max: 100000, step: 0.1 },
   outdatedRedScore: { label: 'Red at score', default: 100, min: 0.1, max: 100000, step: 0.1 },
   outdatedRedMajorGap: { label: 'Major versions behind for red', default: 2, min: 0, max: 100, step: 1 },
@@ -32,11 +35,19 @@ export type NumericSettingKey = keyof typeof numericSettings
 export type AppSettings = Record<NumericSettingKey, number> & {
   auditColors: Record<AuditSeverity, BadgeColor>
   majorUpdatesAreOrange: boolean
+  watcherMode: WatcherMode
+  watcherAudit: boolean
+  watcherOutdated: boolean
+  watcherStorage: boolean
 }
 export const defaultSettings: AppSettings = {
   ...Object.fromEntries(Object.entries(numericSettings).map(([key, field]) => [key, field.default])) as Record<NumericSettingKey, number>,
   auditColors: { critical: 'red', high: 'red', moderate: 'orange', low: 'blue', info: 'neutral' },
   majorUpdatesAreOrange: true,
+  watcherMode: 'manual',
+  watcherAudit: true,
+  watcherOutdated: true,
+  watcherStorage: false,
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -53,6 +64,10 @@ export function normalizeSettings(value: unknown): AppSettings {
     if (validNumber(key, value[key])) result[key] = value[key]
   }
   if (typeof value.majorUpdatesAreOrange === 'boolean') result.majorUpdatesAreOrange = value.majorUpdatesAreOrange
+  if (['manual', 'periodic', 'changes'].includes(value.watcherMode as string)) result.watcherMode = value.watcherMode as WatcherMode
+  for (const key of ['watcherAudit', 'watcherOutdated', 'watcherStorage'] as const) {
+    if (typeof value[key] === 'boolean') result[key] = value[key]
+  }
   if (isRecord(value.auditColors)) for (const severity of auditSeverities) {
     const color = value.auditColors[severity]
     if (badgeColors.includes(color as BadgeColor)) result.auditColors[severity] = color as BadgeColor
@@ -80,6 +95,7 @@ const orderedSettings: [NumericSettingKey, NumericSettingKey][] = [
 export function validateSettings(settings: AppSettings): Partial<Record<NumericSettingKey, string>> {
   const errors: Partial<Record<NumericSettingKey, string>> = {}
   for (const key of Object.keys(numericSettings) as NumericSettingKey[]) {
+    if (key === 'watcherIntervalMinutes' && settings.watcherMode !== 'periodic' || key === 'watcherPollSeconds' && settings.watcherMode !== 'changes') continue
     const { min, max, step } = numericSettings[key]
     if (!validNumber(key, settings[key])) errors[key] = `Enter ${min}–${max} in steps of ${step}.`
   }

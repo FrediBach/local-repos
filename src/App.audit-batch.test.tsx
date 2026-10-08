@@ -89,7 +89,6 @@ async function renderConnected() {
   const user = userEvent.setup()
   const result = render(<App />)
   await screen.findByRole('button', { name: 'View Alpha notebook' })
-  await waitFor(() => expect(storage.saveWorkspace).toHaveBeenCalledWith({ ...scannedWorkspace, mode: 'helper' }))
   storage.saveWorkspace.mockClear()
   return { user, ...result }
 }
@@ -225,17 +224,14 @@ describe('workspace vulnerability scans', () => {
     }))
   })
 
-  it('does not let a late startup scan overwrite a completed audit', async () => {
-    const startupScan = deferred<Response>()
-    const handleFetch = fetchMock.getMockImplementation()!
-    fetchMock.mockImplementation((url: string) => url === '/api/scan' ? startupScan.promise : handleFetch(url))
+  it('audits cached projects without an unsolicited startup rescan', async () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: 'View Alpha notebook' })
     await user.click(scanButton())
     await complete('alpha')
     await waitFor(() => expect(auditRequests()).toHaveLength(2))
-    await act(async () => { startupScan.resolve(response(scan)); await startupScan.promise })
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/scan')).toBe(false)
     expect(badge('Alpha notebook', 'high')).toBeTruthy()
     expect(storage.saveWorkspace).toHaveBeenCalledOnce()
     await user.click(progressSection().getByRole('button', { name: 'Stop after current' }))

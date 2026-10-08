@@ -53,7 +53,6 @@ async function renderConnected() {
   const user = userEvent.setup()
   render(<App />)
   await screen.findByRole('button', { name: 'View Alpha' })
-  await waitFor(() => expect(storage.saveWorkspace).toHaveBeenCalledWith(savedWorkspace))
   storage.saveWorkspace.mockClear()
   return user
 }

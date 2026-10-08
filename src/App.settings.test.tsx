@@ -36,6 +36,32 @@ const auditBadge = () => screen.getByRole('button', { name: /Alpha: 1 vulnerabil
 const outdatedBadge = () => screen.getByRole('button', { name: /Alpha: 1 outdated package/ })
 
 describe('workspace settings dialog', () => {
+  it('saves watcher mode, cadence and selected checks, validates intervals, and restores the draft', async () => {
+    const { user } = await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Watcher' }))
+    expect((screen.getByRole('combobox', { name: 'Scan mode' }) as HTMLSelectElement).value).toBe('manual')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Scan mode' }), 'periodic')
+    await user.clear(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }))
+    await user.type(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }), '0')
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByRole('tab', { name: 'Watcher' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }).getAttribute('aria-invalid')).toBe('true')
+    await user.clear(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }))
+    await user.type(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }), '30')
+    await user.click(screen.getByRole('checkbox', { name: 'Outdated packages', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ watcherMode: 'periodic', watcherIntervalMinutes: 30, watcherOutdated: false })
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Watcher' }))
+    expect((screen.getByRole('combobox', { name: 'Scan mode' }) as HTMLSelectElement).value).toBe('periodic')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Scan mode' }), 'changes')
+    expect(screen.getByRole('spinbutton', { name: 'Check for package changes (seconds)' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toHaveProperty('watcherMode', 'periodic')
+  })
+
   it('keeps batch totals and package badges in sync when score weights change', async () => {
     const workspace = { rootName: 'Projects', rootPath: '/projects', mode: 'helper', projects: [project], syncedAt: project.scannedAt }
     storage.loadWorkspace.mockResolvedValue(workspace)

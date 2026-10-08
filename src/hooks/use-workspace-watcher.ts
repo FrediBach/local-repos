@@ -1,0 +1,88 @@
+import { useEffect, useRef, useState } from 'react'
+import { api } from '@/lib/api'
+import type { AppSettings } from '@/lib/settings'
+import type { Workspace } from '@/types'
+
+interface WatcherOptions {
+  workspace?: Workspace
+  settings: AppSettings
+  busy: boolean
+  online: boolean
+  run: (changedIds: string[] | undefined, isCurrent: () => boolean, progress: (message: string) => void) => Promise<Workspace | undefined>
+}
+
+const fingerprintsOf = (workspace: Workspace) => Object.fromEntries(workspace.projects.map(project => [project.id, project.packageFingerprint]))
+
+export function useWorkspaceWatcher(options: WatcherOptions) {
+  const latest = useRef(options)
+  latest.current = options
+  const running = useRef(false)
+  const [status, setStatus] = useState('')
+  const [error, setError] = useState(false)
+  const [nextRun, setNextRun] = useState<number>()
+  const { workspace, settings, online } = options
+  const { watcherMode: mode, watcherIntervalMinutes: minutes, watcherPollSeconds: seconds, watcherAudit, watcherOutdated, watcherStorage } = settings
+
+  useEffect(() => {
+    setError(false); setStatus(''); setNextRun(undefined)
+    if (!workspace || mode === 'manual' || !online || mode === 'changes' && workspace.mode !== 'helper') return
+    let active = true
+    let timer: ReturnType<typeof setTimeout>
+    let baseline = fingerprintsOf(workspace)
+    const delay = mode === 'periodic' ? minutes * 60_000 : seconds * 1000
+    const current = () => active
+    const publish = (message: string) => { if (active) setStatus(message) }
+    const schedule = (wait: number) => {
+      if (!active) return
+      setNextRun(Date.now() + wait)
+      timer = setTimeout(() => { void tick() }, wait)
+    }
+    async function tick() {
+      if (!active) return
+      if (running.current || latest.current.busy) { schedule(5000); return }
+      running.current = true
+      setNextRun(undefined)
+      let retryDelay = delay
+      try {
+        let changedIds: string[] | undefined
+        if (mode === 'changes') {
+          const result = await api<{ fingerprints: Record<string, string> | null }>('/package-changes', { path: workspace!.rootPath })
+          if (!active) return
+          if (result.fingerprints) {
+            const snapshot = result.fingerprints
+            changedIds = [...new Set([...Object.keys(snapshot), ...Object.keys(baseline)])].filter(id => snapshot[id] !== baseline[id])
+            if (!changedIds.length) { setError(false); publish('Watching for package changes'); return }
+            // Expand to the whole repository when any workspace member changes.
+            const projects = latest.current.workspace!.projects
+            const repositories = new Set(projects.filter(project => changedIds!.includes(project.id)).map(project => project.monorepo?.id ?? project.id))
+            changedIds = projects.filter(project => changedIds!.includes(project.id) || repositories.has(project.monorepo?.id ?? project.id)).map(project => project.id)
+          }
+        }
+        // A manual action may have started while the lightweight change check
+        // was in flight. Let it finish before acquiring the scan queue.
+        if (!active || latest.current.busy) { retryDelay = 5000; return }
+        setError(false)
+        publish('Refreshing project metadata…')
+        const scanned = await latest.current.run(changedIds, current, publish)
+        if (active && scanned) {
+          baseline = fingerprintsOf(scanned)
+          publish(`Last automatic scan ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
+        }
+      } catch (cause) {
+        if (active) { setError(true); publish(cause instanceof Error ? cause.message : 'Automatic scan failed.'); retryDelay = Math.max(delay, 60_000) }
+      } finally {
+        running.current = false
+        schedule(retryDelay)
+      }
+    }
+    schedule(mode === 'changes' ? 0 : delay)
+    return () => { active = false; clearTimeout(timer) }
+  }, [workspace?.mode, workspace?.rootPath, workspace?.handle, mode, minutes, seconds, watcherAudit, watcherOutdated, watcherStorage, online])
+
+  const message = mode === 'manual' ? 'Manual scans only'
+    : !workspace ? 'Connect a directory to enable watching'
+      : !online ? 'Watcher paused while offline'
+        : mode === 'changes' && workspace.mode !== 'helper' ? 'Package-change watching requires the local helper'
+          : status || (mode === 'periodic' ? `Automatic scans every ${minutes} min` : 'Watching for package changes')
+  return { message, error, nextRun }
+}

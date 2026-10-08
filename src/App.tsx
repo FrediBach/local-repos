@@ -24,9 +24,10 @@ import { ProjectAuditBadge } from '@/components/project-audit-badge'
 import { ProjectAiBadge } from '@/components/project-ai-badge'
 import { useAuditBatch } from '@/hooks/use-audit-batch'
 import { useOutdatedBatch } from '@/hooks/use-outdated-batch'
+import { useWorkspaceWatcher } from '@/hooks/use-workspace-watcher'
 import { OutdatedBatchProgress } from '@/components/outdated-batch-progress'
 import { ProjectOutdatedBadge } from '@/components/project-outdated-badge'
-import { api, originUrl, projectAction, scanWithHelper } from '@/lib/api'
+import { api, originUrl, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadWorkspace, saveFavorites, saveWorkspace } from '@/lib/storage'
@@ -99,6 +100,7 @@ function WorkspaceApp() {
   const filtered = useMemo(() => sortProjects(searched.filter(p => matchesProjectFilters(p, filters, filterGroups, filterContext)), sort, favorites), [searched, filters, filterGroups, filterContext, sort, favorites])
   const hasFilters = Object.values(filters).some(values => values.length > 0)
   const hasRefinements = !!query.trim() || Object.entries(filters).some(([key, values]) => values.length > 0 && !(key === 'stars' && values[0] === 'starred') && !(key === 'server' && values[0] === 'running')) || (filter === 'favorites' && !!filters.server?.length)
+  const watcher = useWorkspaceWatcher({ workspace, settings, busy: !!busy, online, run: runAutomaticScan })
 
   useEffect(() => {
     let active = true
@@ -106,9 +108,7 @@ function WorkspaceApp() {
     Promise.all([loadWorkspace(), loadFavorites()]).then(([saved, stars]) => {
       if (!active || workspaceVersion.current !== initialVersion) return
       setWorkspace(saved); if (!favoritesVersion.current) setFavorites(stars); setPath(saved?.rootPath ?? '')
-      if (saved?.mode === 'helper' && saved.rootPath) {
-        scanWithHelper(saved.rootPath).then(result => { if (active && workspaceVersion.current === initialVersion) { const next = preservePreviews({ ...result, mode: 'helper' }, saved); setWorkspace(next); void saveWorkspace(next).catch(() => {}) } }).catch(() => { if (active && workspaceVersion.current === initialVersion) setNotice({ text: 'Showing your cached workspace. Start the local helper and resync to refresh server status.', error: true }) })
-      }
+      setHelperWorkspacePath(saved?.mode === 'helper' ? saved.rootPath : undefined)
     }).catch(() => setNotice({ text: 'Browser storage is unavailable. You can still browse this session.', error: true }))
     if (!hosted) api<{ ok: boolean }>('/health').then(result => active && setHelper(result.ok)).catch(() => {})
     const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallEvent) }
@@ -139,8 +139,52 @@ function WorkspaceApp() {
   }, [workspace?.mode, workspace?.projects, running, busy, settings.statusPollSeconds])
 
   async function persist(next: Workspace, reportError = true) {
+    setHelperWorkspacePath(next.mode === 'helper' ? next.rootPath : undefined)
     setWorkspace(next)
     try { await saveWorkspace(next); return true } catch { if (reportError) setNotice({ text: 'Projects loaded, but browser storage could not save this workspace.', error: true }); return false }
+  }
+
+  async function runAutomaticScan(changedIds: string[] | undefined, isCurrent: () => boolean, progress: (message: string) => void) {
+    if (!workspace || busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
+    const version = ++workspaceVersion.current
+    const current = () => isCurrent() && version === workspaceVersion.current
+    setBusy('watcher')
+    try {
+      let next: Workspace
+      if (workspace.mode === 'helper' && workspace.rootPath) next = { ...await scanWithHelper(workspace.rootPath), mode: 'helper' }
+      else if (workspace.handle) {
+        if (!await canReadDirectory(workspace.handle)) throw new Error('Watcher paused: folder permission expired. Use Synced to grant access again.')
+        next = { ...await scanDirectory(workspace.handle), mode: 'browser', handle: workspace.handle }
+      } else throw new Error('Reconnect the directory to enable automatic scans.')
+      if (!current()) return
+      next = preservePreviews(next, workspace)
+      let cacheFailed = !await persist(next, false)
+      const failures: string[] = []
+      if (next.mode === 'helper') {
+        const previousIds = new Set(workspace.projects.map(project => project.id))
+        const queue = next.projects.filter(project => !changedIds || changedIds.includes(project.id) || !previousIds.has(project.id))
+        for (const project of queue) {
+          const hasPackages = project.hasPackageJson ?? !!project.dependencies?.length
+          const checks = [settings.watcherAudit && hasPackages && 'audit', settings.watcherOutdated && hasPackages && 'outdated', settings.watcherStorage && 'storage'].filter((check): check is string => !!check)
+          for (const check of checks) {
+            if (!current()) return
+            progress(`${check === 'audit' ? 'Scanning vulnerabilities' : check === 'outdated' ? 'Checking outdated packages' : 'Measuring disk usage'} · ${project.name}`)
+            try {
+              const update = await projectAction<Partial<RepoProject>>(project.id, check)
+              if (!current()) return
+              if (!update[check as 'audit' | 'outdated' | 'storage']) throw new Error('The helper returned no report.')
+              next = { ...next, projects: next.projects.map(item => item.id === project.id ? { ...item, ...update } : item) }
+              cacheFailed = !await persist(next, false)
+            } catch (error) {
+              failures.push(`${project.name} (${check}): ${error instanceof Error ? error.message : 'Scan failed.'}`)
+            }
+          }
+        }
+      }
+      if (!current()) return
+      if (failures.length || cacheFailed) setNotice({ text: `Automatic scan finished${failures.length ? ` with ${failures.length} failed check(s). ${failures.slice(0, 3).join(' ')}` : '.'}${cacheFailed ? ' Results could not be saved in this browser.' : ''}`, error: true })
+      return next
+    } finally { if (version === workspaceVersion.current) setBusy('') }
   }
 
   function clearFilters() { setFilters({}); setQuery('') }
@@ -245,7 +289,7 @@ function WorkspaceApp() {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
     ++workspaceVersion.current
     setBusy('disconnect')
-    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); setWorkspace(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
+    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); setWorkspace(undefined); setHelperWorkspacePath(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
     catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Could not disconnect the workspace.', error: true }) }
     finally { setBusy('') }
   }
@@ -371,6 +415,7 @@ function WorkspaceApp() {
 
         {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
         {auditBatch.progress && <AuditBatchProgress progress={auditBatch.progress} onStop={auditBatch.stop} onDismiss={auditBatch.dismiss} />}
+        {workspace && <div className={`watcher-status ${watcher.error ? 'watcher-error' : ''}`} role="region" aria-label="Workspace watcher" aria-live="polite" title={watcher.nextRun ? `Next ${settings.watcherMode === 'changes' ? 'change check' : 'scan'}: ${new Date(watcher.nextRun).toLocaleTimeString()}. Configure in Settings → Watcher.` : 'Configure in Settings → Watcher.'}><RefreshCw size={13} className={busy === 'watcher' ? 'spinning' : ''} /><span>{watcher.message}</span>{busy === 'watcher' && <span>Change to manual mode in Settings to stop after the current check.</span>}</div>}
         {outdatedBatch.progress && <OutdatedBatchProgress progress={outdatedBatch.progress} onStop={outdatedBatch.stop} onDismiss={outdatedBatch.dismiss} />}
 
         <div className="toolbar"><div className="search-group"><select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => setSearchScope(event.target.value as 'all' | 'packages')}><option value="all">Projects & packages</option><option value="packages">Package name & version</option></select><div className="search-box"><Search size={17} /><input ref={searchRef} value={query} onChange={event => setQuery(event.target.value)} placeholder={searchScope === 'packages' ? 'e.g. next, next@16.0.0, next@16.*.*…' : 'Find a project or package…'} aria-label="Search projects" />{query ? <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button> : <kbd>⌘ K</kbd>}</div></div><div className="toolbar-right"><label className="sort-control"><ArrowDownWideNarrow size={15} /><select value={sort} onChange={event => setSort(event.target.value as ProjectSort)} aria-label="Sort projects">{projectSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={12} /></label><div className="view-toggle"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={17} /></button></div></div></div>
@@ -412,7 +457,7 @@ function WorkspaceApp() {
 
     <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelectedId(undefined) }}><DialogContent className="project-dialog" onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}>{selected && <><div className="detail-header" role="region" aria-label="Project summary" tabIndex={0}><span className="eyebrow"><FolderGit2 size={14} /> PROJECT OVERVIEW</span><DialogTitle>{selected.name}</DialogTitle><DialogDescription>{selected.description || 'Your local project, at a glance.'}</DialogDescription><div className="detail-tags"><ProjectAiBadge project={selected} />{selected.monorepo && <span>{selected.monorepo.name} / {selected.monorepo.packagePath}</span>}{!!selected.workspacePackageCount && <span>{selected.workspacePackageCount} workspace packages</span>}{selected.stack.map(tech => <span key={tech}>{tech}</span>)}{isDemo && <span className="sample-badge">SAMPLE PROJECT</span>}</div></div><ProjectTabs value={detailTab} onChange={setDetailTab}>{detailTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === selected.id ? `${selected.id}:outdated` : busy} onAction={name => { void action(selected, name) }} /> : detailTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <><ProjectPreview project={selected} large /><div className="metadata-grid"><div><span>VERSION</span><strong>{selected.version ? `v${selected.version}` : 'Not specified'}</strong></div><div><span>AUTHOR</span><strong>{selected.author || 'Not specified'}</strong></div><div><span>BRANCH</span><strong><GitBranch size={14} />{selected.git?.branch || 'Not available'}</strong></div><div><span>LICENSE</span><strong>{selected.license || 'Not specified'}</strong></div></div><div className="commit-row"><GitCommitHorizontal size={18} /><div><strong>{selected.git?.message || 'No commit information available'}</strong><span>{selected.git?.commit?.slice(0, 7)} {selected.git?.committedAt && `· ${relativeTime(selected.git.committedAt)}`}{selected.git?.dirty && ' · Uncommitted changes'}</span></div>{originUrl(selected.git?.origin) && <a href={originUrl(selected.git?.origin)} target="_blank" rel="noreferrer" title="Open Git remote"><ExternalLink size={16} /></a>}</div><ProjectHistory key={`history:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} /><ProjectControls key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} logs={logs} onAction={(name, body) => { void action(selected, name, body) }} /><ProjectStoragePanel key={`storage:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={(name, body) => { void action(selected, name, body) }} /></>}</ProjectTabs><div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'vscode' })}><Code2 size={15} />VS Code</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'sourcetree' })}><GitBranch size={15} />Sourcetree</Button><Button variant="ghost" size="sm" aria-pressed={favorites.includes(selected.id)} onClick={() => toggleFavorite(selected.id)}><Star size={15} fill={favorites.includes(selected.id) ? 'currentColor' : 'none'} />{favorites.includes(selected.id) ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
 
-    <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent className="help-dialog"><Logo /><DialogTitle>A little order. A lot of possibility.</DialogTitle><DialogDescription>Local Repos is a quiet home for your checked-out projects.</DialogDescription><div className="help-steps"><div><span>01</span><div><h3>Connect a directory.</h3><p>Choose your projects folder. We look for repositories and package.json files up to two folders deep, including declared monorepo workspaces and skipping dependencies and build output.</p></div></div><div><span>02</span><div><h3>Find your bearings.</h3><p>README introductions, technologies, package details, and Git history come together in one place. Favorite the projects you return to.</p></div></div><div><span>03</span><div><h3>Pick up where you left off.</h3><p>The local helper opens your editor, runs your dev script, and captures a preview. Only projects you explicitly start are run.</p></div></div></div><div className="help-cache"><ShieldCheck size={20} /><p>Your directory connection and project metadata are cached in IndexedDB. Use resync to read changes. The production PWA keeps the interface available offline.</p></div>{workspace?.warnings?.length ? <details className="scan-warnings"><summary>{workspace.warnings.length} scan notes</summary><ul>{workspace.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}{workspace && <Button variant="outline" disabled={!!busy} onClick={() => { void forgetWorkspace(); setHelpOpen(false) }}><Unplug size={15} />Forget this directory</Button>}</DialogContent></Dialog>
+    <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent className="help-dialog"><Logo /><DialogTitle>A little order. A lot of possibility.</DialogTitle><DialogDescription>Local Repos is a quiet home for your checked-out projects.</DialogDescription><div className="help-steps"><div><span>01</span><div><h3>Connect a directory.</h3><p>Choose your projects folder. We look for repositories and package.json files up to two folders deep, including declared monorepo workspaces and skipping dependencies and build output.</p></div></div><div><span>02</span><div><h3>Find your bearings.</h3><p>README introductions, technologies, package details, and Git history come together in one place. Favorite the projects you return to.</p></div></div><div><span>03</span><div><h3>Pick up where you left off.</h3><p>The local helper opens your editor, runs your dev script, and captures a preview. Only projects you explicitly start are run.</p></div></div></div><div className="help-cache"><ShieldCheck size={20} /><p>Your directory connection and project metadata are cached in IndexedDB. Use resync to read changes or configure automatic scans in Settings → Watcher. The production PWA keeps the interface available offline.</p></div>{workspace?.warnings?.length ? <details className="scan-warnings"><summary>{workspace.warnings.length} scan notes</summary><ul>{workspace.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}{workspace && <Button variant="outline" disabled={!!busy} onClick={() => { void forgetWorkspace(); setHelpOpen(false) }}><Unplug size={15} />Forget this directory</Button>}</DialogContent></Dialog>
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <CircleHelp size={18} /> : <Check size={18} />}<span>{notice.text}</span><button aria-label="Dismiss notification" onClick={() => setNotice(undefined)}><X size={15} /></button></div>}
   </div>
 }

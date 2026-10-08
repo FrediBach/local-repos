@@ -90,7 +90,6 @@ async function renderConnected() {
   const user = userEvent.setup()
   const result = render(<App />)
   await screen.findByRole('button', { name: 'View Alpha notebook' })
-  await waitFor(() => expect(storage.saveWorkspace).toHaveBeenCalledWith(workspace))
   storage.saveWorkspace.mockClear()
   return { user, ...result }
 }
@@ -281,10 +280,7 @@ describe('workspace preview capture queue', () => {
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
   })
 
-  it('keeps a newly captured image when the startup rescan finishes late', async () => {
-    const startupScan = deferred<Response>()
-    const handleFetch = fetchMock.getMockImplementation()!
-    fetchMock.mockImplementation((url: string) => url === '/api/scan' ? startupScan.promise : handleFetch(url))
+  it('captures cached projects without an unsolicited startup rescan', async () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: 'View Alpha notebook' })
@@ -293,10 +289,7 @@ describe('workspace preview capture queue', () => {
     await waitFor(() => expect(screenshotRequests()).toHaveLength(2))
     expect(storage.saveWorkspace).toHaveBeenCalledOnce()
 
-    await act(async () => {
-      startupScan.resolve(response(scan))
-      await startupScan.promise
-    })
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/scan')).toBe(false)
     expect(screen.getByRole('img', { name: 'Screenshot of Alpha notebook' }).getAttribute('src')).toBe(cachedImage('alpha'))
     expect(storage.saveWorkspace).toHaveBeenCalledOnce()
     expect(progress().getAttribute('aria-valuenow')).toBe('1')

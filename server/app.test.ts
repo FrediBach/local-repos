@@ -48,6 +48,25 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
 }
 
 describe('local helper API security', () => {
+  it('checks package changes only in registered workspaces and includes shared monorepo lockfiles', async () => {
+    expect(await (await post('/api/package-changes', { path: directory })).json()).toEqual({ fingerprints: null })
+    const root = path.join(directory, 'repo')
+    await mkdir(path.join(root, 'packages/member'), { recursive: true })
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'root', workspaces: ['packages/*'] }))
+    await writeFile(path.join(root, 'packages/member/package.json'), JSON.stringify({ name: 'member' }))
+    const scan = await (await post('/api/scan', { path: directory })).json()
+    const poll = async () => (await (await post('/api/package-changes', { path: scan.rootPath })).json()).fingerprints as Record<string, string>
+    const initial = await poll()
+    expect(initial).toEqual(Object.fromEntries(scan.projects.map((project: RepoProject) => [project.id, project.packageFingerprint])))
+    expect(Object.keys(initial)).toHaveLength(2)
+    await writeFile(path.join(root, 'package-lock.json'), '{"lockfileVersion":3}')
+    const changed = await poll()
+    for (const id of Object.keys(initial)) expect(changed[id]).not.toBe(initial[id])
+    expect((await post('/api/package-changes', { path: scan.rootPath }, { Origin: 'https://untrusted.example' })).status).toBe(403)
+    const missingHeader = await fetch(`${address}/api/package-changes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: scan.rootPath }) })
+    expect(missingHeader.status).toBe(403)
+  })
+
   it('launches only a selected current script in a registered project', async () => {
     const launch = vi.spyOn(projectScripts, 'openScriptTerminal').mockResolvedValue(undefined)
     expect((await post('/api/projects/unknown/run-script', { name: 'test', command: 'vitest run' })).status).toBe(404)

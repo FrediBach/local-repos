@@ -3,14 +3,14 @@ import { RotateCcw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useSettings } from '@/hooks/use-settings'
-import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey } from '@/lib/settings'
+import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
 import './settings-dialog.css'
 
-const tabs = ['badges', 'filters', 'interface'] as const
+const tabs = ['badges', 'filters', 'watcher', 'interface'] as const
 type SettingsTab = typeof tabs[number]
-const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', interface: 'Interface' }
-const fieldTabs = (key: NumericSettingKey): SettingsTab => key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
+const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface' }
+const fieldTabs = (key: NumericSettingKey): SettingsTab => key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
 
 export function SettingsDialog() {
   const { settings, saveSettings } = useSettings()
@@ -93,6 +93,20 @@ export function SettingsDialog() {
           {tab === 'interface' && <>
             <fieldset className="settings-section"><legend>Project display</legend><div className="settings-grid">{field('sidebarTechnologyLimit')}{field('projectTagLimit', '0 = hide technology tags.')}{field('packageMatchLimit')}</div></fieldset>
             <fieldset className="settings-section"><legend>Refresh & notifications</legend><div className="settings-grid">{field('statusPollSeconds', 'While development servers are running.')}{field('notificationSeconds', '0 = keep notifications until dismissed. Errors always stay visible.')}</div></fieldset>
+          </>}
+          {tab === 'watcher' && <>
+            <fieldset className="settings-section"><legend>Rescan your workspace</legend>
+              <p>Automatic scans run while this app is open and online. They wait for other actions to finish. Manual scan buttons remain available in every mode.</p>
+              <label className="settings-field"><span>Scan mode</span><select value={draft.watcherMode} onChange={event => setDraft(current => ({ ...current, watcherMode: event.target.value as WatcherMode }))}>
+                <option value="manual">Only when I initiate a scan</option><option value="periodic">Periodically</option><option value="changes">When a package changes</option>
+              </select></label>
+              {draft.watcherMode === 'manual' ? <p className="watcher-hint">No automatic rescans, including when you reopen the app. Use Synced, Scan vulnerabilities, or Scan outdated packages to refresh results.</p> : <div className="settings-grid watcher-hint">{draft.watcherMode === 'periodic' ? field('watcherIntervalMinutes', 'The first scan runs after this interval. All projects are included, even when filtered.') : field('watcherPollSeconds', 'Watches package manifests, workspace declarations, and lockfiles in known projects. Only affected repositories are checked; new projects are discovered on resync.')}</div>}
+            </fieldset>
+            <fieldset className="settings-section"><legend>Include in automatic scans</legend>
+              <p>Project metadata and package declarations are always refreshed. Additional checks require the local helper. Vulnerability and outdated checks contact your configured package registries.</p>
+              {([['watcherAudit', 'Vulnerabilities'], ['watcherOutdated', 'Outdated packages'], ['watcherStorage', 'Disk usage']] as const).map(([key, label]) => <label className="settings-checkbox" key={key}><input type="checkbox" checked={draft[key]} disabled={draft.watcherMode === 'manual'} onChange={event => setDraft(current => ({ ...current, [key]: event.target.checked }))} />{label}</label>)}
+              <p className="watcher-hint">Package-change watching requires the local helper. Browser directory connections support periodic metadata scans while read permission is granted. Automatic scans never install or update packages.</p>
+            </fieldset>
           </>}
         </div>
         <div className="settings-footer">

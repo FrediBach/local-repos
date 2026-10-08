@@ -486,3 +486,5 @@ select option { color: var(--foreground); background: var(--surface); }
   .main-nav button.active, .stack-nav button.active, .view-toggle button.active { outline: 2px solid Highlight; outline-offset: -3px; }
   .detail-tabs button.active { border-bottom-color: Highlight; }
 }
+.watcher-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; color: var(--muted-foreground); font-size: .8125rem; }
+.watcher-status.watcher-error { color: var(--danger); }

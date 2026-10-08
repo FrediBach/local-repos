@@ -41,7 +41,7 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 - Search names, descriptions, technologies, folder names, branches, and package names. Choose **Package name & version** beside search to find only projects that declare a matching dependency. Use `next@16.2.1` for an exact version or `next@16.*.*` for a wildcard range. Matching declared versions appear on the project cards. Use `⌘K` or `Ctrl+K` to focus search.
 - Switch between grid and list views. Combine quick filters for starred projects, vulnerabilities, outdated packages, uncommitted changes, and running servers, or open **All filters** for the full set.
 - Open a project for its README, package metadata, current branch, latest commit, and origin link.
-- Use **Synced …** to rescan. Changes are not watched continuously. A saved helper connection also rescans on app startup when the helper is available.
+- Use **Synced …** to rescan, or configure automatic rescans in **Settings → Watcher**. The default is manual only; reopening the app restores cached projects without rescanning. After a helper restart, opening project history or invoking a helper action reconnects the workspace on demand.
 - Browser folder permissions can expire; resync may request read permission again.
 - Use **How it works → Forget this directory** to remove the saved workspace. This does not delete project files.
 
@@ -67,11 +67,30 @@ The cog beside the top-right help icon opens **Settings**:
 
 - **Badges & scores:** assign red, orange, blue, or neutral to each vulnerability severity; set orange/red package-lag thresholds, the major-version requirement for red, and whether any major update is orange. Expand **Score weights** to adjust major, minor, patch, and prerelease points and per-package caps. A preview shows the resulting colors and scores.
 - **Filter thresholds:** set recent/active/inactive windows in days and large-project/node_modules size thresholds.
+- **Watcher:** choose manual-only, periodic, or package-change scans; set the interval and select vulnerability, outdated-package, and optional disk-usage checks.
 - **Interface:** choose sidebar technology, project tag, and package-match limits; adjust running-server polling and success-notification duration. A notification duration of 0 keeps it visible until dismissed; errors always remain visible.
 
 **Save settings** applies changes immediately to cached project badges, package details, package-lag sorting, filter labels/counts, and batch lag totals. No rescan or helper restart is required. **Cancel** discards the draft; **Reset defaults** fills in the original values and takes effect when saved. Invalid values are highlighted and cannot be saved.
 
 Settings are stored in localStorage for this browser and app origin, independently of the connected directory, and changes synchronize between open tabs. If storage is unavailable, the dialog reports the failure and keeps the previously applied settings. Package lag measures version distance, not release age in days; vulnerability labels and counts continue to reflect the package manager's report.
+
+## Automatic scans
+
+Configure **Settings → Watcher**:
+
+| Mode | Behavior |
+| --- | --- |
+| Only when I initiate a scan | Default. No automatic metadata or maintenance rescans, including on app startup. Use the existing sync and scan buttons. |
+| Periodically | Refresh all projects after the chosen interval (1 minute to 7 days; default 60 minutes), then repeat that interval after each run finishes. Includes projects hidden by filters. |
+| When a package changes | With the local helper, check known projects for package input changes every 5–300 seconds (default 15). Refresh metadata and run selected checks for affected repositories and their workspace members. |
+
+Automatic runs always refresh project metadata and package declarations. **Vulnerabilities** and **Outdated packages** are selected by default when automation is enabled; **Disk usage** is optional. Package checks run only for projects with a package.json. Checks run sequentially, save each successful report, and continue after individual failures while retaining the last successful report. Failures appear in a notification. Scans never install packages, apply updates, or start development servers.
+
+Package-change detection reads file metadata for package.json, npm/pnpm/Yarn/Bun lockfiles, pnpm-workspace.yaml, .npmrc, and .yarnrc.yml. A shared workspace input change also affects its member packages. It does not traverse node_modules or follow symlink targets. New projects outside the known project directories need a manual or periodic rescan. Enabling change watching after a helper restart first refreshes the workspace and runs the selected checks to establish a baseline.
+
+The watcher runs while the app is open and online, waits for existing app actions, and avoids overlapping runs in the same tab. Browser background throttling or computer sleep can delay scans; this is not a system background service. Changing to manual mode stops queued checks after the current request finishes. Changing or forgetting the connected directory clears its schedule. The workspace watcher status shows activity and failures; hover it for the next scheduled scan or change check. Use a single tab for automatic scans.
+
+Browser directory connections support periodic metadata scans only. They never request folder permission automatically: use **Synced …** to restore expired permission. Vulnerabilities, outdated packages, disk usage, and package-change watching require the local helper. Restart `npm run dev` after updating Local Repos to load the helper's watcher endpoint.
 
 ## Commit history
 
@@ -87,7 +106,7 @@ Open a project’s **Packages** tab to inspect its runtime, development, peer, a
 
 Add `@version` or `@range` to a full package name to find declarations compatible with that version or overlapping that range. For example, `next@16.2.1` matches `16.2.1`, `^16.0.0`, and `>=15`; `next@16.*.*` matches `^16.2.1` and `>=15`, but not `^15.0.0`. Scoped names work too, such as `@types/react@19.*.*`. Version search supports npm semver syntax, including `16.*`, `16.x`, `^16.0.0`, and `>=16 <17`. Prereleases follow npm’s explicit opt-in rules. Tags, local paths, Git URLs, aliases, and workspace/catalog protocols remain searchable by name but are not resolved for version searches. The same syntax works in both search scopes and the **Packages** tab; name-only searches still match partial names.
 
-In **Overview → Disk usage**, select **Measure disk usage** to measure the entire project and its root `node_modules`. This requires the local helper and runs on demand; ordinary scans do not traverse dependency trees. Measurements include hidden files, Git data, and build output, use allocated disk blocks where available, count hard links once, and do not follow symlinks. Scans stop after 20 seconds, 250,000 entries, or 128 directory levels; incomplete results are explicitly shown as lower bounds. Measurements show their timestamp and also appear on project cards.
+In **Overview → Disk usage**, select **Measure disk usage** to measure the entire project and its root `node_modules`. This requires the local helper and runs on demand or when enabled in the watcher; ordinary metadata scans do not traverse dependency trees. Measurements include hidden files, Git data, and build output, use allocated disk blocks where available, count hard links once, and do not follow symlinks. Scans stop after 20 seconds, 250,000 entries, or 128 directory levels; incomplete results are explicitly shown as lower bounds. Measurements show their timestamp and also appear on project cards.
 
 After measuring, **Delete node_modules** opens a confirmation for that project. It permanently removes only the root dependency directory, keeping source files, lockfiles, and nested workspace dependency directories outside that root `node_modules`. Linked or non-directory targets are rejected. The helper refuses cleanup while it is starting, running, or stopping that project’s development server, capturing a preview, measuring storage, auditing packages, or checking outdated versions. Stop other tools using the directory before deleting. Disk usage is measured again after deletion. Reinstall dependencies with the project’s package manager before running it again; Local Repos does not provide a general-purpose install action.
 
@@ -231,7 +250,7 @@ The helper binds only to loopback, checks the request host and origin, rejects c
 - Captures use a fresh browser session without authentication. Apps requiring login or interactive setup cannot be previewed automatically. Local startup has a 45-second readiness limit; each page capture has a 25-second rendering limit. A configured project URL can bypass local startup or select a custom route.
 - GitHub website discovery supports public repositories on `github.com`. Other Git hosts need a package homepage or explicit preview URL. A deployed preview may differ from your local branch or uncommitted changes.
 - VS Code and file-browser opening depend on installed local applications. Sourcetree opening is implemented for macOS. Windows local dev-server startup and process-tree cleanup are not supported; **Project URL** capture does not require launching a local dev server and needs the helper and Chromium.
-- There is no automatic filesystem watching, background resync, or management of development servers launched outside Local Repos.
+- Automatic rescans require an open app tab; there is no system background service or management of development servers launched outside Local Repos.
 
 ## Checks
 

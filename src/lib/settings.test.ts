@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { defaultSettings, normalizeSettings, validateSettings } from './settings'
 
 describe('workspace settings', () => {
+  it('defaults to manual scans and normalizes invalid watcher preferences', () => {
+    expect(normalizeSettings({})).toMatchObject({ watcherMode: 'manual', watcherIntervalMinutes: 60, watcherPollSeconds: 15 })
+    expect(normalizeSettings({ watcherMode: 'always', watcherIntervalMinutes: 0, watcherPollSeconds: 1, watcherAudit: 'true' })).toMatchObject({ watcherMode: 'manual', watcherIntervalMinutes: 60, watcherPollSeconds: 15, watcherAudit: true })
+    expect(normalizeSettings({ watcherMode: 'changes', watcherOutdated: false })).toMatchObject({ watcherMode: 'changes', watcherOutdated: false })
+    expect(validateSettings({ ...defaultSettings, watcherMode: 'periodic', watcherIntervalMinutes: 0, watcherPollSeconds: NaN })).toHaveProperty('watcherIntervalMinutes')
+    expect(validateSettings({ ...defaultSettings, watcherMode: 'changes', watcherIntervalMinutes: 0, watcherPollSeconds: NaN })).toHaveProperty('watcherPollSeconds')
+    expect(validateSettings({ ...defaultSettings, watcherIntervalMinutes: 0, watcherPollSeconds: NaN })).toEqual({})
+  })
+
   it('restores defaults for missing, invalid, and unsupported stored values', () => {
     expect(normalizeSettings(null)).toEqual(defaultSettings)
     expect(normalizeSettings([])).toEqual(defaultSettings)

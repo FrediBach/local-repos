@@ -1,6 +1,11 @@
 import type { GitHistory, GitHistoryQuery, RepoProject, ScanResult } from '@/types'
 
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+let helperWorkspacePath: string | undefined
+let registration: { path: string; promise: Promise<ScanResult> } | undefined
+export function setHelperWorkspacePath(path?: string) { helperWorkspacePath = path }
+
+export async function api<T>(path: string, body?: unknown, retry = true): Promise<T> {
+  const root = helperWorkspacePath
   const response = await fetch(`/api${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Local-Repos': '1' },
@@ -8,6 +13,17 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     signal: AbortSignal.timeout(path.endsWith('update-packages') ? 420_000 : path.endsWith('screenshot') ? 240_000 : /(?:audit|outdated|delete-node-modules)$/.test(path) ? 150_000 : 60_000),
   })
   const data = await response.json().catch(() => null)
+  // Manual mode restores cached browsing without scanning on startup. Register
+  // lazily if a user opens history or invokes an action after a helper restart.
+  // Background status polling must never initiate this scan.
+  if (!response.ok && response.status === 404 && data?.error === 'Project not found. Sync its folder again.' && retry && root && path.startsWith('/projects/') && !path.endsWith('/status')) {
+    if (helperWorkspacePath !== root) throw new Error('The connected directory changed. Try the action again.')
+    if (!registration || registration.path !== root) registration = { path: root, promise: scanWithHelper(root) }
+    const pending = registration
+    try { await pending.promise } finally { if (registration === pending) registration = undefined }
+    if (helperWorkspacePath !== root) throw new Error('The connected directory changed. Try the action again.')
+    return api<T>(path, body, false)
+  }
   if (!response.ok) throw new Error(data?.error || 'The local helper is unavailable. Start the app with npm run dev and try again.')
   return data as T
 }
