@@ -50,10 +50,10 @@ export function ProjectPackages({ project, helper, demo, busy, onAction }: {
     <ProjectOutdated project={project} helper={helper} demo={demo} busy={busy} onAction={onAction} />
     <section aria-label="Declared packages">
       <div className="maintenance-heading"><h3><Package size={16} /> Packages <span className="muted-count">{dependencies.length}</span></h3></div>
-      <p className="maintenance-hint">Versions are declared ranges from package.json, not installed versions. Includes runtime, development, peer, and optional dependencies.</p>
+      <p className="maintenance-hint">Versions are declared ranges from package.json, not installed versions. Includes runtime, development, peer, and optional dependencies. Search name@version to find compatible ranges, using * for wildcards.</p>
       {project.dependencies === undefined ? <p className="maintenance-empty">Resync your directory to load package details.</p> : dependencies.length ? <>
-        <input className="package-filter" aria-label="Filter packages in project" placeholder="Filter package names…" value={query} onChange={event => setQuery(event.target.value)} />
-        {visible.length ? <div className="dependency-table-wrap"><table className="dependency-table"><thead><tr><th>Package</th><th>Declared version</th><th>Type</th></tr></thead><tbody>{visible.map(item => <tr key={`${item.kind}:${item.name}`}><td>{item.name}</td><td><code>{item.version}</code></td><td>{dependencyKindLabel(item.kind)}</td></tr>)}</tbody></table></div> : <p className="maintenance-empty">No packages match this name.</p>}
+        <input className="package-filter" aria-label="Filter packages in project" placeholder="e.g. next, next@16.0.0, next@16.*.*…" value={query} onChange={event => setQuery(event.target.value)} />
+        {visible.length ? <div className="dependency-table-wrap"><table className="dependency-table"><thead><tr><th>Package</th><th>Declared version</th><th>Type</th></tr></thead><tbody>{visible.map(item => <tr key={`${item.kind}:${item.name}`}><td>{item.name}</td><td><code>{item.version}</code></td><td>{dependencyKindLabel(item.kind)}</td></tr>)}</tbody></table></div> : <p className="maintenance-empty">No packages match this search.</p>}
       </> : <p className="maintenance-empty">No declared packages found.</p>}
     </section>
   </div>

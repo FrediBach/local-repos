@@ -38,7 +38,7 @@ Choose **Connect directory**, then use either connection method:
 
 The browser cannot reveal an absolute path or launch local processes. To enable local actions for a folder selected through the browser, reconnect it by entering its path in the helper form.
 
-- Search names, descriptions, technologies, folder names, branches, and package names. Choose **Package name** beside search to find only projects that declare a matching dependency. Matching declared versions appear on the project cards. Use `⌘K` or `Ctrl+K` to focus search.
+- Search names, descriptions, technologies, folder names, branches, and package names. Choose **Package name & version** beside search to find only projects that declare a matching dependency. Use `next@16.2.1` for an exact version or `next@16.*.*` for a wildcard range. Matching declared versions appear on the project cards. Use `⌘K` or `Ctrl+K` to focus search.
 - Switch between grid and list views; filter by technology, favorites, or running servers.
 - Open a project for its README, package metadata, current branch, latest commit, and origin link.
 - Use **Synced …** to rescan. Changes are not watched continuously. A saved helper connection also rescans on app startup when the helper is available.
@@ -50,6 +50,8 @@ Only one workspace is displayed at a time. Metadata, captured previews, favorite
 ## Packages, disk usage, and maintenance
 
 Open a project’s **Packages** tab to inspect its runtime, development, peer, and optional dependencies. Package search works with either connection method and matches names case-insensitively, including scoped names. Versions are the ranges or other specifications declared in the selected project’s `package.json`, not resolved or installed versions. Resync existing workspaces to load the new dependency metadata. Declared monorepo packages appear as separate searchable projects; transitive dependencies are not included in package search.
+
+Add `@version` or `@range` to a full package name to find declarations compatible with that version or overlapping that range. For example, `next@16.2.1` matches `16.2.1`, `^16.0.0`, and `>=15`; `next@16.*.*` matches `^16.2.1` and `>=15`, but not `^15.0.0`. Scoped names work too, such as `@types/react@19.*.*`. Version search supports npm semver syntax, including `16.*`, `16.x`, `^16.0.0`, and `>=16 <17`. Prereleases follow npm’s explicit opt-in rules. Tags, local paths, Git URLs, aliases, and workspace/catalog protocols remain searchable by name but are not resolved for version searches. The same syntax works in both search scopes and the **Packages** tab; name-only searches still match partial names.
 
 In **Overview → Disk usage**, select **Measure disk usage** to measure the entire project and its root `node_modules`. This requires the local helper and runs on demand; ordinary scans do not traverse dependency trees. Measurements include hidden files, Git data, and build output, use allocated disk blocks where available, count hard links once, and do not follow symlinks. Scans stop after 20 seconds, 250,000 entries, or 128 directory levels; incomplete results are explicitly shown as lower bounds. Measurements show their timestamp and also appear on project cards.
 

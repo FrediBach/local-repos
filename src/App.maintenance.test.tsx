@@ -107,6 +107,42 @@ describe('workspace package search', () => {
     await user.click(screen.getByRole('button', { name: 'Clear search' }))
     expect(screen.getAllByRole('article')).toHaveLength(3)
   })
+
+  it('searches compatible version ranges in both search scopes and views', async () => {
+    const versionProjects: RepoProject[] = ['^16.2.1', '>=15', '^15.0.0', '^17.0.0'].map((version, index) => ({
+      ...project, id: `next-${index}`, name: `Next project ${index}`, dependencies: [{ name: 'next', version, kind: 'dependencies' }],
+    }))
+    const versionScan = { ...scan, projects: versionProjects }
+    storage.loadWorkspace.mockResolvedValue({ ...versionScan, mode: 'helper' })
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/health') return response({ ok: true })
+      if (url === '/api/scan') return response(versionScan)
+      throw new Error(`Unexpected API request: ${url}`)
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('button', { name: 'View Next project 0' })
+    const search = screen.getByRole('textbox', { name: 'Search projects' })
+    await user.type(search, 'next@16.*.*')
+    expect(screen.getAllByRole('article')).toHaveLength(2)
+    expect(screen.getByText('^16.2.1')).toBeTruthy()
+    expect(screen.getByText('>=15')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'View Next project 2' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'View Next project 3' })).toBeNull()
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Search scope' }), 'packages')
+    await user.click(screen.getByRole('button', { name: 'List view' }))
+    expect(screen.getAllByRole('article')).toHaveLength(2)
+    expect(screen.getByText('^16.2.1')).toBeTruthy()
+    await user.clear(search)
+    await user.type(search, 'next@16.0.0')
+    expect(screen.getAllByRole('article')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'View Next project 1' })).toBeTruthy()
+    await user.clear(search)
+    await user.type(search, 'next@invalid')
+    expect(screen.queryAllByRole('article')).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getAllByRole('article')).toHaveLength(4)
+  })
 })
 
 describe('workspace maintenance actions', () => {

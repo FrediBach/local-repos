@@ -37,7 +37,7 @@ describe('declared package details', () => {
     await user.clear(filter)
     await user.type(filter, '19.0.0')
     expect(screen.queryByRole('table')).toBeNull()
-    expect(screen.getByText('No packages match this name.')).toBeTruthy()
+    expect(screen.getByText('No packages match this search.')).toBeTruthy()
     await user.clear(filter)
     expect(screen.getAllByRole('row')).toHaveLength(6)
   })
@@ -49,6 +49,33 @@ describe('declared package details', () => {
     rerender(<ProjectPackages {...props} project={{ ...project, dependencies: [] }} />)
     expect(screen.getByText('No declared packages found.')).toBeTruthy()
     expect(screen.queryByText(/Resync your directory/)).toBeNull()
+  })
+
+  it('filters the package table by compatible versions, including scoped packages', async () => {
+    const user = userEvent.setup()
+    render(<ProjectPackages {...props} />)
+    const filter = screen.getByRole('textbox', { name: 'Filter packages in project' })
+    await user.type(filter, 'react@19.*.*')
+    expect(screen.getAllByRole('row')).toHaveLength(3)
+    expect(screen.getByText('^19.0.0')).toBeTruthy()
+    expect(screen.getByText('>=18 <20')).toBeTruthy()
+    expect(screen.queryByText('@types/react')).toBeNull()
+    await user.clear(filter)
+    await user.type(filter, '@types/react@19.0.5')
+    expect(screen.getAllByRole('row')).toHaveLength(2)
+    expect(screen.getByText('~19.0.0')).toBeTruthy()
+    await user.clear(filter)
+    await user.type(filter, 'react@20.*.*')
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.getByText('No packages match this search.')).toBeTruthy()
+  })
+
+  it('shows only compatible declarations in card matches', () => {
+    render(<PackageMatches project={project} query="react@18.3.1" />)
+    const matches = screen.getByLabelText('Matching packages')
+    expect(within(matches).getByText('react')).toBeTruthy()
+    expect(within(matches).getByText('>=18 <20')).toBeTruthy()
+    expect(within(matches).queryByText('^19.0.0')).toBeNull()
   })
 
   it('limits card matches with a remainder count and hides an empty search', () => {
