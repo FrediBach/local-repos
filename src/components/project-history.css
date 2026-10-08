@@ -1,0 +1,44 @@
+.project-history { margin-top: 28px; }
+.history-filters { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.history-filters label { display: flex; flex: 1 1 200px; flex-direction: column; gap: 7px; min-width: 0; font-size: .8125rem; color: var(--muted-foreground); }
+.history-filters label > span { display: flex; align-items: center; gap: 5px; }
+.history-filters select { width: 100%; min-height: 40px; border: 1px solid var(--control-border); border-radius: 5px; padding: 8px 28px 8px 10px; color: var(--foreground); background: var(--surface); font: inherit; text-overflow: ellipsis; }
+.history-loading { display: flex; align-items: center; gap: 8px; min-height: 100px; justify-content: center; color: var(--muted-foreground); font-size: .9375rem; }
+.history-error { border: 1px solid var(--danger); padding: 14px; border-radius: 6px; color: var(--danger); }
+.history-error p { margin: 0 0 12px; overflow-wrap: anywhere; }
+.commit-heatmap, .commit-log-card { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; overflow: hidden; }
+.commit-heatmap { padding: 16px; margin-bottom: 16px; }
+.history-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.history-card-heading h4 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: .875rem; font-weight: 600; color: var(--foreground); }
+.history-card-heading > span { color: var(--muted-foreground); font-size: .75rem; }
+.heatmap-scroll { overflow-x: auto; padding: 3px 0; }
+.heatmap-calendar { display: block; width: 100%; min-width: 590px; }
+.heatmap-label { fill: var(--muted-foreground); font-size: 8px; }
+.heatmap-level-0 { fill: var(--surface-muted); background: var(--surface-muted); }
+.heatmap-level-1 { fill: color-mix(in srgb, var(--accent) 25%, var(--surface)); background: color-mix(in srgb, var(--accent) 25%, var(--surface)); }
+.heatmap-level-2 { fill: color-mix(in srgb, var(--accent) 50%, var(--surface)); background: color-mix(in srgb, var(--accent) 50%, var(--surface)); }
+.heatmap-level-3 { fill: color-mix(in srgb, var(--accent) 75%, var(--surface)); background: color-mix(in srgb, var(--accent) 75%, var(--surface)); }
+.heatmap-level-4 { fill: var(--accent); background: var(--accent); }
+.heatmap-day { stroke: var(--border); stroke-width: .35; }
+.heatmap-day:focus-visible, .heatmap-day:hover { stroke: var(--foreground); stroke-width: 1; outline: none; }
+.heatmap-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: .75rem; color: var(--muted-foreground); margin-top: 12px; }
+.heatmap-footer strong { color: var(--foreground); font-weight: 500; }
+.heatmap-legend { display: flex; align-items: center; gap: 4px; }
+.heatmap-legend i { width: 10px; height: 10px; border-radius: 2px; border: 1px solid var(--border); }
+.commit-log-card > .history-card-heading { margin: 0; padding: 16px; border-bottom: 1px solid var(--border); }
+.commit-log { list-style: none; padding: 0 16px; margin: 0; }
+.commit-log > li { display: flex; gap: 12px; position: relative; padding: 16px 0; }
+.commit-log > li + li { border-top: 1px solid var(--border); }
+.commit-log-marker { display: flex; justify-content: center; align-items: center; flex: 0 0 28px; height: 28px; border: 1px solid var(--border); background: var(--surface-muted); color: var(--muted-foreground); border-radius: 50%; }
+.commit-log-content { min-width: 0; flex: 1; }
+.commit-log-heading { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.commit-log-heading > code { font-size: .75rem; color: var(--accent); padding: 3px 5px; border: 1px solid var(--border); background: var(--surface-muted); border-radius: 4px; }
+.commit-log-heading > strong { font-weight: 500; font-size: .875rem; color: var(--foreground); overflow-wrap: anywhere; line-height: 1.6; }
+.commit-log-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 7px; color: var(--muted-foreground); font-size: .75rem; }
+.commit-log-meta > span, .commit-log-meta > time { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.commit-author { background: var(--surface-muted); border-radius: 4px; padding: 3px 5px; }
+.history-pagination { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); font-size: .75rem; color: var(--muted-foreground); }
+.history-pagination > div { display: flex; gap: 6px; }
+.history-note { margin: 12px 0 0; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.7; }
+.history-empty { color: var(--muted-foreground); padding: 20px 16px; font-size: .875rem; margin: 0; }
+@media (max-width: 480px) { .commit-heatmap { padding: 12px; } .history-filters { gap: 10px; } .commit-log { padding: 0 12px; } .commit-log-marker { display: none; } .history-pagination { padding: 12px; } }

@@ -47,6 +47,14 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 
 Only one workspace is displayed at a time. Metadata, captured previews, favorites, and the browser directory handle are stored in IndexedDB for this browser and app origin. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
 
+## Commit history
+
+The project's **Overview → Commit history** shows a daily commit heatmap for the last 365 days and a paginated, all-time commit log. Choose **All branches** and **All authors**, or combine a specific branch and author. The calendar and log use the same filters; the calendar counts all matching commits in its date range, including commits on other log pages. Dates in the calendar are grouped in UTC. The log shows commit subjects, short hashes, authors, and relative timestamps; hover a hash or timestamp for its full value.
+
+History requires the local helper and Git, loads when the overview opens, and can be refreshed independently. All branches includes local branches, locally available remote-tracking branches, and detached HEAD commits, deduplicated by commit. It does not fetch remotes. A specific branch includes all commits reachable from its tip. Monorepo packages show the repository's history, and shallow clones display only locally downloaded commits. Empty repositories, projects without Git, and helper failures have explicit states.
+
+The heatmap, commit log, and grouped outdated-package cards are local adaptations of the public shadcn.io [commit frequency heatmap](https://www.shadcn.io/blocks/changelog-commit-frequency-heatmap), [commit log](https://www.shadcn.io/blocks/changelog-commit-log), and [dependency updates](https://www.shadcn.io/blocks/changelog-dependency-updates) designs, styled for this app's light and dark themes. They do not include the site's licensed block source.
+
 ## Packages, disk usage, and maintenance
 
 Open a project’s **Packages** tab to inspect its runtime, development, peer, and optional dependencies. Package search works with either connection method and matches names case-insensitively, including scoped names. Versions are the ranges or other specifications declared in the selected project’s `package.json`, not resolved or installed versions. Resync existing workspaces to load the new dependency metadata. Declared monorepo packages appear as separate searchable projects; transitive dependencies are not included in package search.

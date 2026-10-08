@@ -258,7 +258,7 @@ h1 { font-size: clamp(1.5625rem, 2.55vw, 2.4375rem); letter-spacing: -1.5px; lin
 .button.danger-button:hover:not(:disabled) { background: var(--danger-soft); }
 .delete-path { display: block; padding: 12px; background: var(--surface-muted); color: var(--foreground); border-radius: 4px; overflow-wrap: anywhere; font-size: 0.9375rem; }
 .delete-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
-.packages-panel section + section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+.packages-panel > section + section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
 .muted-count { color: var(--muted-foreground); font-size: 0.875rem; margin-left: 4px; }
 .package-filter { width: 100%; padding: 10px 12px; margin-bottom: 14px; border: 1px solid var(--control-border); border-radius: 5px; background: var(--surface); color: var(--foreground); font-size: 0.9375rem; }
 .dependency-table-wrap { overflow-x: auto; }

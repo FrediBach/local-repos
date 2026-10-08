@@ -1,0 +1,27 @@
+.dependency-updates { margin: 20px 0; }
+.dependency-update-summary { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.dependency-change { display: inline-flex; align-items: center; border: 1px solid currentColor; border-radius: 4px; padding: 3px 7px; font-size: .75rem; font-weight: 500; line-height: 1.5; white-space: nowrap; }
+.dependency-change-major { color: var(--danger); background: var(--danger-soft); }
+.dependency-change-minor { color: var(--warning); background: var(--warning-soft); }
+.dependency-change-patch { color: var(--accent); background: var(--accent-soft); }
+.dependency-change-prerelease { color: var(--info); background: var(--info-soft); }
+.dependency-update-group { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 14px; }
+.dependency-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; background: var(--surface-muted); border-bottom: 1px solid var(--border); }
+.dependency-group-heading h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: .8125rem; font-weight: 600; color: var(--foreground); }
+.dependency-group-heading > span { font-size: .75rem; color: var(--muted-foreground); }
+.dependency-update-list { margin: 0; padding: 0; list-style: none; }
+.dependency-update-list li { padding: 16px; background: var(--surface); }
+.dependency-update-list li + li { border-top: 1px solid var(--border); }
+.dependency-update-main { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.dependency-package-name { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.dependency-package-name svg { flex-shrink: 0; align-self: center; color: var(--muted-foreground); }
+.dependency-package-name strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; font-weight: 500; color: var(--foreground); overflow-wrap: anywhere; }
+.dependency-version-diff { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; font-size: .8125rem; color: var(--muted-foreground); }
+.dependency-version-diff code { padding: 3px 7px; border-radius: 4px; min-width: 0; overflow-wrap: anywhere; }
+.dependency-version-from { color: var(--muted-foreground); background: var(--surface-muted); }
+.dependency-version-to { color: var(--accent); background: var(--accent-soft); }
+.dependency-version-diff > span { font-size: .75rem; }
+.dependency-update-detail { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; color: var(--muted-foreground); font-size: .75rem; line-height: 1.6; }
+.dependency-update-detail .outdated-points { margin-left: auto; font-size: .75rem; }
+.dependency-wanted { margin: 9px 0 0; font-size: .75rem; color: var(--muted-foreground); }
+@media (max-width: 480px) { .dependency-update-list li, .dependency-group-heading { padding: 12px; } .dependency-update-detail .outdated-points { margin-left: 0; } }

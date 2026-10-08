@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { ProjectRuntime } from './runtime'
 import { HelperError, ProjectRegistry, scanDirectory } from './scanner'
+import { readGitHistory } from './git-history'
 
 export const HELPER_PORT = 4318
 
@@ -50,6 +51,10 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   })
   app.get('/api/projects/:id/status', async (request, response) => response.json({ dev: await runtime.status(request.params.id) }))
   app.get('/api/projects/:id/logs', async (request, response) => response.json({ logs: await runtime.logs(request.params.id) }))
+  app.post('/api/projects/:id/history', async (request, response) => {
+    const entry = await registry.get(request.params.id)
+    response.json(await readGitHistory(entry, request.body ?? {}))
+  })
   app.post('/api/projects/:id/start', async (request, response) => response.json({ dev: await runtime.start(request.params.id) }))
   app.post('/api/projects/:id/stop', async (request, response) => response.json({ dev: await runtime.stop(request.params.id) }))
   app.post('/api/projects/:id/storage', async (request, response) => response.json({ storage: await runtime.storage(request.params.id) }))

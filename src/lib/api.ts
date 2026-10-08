@@ -1,4 +1,4 @@
-import type { RepoProject, ScanResult } from '@/types'
+import type { GitHistory, GitHistoryQuery, RepoProject, ScanResult } from '@/types'
 
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -13,6 +13,7 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
 }
 export const scanWithHelper = (path: string) => api<ScanResult>('/scan', { path })
 export const projectAction = <T = Partial<RepoProject>>(id: string, action: string, body: unknown = {}) => api<T>(`/projects/${encodeURIComponent(id)}/${action}`, body)
+export const projectHistory = (id: string, query: GitHistoryQuery = {}) => projectAction<GitHistory>(id, 'history', query)
 
 export function originUrl(origin?: string): string | undefined {
   if (!origin) return

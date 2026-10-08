@@ -1,6 +1,32 @@
 export type PreviewMode = 'auto' | 'local' | 'website'
 export type PreviewKind = 'screenshot' | 'og-image' | 'logo' | 'favicon'
 
+export interface GitCommit {
+  hash: string
+  author: string
+  email: string
+  committedAt: string
+  message: string
+}
+export interface GitHistoryQuery {
+  branch?: string
+  author?: string
+  offset?: number
+}
+export interface GitHistory {
+  available: boolean
+  branches: { ref: string; name: string; remote: boolean }[]
+  authors: { name: string; email: string }[]
+  commits: GitCommit[]
+  total: number
+  offset: number
+  hasMore: boolean
+  activity: { date: string; count: number }[]
+  from: string
+  to: string
+  shallow: boolean
+}
+
 export interface ProjectDependency {
   name: string
   version: string

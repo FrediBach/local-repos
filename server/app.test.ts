@@ -47,6 +47,18 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
 }
 
 describe('local helper API security', () => {
+  it('serves Git history only for registered, still-accessible project paths', async () => {
+    expect((await post('/api/projects/unknown/history')).status).toBe(404)
+    const project = await createProject()
+    const result = await post(`/api/projects/${project.id}/history`)
+    expect(result.status).toBe(200)
+    expect(await result.json()).toMatchObject({ available: false, commits: [], total: 0 })
+    expect((await post(`/api/projects/${project.id}/history`, { offset: -1 })).status).toBe(400)
+    const moved = path.join(directory, 'moved')
+    await rename(path.join(directory, 'project'), moved)
+    expect((await post(`/api/projects/${project.id}/history`)).status).toBe(404)
+  })
+
   it('reports health and blocks foreign origins, foreign hosts, and cross-site requests', async () => {
     expect(await (await fetch(`${address}/api/health`)).json()).toMatchObject({ ok: true })
     const unsafeHeaders: Record<string, string>[] = [{ Origin: 'https://untrusted.example' }, { Host: 'attacker.example' }, { 'Sec-Fetch-Site': 'cross-site' }, { Origin: 'null' }]
