@@ -25,6 +25,8 @@ The initial screen contains labeled sample projects and illustrative previews. C
 
 Use the **System / Light / Dark** selector in the top bar to choose a theme. System follows your operating system and updates when it changes. The preference is saved locally and applied before the first paint; if browser storage is blocked, changes still work for the current session.
 
+Choose **Settings → Interface → Color scheme** to personalize the palette: **Forest** (the original soft greens), **Ocean** (cool blues), **Plum** (muted violet), or **Sand** (warm stone). Each option previews both light and dark mode and follows the top-bar mode selector. **Save settings** applies the scheme and stores it alongside your other settings, including across reloads and open tabs. Cancel discards the draft; saving Reset defaults restores Forest. Text, controls, and focus indicators use contrast-checked colors, while vulnerability and update status colors keep their meaning across schemes.
+
 The interface uses larger, scalable text, higher-contrast colors, visible focus indicators, and reduced-motion support. Press **Tab** to reach **Skip to projects**. In a project dialog, use **Left / Right** to switch tabs, **Home / End** to reach the first or last tab, and **Escape** to close and return focus to the project. Dialog summaries and content can be scrolled with the keyboard.
 
 ## Connect your projects
@@ -69,7 +71,7 @@ The cog beside the top-right help icon opens **Settings**:
 - **Badges & scores:** assign red, orange, blue, or neutral to each vulnerability severity; set orange/red package-lag thresholds, the major-version requirement for red, and whether any major update is orange. Expand **Score weights** to adjust major, minor, patch, and prerelease points and per-package caps. A preview shows the resulting colors and scores.
 - **Filter thresholds:** set recent/active/inactive windows in days and large-project/node_modules size thresholds.
 - **Watcher:** choose manual-only, periodic, or package-change scans; set the interval and select vulnerability, outdated-package, and optional disk-usage checks.
-- **Interface:** choose sidebar technology, project tag, and package-match limits; adjust running-server polling and success-notification duration. A notification duration of 0 keeps it visible until dismissed; errors always remain visible.
+- **Interface:** choose a color scheme, sidebar technology, project tag, and package-match limits; adjust running-server polling and success-notification duration. A notification duration of 0 keeps it visible until dismissed; errors always remain visible.
 
 **Save settings** applies changes immediately to cached project badges, package details, package-lag sorting, filter labels/counts, and batch lag totals. No rescan or helper restart is required. **Cancel** discards the draft; **Reset defaults** fills in the original values and takes effect when saved. Invalid values are highlighted and cannot be saved.
 

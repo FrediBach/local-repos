@@ -25,7 +25,7 @@ button { border: 0; background: none; color: inherit; }
 button, a { touch-action: manipulation; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 input { min-width: 0; }
-::selection { background: var(--selection); }
+::selection { background: var(--selection); color: var(--foreground); }
 svg { flex-shrink: 0; }
 .app-shell { min-height: 100vh; }
 .sidebar { position: fixed; inset: 0 auto 0 0; overflow-y: auto; width: 246px; display: flex; flex-direction: column; background: var(--sidebar); border-right: 1px solid var(--border); padding: 33px 21px 0; z-index: 10; }

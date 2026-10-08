@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { defaultSettings, SETTINGS_STORAGE_KEY } from './lib/settings'
@@ -36,6 +36,66 @@ const auditBadge = () => screen.getByRole('button', { name: /Alpha: 1 vulnerabil
 const outdatedBadge = () => screen.getByRole('button', { name: /Alpha: 1 outdated package/ })
 
 describe('workspace settings dialog', () => {
+  it('saves a scheme with other settings, restores it on reload, and keeps it when switching modes', async () => {
+    const { user, unmount } = await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    const forest = screen.getByRole('radio', { name: 'Forest' })
+    expect((forest as HTMLInputElement).checked).toBe(true)
+    await user.click(screen.getByRole('radio', { name: 'Ocean' }))
+    expect((screen.getByRole('radio', { name: 'Ocean' }) as HTMLInputElement).checked).toBe(true)
+    expect(document.documentElement.dataset.colorScheme).toBe('forest')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toEqual({ ...defaultSettings, colorScheme: 'ocean' })
+    expect(document.documentElement.dataset.colorScheme).toBe('ocean')
+    for (const mode of ['dark', 'light', 'system']) {
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Color theme' }), mode)
+      expect(document.documentElement.dataset.colorScheme).toBe('ocean')
+      if (mode !== 'system') expect(document.documentElement.dataset.theme).toBe(mode)
+    }
+    unmount()
+    await setup()
+    expect(document.documentElement.dataset.colorScheme).toBe('ocean')
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    expect((screen.getByRole('radio', { name: 'Ocean' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('discards scheme drafts and failed saves, resets only on save, and follows other tabs', async () => {
+    preferences.set(SETTINGS_STORAGE_KEY, JSON.stringify({ ...defaultSettings, colorScheme: 'plum' }))
+    const { user } = await setup()
+    const openInterface = async () => {
+      await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+      await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    }
+    await openInterface()
+    await user.click(screen.getByRole('radio', { name: 'Sand' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(document.documentElement.dataset.colorScheme).toBe('plum')
+    await openInterface()
+    expect((screen.getByRole('radio', { name: 'Plum' }) as HTMLInputElement).checked).toBe(true)
+    await user.click(screen.getByRole('radio', { name: 'Sand' }))
+    setItem.mockImplementationOnce(() => { throw new Error('Storage blocked') })
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByRole('alert').textContent).toContain('Could not save settings')
+    expect(document.documentElement.dataset.colorScheme).toBe('plum')
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!).colorScheme).toBe('plum')
+    await user.click(screen.getByRole('button', { name: 'Reset defaults' }))
+    expect(document.documentElement.dataset.colorScheme).toBe('plum')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(document.documentElement.dataset.colorScheme).toBe('forest')
+    act(() => {
+      preferences.set(SETTINGS_STORAGE_KEY, JSON.stringify({ ...defaultSettings, colorScheme: 'sand' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: SETTINGS_STORAGE_KEY }))
+    })
+    expect(document.documentElement.dataset.colorScheme).toBe('sand')
+    act(() => {
+      preferences.clear()
+      window.dispatchEvent(new StorageEvent('storage', { key: null }))
+    })
+    expect(document.documentElement.dataset.colorScheme).toBe('forest')
+  })
+
   it('saves watcher mode, cadence and selected checks, validates intervals, and restores the draft', async () => {
     const { user } = await setup()
     await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))

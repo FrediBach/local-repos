@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { useSettings } from '@/hooks/use-settings'
 import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
+import { colorSchemes } from '@/lib/color-schemes'
 import './settings-dialog.css'
 
 const tabs = ['badges', 'filters', 'watcher', 'interface'] as const
@@ -51,7 +52,7 @@ export function SettingsDialog() {
   return <Dialog open={open} onOpenChange={changeOpen}>
     <DialogTrigger asChild><button type="button" className="workspace-info-button settings-trigger" aria-label="Settings" title="Settings"><Settings size={17} /></button></DialogTrigger>
     <DialogContent className="settings-dialog">
-      <div className="settings-header"><DialogTitle><Settings size={20} />Settings</DialogTitle><DialogDescription>Badge rules, filter thresholds, and workspace preferences.</DialogDescription></div>
+      <div className="settings-header"><DialogTitle><Settings size={20} />Settings</DialogTitle><DialogDescription>Appearance, badge rules, and workspace preferences.</DialogDescription></div>
       <form noValidate onSubmit={event => { event.preventDefault(); save() }}>
         <div className="settings-tabs" role="tablist" aria-label="Settings categories">
           {tabs.map((value, index) => <button key={value} type="button" role="tab" id={`${id}-${value}`} aria-controls={`${id}-panel`} aria-selected={tab === value} tabIndex={tab === value ? 0 : -1}
@@ -91,6 +92,21 @@ export function SettingsDialog() {
             <fieldset className="settings-section"><legend>Disk usage</legend><p>Thresholds for the large-project and large-node_modules filters.</p><div className="settings-grid">{field('largeProjectGiB')}{field('heavyNodeModulesMiB')}</div></fieldset>
           </>}
           {tab === 'interface' && <>
+            <fieldset className="settings-section" aria-describedby={`${id}-scheme-hint`}><legend>Color scheme</legend>
+              <p id={`${id}-scheme-hint`}>Make this space your own. Every scheme works with the System, Light, and Dark modes in the top bar.</p>
+              <div className="scheme-options">{colorSchemes.map(scheme => <label className="scheme-option" key={scheme.id}>
+                <span className="scheme-option-heading"><input type="radio" name="colorScheme" value={scheme.id} checked={draft.colorScheme === scheme.id}
+                  aria-labelledby={`${id}-scheme-${scheme.id}`} aria-describedby={`${id}-scheme-${scheme.id}-description`}
+                  onChange={() => { setDraft(current => ({ ...current, colorScheme: scheme.id })); setSaveError('') }} />
+                  <strong id={`${id}-scheme-${scheme.id}`}>{scheme.name}</strong>
+                </span>
+                <span className="scheme-description" id={`${id}-scheme-${scheme.id}-description`}>{scheme.description}</span>
+                <span className="scheme-preview-pair" aria-hidden="true">{(['light', 'dark'] as const).map(mode => <span className="scheme-preview" data-color-scheme={scheme.id} data-theme={mode} key={mode}>
+                  <span className="scheme-preview-sidebar"><i /><i /><i /></span>
+                  <span className="scheme-preview-content"><span>{mode === 'light' ? 'Light' : 'Dark'}</span><i /><b /></span>
+                </span>)}</span>
+              </label>)}</div>
+            </fieldset>
             <fieldset className="settings-section"><legend>Project display</legend><div className="settings-grid">{field('sidebarTechnologyLimit')}{field('projectTagLimit', '0 = hide technology tags.')}{field('packageMatchLimit')}</div></fieldset>
             <fieldset className="settings-section"><legend>Refresh & notifications</legend><div className="settings-grid">{field('statusPollSeconds', 'While development servers are running.')}{field('notificationSeconds', '0 = keep notifications until dismissed. Errors always stay visible.')}</div></fieldset>
           </>}

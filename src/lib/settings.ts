@@ -1,4 +1,5 @@
 import type { AuditSeverity, PackageAudit } from '../types'
+import { normalizeColorScheme, type ColorScheme } from './color-schemes'
 
 export type BadgeColor = 'red' | 'orange' | 'blue' | 'neutral'
 export const badgeColors: BadgeColor[] = ['red', 'orange', 'blue', 'neutral']
@@ -33,6 +34,7 @@ export const numericSettings = {
 
 export type NumericSettingKey = keyof typeof numericSettings
 export type AppSettings = Record<NumericSettingKey, number> & {
+  colorScheme: ColorScheme
   auditColors: Record<AuditSeverity, BadgeColor>
   majorUpdatesAreOrange: boolean
   watcherMode: WatcherMode
@@ -41,6 +43,7 @@ export type AppSettings = Record<NumericSettingKey, number> & {
   watcherStorage: boolean
 }
 export const defaultSettings: AppSettings = {
+  colorScheme: 'forest',
   ...Object.fromEntries(Object.entries(numericSettings).map(([key, field]) => [key, field.default])) as Record<NumericSettingKey, number>,
   auditColors: { critical: 'red', high: 'red', moderate: 'orange', low: 'blue', info: 'neutral' },
   majorUpdatesAreOrange: true,
@@ -60,6 +63,7 @@ function validNumber(key: NumericSettingKey, value: unknown): value is number {
 export function normalizeSettings(value: unknown): AppSettings {
   const result = { ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }
   if (!isRecord(value)) return result
+  result.colorScheme = normalizeColorScheme(value.colorScheme)
   for (const key of Object.keys(numericSettings) as NumericSettingKey[]) {
     if (validNumber(key, value[key])) result[key] = value[key]
   }

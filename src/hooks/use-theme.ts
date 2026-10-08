@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSettings } from './use-settings'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 const storageKey = 'local-repos:theme'
@@ -12,6 +13,7 @@ function readPreference(): ThemePreference {
 }
 
 export function useTheme() {
+  const { settings: { colorScheme } } = useSettings()
   const [theme, setTheme] = useState<ThemePreference>(readPreference)
 
   useEffect(() => {
@@ -19,12 +21,14 @@ export function useTheme() {
     const apply = () => {
       const resolved = theme === 'system' ? (media?.matches ? 'dark' : 'light') : theme
       document.documentElement.dataset.theme = resolved
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#181d17' : '#f8f9f5')
+      document.documentElement.dataset.colorScheme = colorScheme
+      const background = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
+      if (background) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background)
     }
     apply()
     media?.addEventListener('change', apply)
     return () => media?.removeEventListener('change', apply)
-  }, [theme])
+  }, [theme, colorScheme])
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {

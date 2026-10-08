@@ -6,13 +6,20 @@
     <meta name="theme-color" content="#f8f9f5" />
     <meta name="color-scheme" content="light dark" />
     <script>
-      // Apply the saved or system theme before the first paint. Keep in sync with useTheme.
+      // Apply appearance before the first paint. Keep scheme IDs/colors in sync with color-schemes.ts/theme.css.
       (() => {
-        let preference;
+        let preference, scheme;
         try { preference = localStorage.getItem('local-repos:theme'); } catch {}
+        try { scheme = JSON.parse(localStorage.getItem('local-repos:settings:v1'))?.colorScheme; } catch {}
+        const backgrounds = {
+          forest: ['#f8f9f5', '#181d17'], ocean: ['#f5f8fa', '#161d24'],
+          plum: ['#faf7fb', '#201a23'], sand: ['#faf8f4', '#211c17'],
+        };
+        if (typeof scheme !== 'string' || !Object.hasOwn(backgrounds, scheme)) scheme = 'forest';
         const dark = preference === 'dark' || (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-        document.querySelector('meta[name="theme-color"]').content = dark ? '#181d17' : '#f8f9f5';
+        document.documentElement.dataset.colorScheme = scheme;
+        document.querySelector('meta[name="theme-color"]').content = backgrounds[scheme][dark ? 1 : 0];
       })();
     </script>
     <link rel="icon" href="/favicon.ico" sizes="32x32" />

@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { defaultSettings, normalizeSettings, validateSettings } from './settings'
 
 describe('workspace settings', () => {
+  it('keeps older settings compatible and falls back safely for invalid color schemes', () => {
+    for (const colorScheme of [undefined, null, '', 'unknown', 'toString', ['ocean'], {}]) {
+      expect(normalizeSettings({ colorScheme, projectTagLimit: 2 })).toMatchObject({ colorScheme: 'forest', projectTagLimit: 2 })
+    }
+    for (const colorScheme of ['forest', 'ocean', 'plum', 'sand']) {
+      expect(normalizeSettings({ colorScheme }).colorScheme).toBe(colorScheme)
+    }
+  })
+
   it('defaults to manual scans and normalizes invalid watcher preferences', () => {
     expect(normalizeSettings({})).toMatchObject({ watcherMode: 'manual', watcherIntervalMinutes: 60, watcherPollSeconds: 15 })
     expect(normalizeSettings({ watcherMode: 'always', watcherIntervalMinutes: 0, watcherPollSeconds: 1, watcherAudit: 'true' })).toMatchObject({ watcherMode: 'manual', watcherIntervalMinutes: 60, watcherPollSeconds: 15, watcherAudit: true })

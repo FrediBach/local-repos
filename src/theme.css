@@ -1,5 +1,6 @@
-/* Shared semantic colors keep every surface, including portals, in one theme. */
-:root {
+/* Shared tokens theme every surface and portal. Preview cards use these same palettes.
+   Forest is the fallback for existing preferences. Status colors stay consistent. */
+:root, .scheme-preview {
   color-scheme: light;
   --background: #f8f9f5;
   --surface: #ffffff;
@@ -8,7 +9,7 @@
   --foreground: #262e23;
   --muted-foreground: #58634f;
   --border: #d1d8c9;
-  --control-border: #7d8974;
+  --control-border: #76826d;
   --primary: #354a2b;
   --primary-hover: #263c1d;
   --primary-foreground: #ffffff;
@@ -30,7 +31,7 @@
   --log-foreground: #e2ecd9;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"], .scheme-preview[data-theme="dark"] {
   color-scheme: dark;
   --background: #181d17;
   --surface: #222920;
@@ -59,4 +60,148 @@
   --shadow: #00000059;
   --log-background: #11170e;
   --log-foreground: #e2ecd9;
+}
+
+:root[data-color-scheme="ocean"]:not([data-theme="dark"]), .scheme-preview[data-color-scheme="ocean"][data-theme="light"] {
+  --background: #f5f8fa;
+  --surface: #ffffff;
+  --surface-muted: #eaf0f5;
+  --sidebar: #edf2f6;
+  --foreground: #203040;
+  --muted-foreground: #4f6375;
+  --border: #cbd6e0;
+  --control-border: #708394;
+  --primary: #245473;
+  --primary-hover: #193f5a;
+  --primary-foreground: #ffffff;
+  --accent: #205b80;
+  --accent-soft: #dcebf5;
+  --hover: #e3edf4;
+  --focus: #97451f;
+  --selection: #c8e0f1;
+  --warm: #8b471f;
+  --overlay: #14233080;
+  --shadow: #1423301a;
+  --log-background: #192937;
+  --log-foreground: #e0edf7;
+}
+
+:root[data-color-scheme="ocean"][data-theme="dark"], .scheme-preview[data-color-scheme="ocean"][data-theme="dark"] {
+  --background: #161d24;
+  --surface: #202a34;
+  --surface-muted: #293642;
+  --sidebar: #1b242d;
+  --foreground: #e9f0f6;
+  --muted-foreground: #afc1d0;
+  --border: #3c5060;
+  --control-border: #7f98ad;
+  --primary: #a8cfe9;
+  --primary-hover: #c5e2f5;
+  --primary-foreground: #152d3f;
+  --accent: #a8cfe9;
+  --accent-soft: #2a4255;
+  --hover: #2a3946;
+  --focus: #f0b384;
+  --selection: #35536a;
+  --warm: #f0b384;
+  --overlay: #080e14b3;
+  --shadow: #00000059;
+  --log-background: #101820;
+  --log-foreground: #e0edf7;
+}
+
+:root[data-color-scheme="plum"]:not([data-theme="dark"]), .scheme-preview[data-color-scheme="plum"][data-theme="light"] {
+  --background: #faf7fb;
+  --surface: #ffffff;
+  --surface-muted: #f1ebf3;
+  --sidebar: #f3edf5;
+  --foreground: #35293c;
+  --muted-foreground: #6b5873;
+  --border: #dbcfdf;
+  --control-border: #8d7695;
+  --primary: #654373;
+  --primary-hover: #4e305c;
+  --primary-foreground: #ffffff;
+  --accent: #704780;
+  --accent-soft: #ecdef2;
+  --hover: #eee4f2;
+  --focus: #236856;
+  --selection: #e3ceec;
+  --warm: #874724;
+  --overlay: #2a183380;
+  --shadow: #2a18331a;
+  --log-background: #2b2032;
+  --log-foreground: #efe3f5;
+}
+
+:root[data-color-scheme="plum"][data-theme="dark"], .scheme-preview[data-color-scheme="plum"][data-theme="dark"] {
+  --background: #201a23;
+  --surface: #2c2331;
+  --surface-muted: #382d3e;
+  --sidebar: #261f2b;
+  --foreground: #f3eaf7;
+  --muted-foreground: #c6b5ce;
+  --border: #55425e;
+  --control-border: #a08aad;
+  --primary: #d9b8e8;
+  --primary-hover: #e8cef3;
+  --primary-foreground: #34213e;
+  --accent: #d9b8e8;
+  --accent-soft: #493352;
+  --hover: #3c2e43;
+  --focus: #8fd9bd;
+  --selection: #61436e;
+  --warm: #efb58f;
+  --overlay: #100a15b3;
+  --shadow: #00000059;
+  --log-background: #180f1e;
+  --log-foreground: #efe3f5;
+}
+
+:root[data-color-scheme="sand"]:not([data-theme="dark"]), .scheme-preview[data-color-scheme="sand"][data-theme="light"] {
+  --background: #faf8f4;
+  --surface: #fffefd;
+  --surface-muted: #f1ece4;
+  --sidebar: #f3eee6;
+  --foreground: #382e23;
+  --muted-foreground: #6b5b48;
+  --border: #ddd2c3;
+  --control-border: #877761;
+  --primary: #75502d;
+  --primary-hover: #5b3b1e;
+  --primary-foreground: #ffffff;
+  --accent: #79532d;
+  --accent-soft: #efe2cf;
+  --hover: #f0e7da;
+  --focus: #245f91;
+  --selection: #e7d4b7;
+  --warm: #854521;
+  --overlay: #2c211580;
+  --shadow: #2c21151a;
+  --log-background: #30261c;
+  --log-foreground: #f3e7d5;
+}
+
+:root[data-color-scheme="sand"][data-theme="dark"], .scheme-preview[data-color-scheme="sand"][data-theme="dark"] {
+  --background: #211c17;
+  --surface: #2d261f;
+  --surface-muted: #393026;
+  --sidebar: #27211b;
+  --foreground: #f5eddf;
+  --muted-foreground: #cbbba4;
+  --border: #554736;
+  --control-border: #a59175;
+  --primary: #e4c18e;
+  --primary-hover: #f1d7b0;
+  --primary-foreground: #372510;
+  --accent: #e4c18e;
+  --accent-soft: #4a3925;
+  --hover: #3f3225;
+  --focus: #9cccf3;
+  --selection: #634b2f;
+  --warm: #f1b68a;
+  --overlay: #130e08b3;
+  --shadow: #00000059;
+  --log-background: #19130d;
+  --log-foreground: #f3e7d5;
 }
