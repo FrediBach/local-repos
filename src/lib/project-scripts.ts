@@ -10,6 +10,10 @@ type Scripts = { scripts: Record<string, string> }
 
 const lifecycle = new Set(['preinstall', 'install', 'postinstall', 'prepublish', 'prepublishOnly', 'prepack', 'postpack', 'prepare', 'postpublish', 'publish', 'preversion', 'version', 'postversion', 'prestart', 'poststart', 'prestop', 'stop', 'poststop', 'prerestart', 'restart', 'postrestart', 'pretest', 'posttest'])
 
+const testCommands = new Set(['vitest', 'jest', 'playwright', 'cypress', 'mocha', 'ava', 'uvu', 'testcafe', 'karma', 'nyc', 'c8', 'test-storybook'])
+const frameworkCommands = new Set(['vite', 'next', 'astro', 'nuxt', 'nuxi', 'ng', 'react-scripts', 'vue-cli-service', 'webpack', 'parcel', 'remix', 'react-router'])
+const taskRunners = new Set(['turbo', 'nx', 'npm', 'pnpm', 'yarn', 'bun', 'run-s', 'run-p', 'npm-run-all'])
+
 /** Split names at word boundaries, including testUnit and build:storybook. */
 function words(name: string): string[] {
   return name.replace(/([a-z\d])([A-Z])/g, '$1:$2').toLowerCase().split(/[^a-z\d]+/)
@@ -53,7 +57,7 @@ function commandHeads(command: string): string[][] {
 function commandCategory(command: string): ScriptCategory | undefined {
   const categories = commandHeads(command).map(([binary, task, ...args]): ScriptCategory | undefined => {
     const rest = [task, ...args]
-    if (['vitest', 'jest', 'playwright', 'cypress', 'mocha', 'ava', 'uvu', 'testcafe', 'karma', 'nyc', 'c8', 'test-storybook'].includes(binary) || (binary === 'node' && rest.includes('--test'))) return 'test'
+    if (testCommands.has(binary) || (binary === 'node' && rest.includes('--test'))) return 'test'
     if (['eslint', 'stylelint', 'prettier', 'biome', 'svelte-check', 'oxlint'].includes(binary)) return 'quality'
     if (['tsc', 'vue-tsc'].includes(binary)) return rest.some(arg => /^--noEmit(?:=true)?$/.test(arg ?? '')) ? 'quality' : 'build'
     if (['plop', 'hygen', 'graphql-codegen', 'graphql-code-generator', 'openapi-generator-cli', 'orval'].includes(binary)) return 'scaffold'
@@ -62,7 +66,7 @@ function commandCategory(command: string): ScriptCategory | undefined {
     if (binary === 'start-storybook') return 'storybook'
     if (binary === 'storybook') return task === 'build' ? 'build' : task === 'dev' ? 'storybook' : undefined
     if (['vitepress', 'vuepress', 'docusaurus', 'typedoc'].includes(binary)) return task === 'build' ? 'build' : 'docs'
-    if (['vite', 'next', 'astro', 'nuxt', 'nuxi', 'ng', 'react-scripts', 'vue-cli-service', 'webpack', 'parcel', 'remix', 'react-router'].includes(binary)) {
+    if (frameworkCommands.has(binary)) {
       if (['build', 'generate', 'export'].includes(task)) return 'build'
       if (task === 'preview') return 'preview'
       if (task === 'test' || task === 'e2e') return 'test'
@@ -72,7 +76,7 @@ function commandCategory(command: string): ScriptCategory | undefined {
     if (binary === 'webpack-dev-server') return 'development'
     if (['rollup', 'tsup', 'esbuild', 'unbuild'].includes(binary)) return 'build'
     if (binary === 'serve' || binary === 'http-server') return 'preview'
-    if (['turbo', 'nx', 'npm', 'pnpm', 'yarn', 'bun', 'run-s', 'run-p', 'npm-run-all'].includes(binary)) {
+    if (taskRunners.has(binary)) {
       return namedCategory(task === 'run' ? args[0] ?? '' : task ?? '')
     }
     return undefined
