@@ -49,6 +49,21 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
 }
 
 describe('local helper API security', () => {
+  it.each([undefined, null, 'arbitrary-command', 42, {}])('rejects unsupported open targets before project lookup: %j', async app => {
+    const lookup = vi.spyOn(helper.registry, 'get')
+    const response = await post('/api/projects/unknown/open', { app })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Choose VS Code, Sourcetree, or the system file browser.' })
+    expect(lookup).not.toHaveBeenCalled()
+  })
+
+  it.each(['vscode', 'sourcetree', 'folder'])('still validates project registration before opening %s', async app => {
+    const lookup = vi.spyOn(helper.registry, 'get')
+    const response = await post('/api/projects/unknown/open', { app })
+    expect(response.status).toBe(404)
+    expect(lookup).toHaveBeenCalledExactlyOnceWith('unknown')
+  })
+
   it('serves daily summaries only for registered projects with a valid day and app origin', async () => {
     const query = { from: '2026-10-07T22:00:00.000Z', to: '2026-10-08T22:00:00.000Z' }
     expect((await post('/api/projects/unknown/daily-summary', query)).status).toBe(404)

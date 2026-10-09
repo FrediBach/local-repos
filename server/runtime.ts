@@ -522,8 +522,8 @@ export class ProjectRuntime {
   }
 
   async open(id: string, app: unknown): Promise<void> {
-    const entry = await this.registry.get(id)
     if (app !== 'vscode' && app !== 'sourcetree' && app !== 'folder') throw new HelperError('Choose VS Code, Sourcetree, or the system file browser.')
+    const entry = await this.registry.get(id)
     try {
       if (process.platform === 'darwin') {
         await execFileAsync('/usr/bin/open', app === 'folder' ? [entry.directory] : ['-a', app === 'vscode' ? 'Visual Studio Code' : 'Sourcetree', entry.directory], { timeout: 10_000 })
