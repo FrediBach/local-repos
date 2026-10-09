@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { ChevronDown, GitBranch, Package, Play, ShieldAlert, SlidersHorizontal, Star, Tag, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
-import { filterOptionCounts, type FilterContext, type FilterGroup, type FilterKey, type ProjectFilters as Filters } from '@/lib/project-filters'
+import { filterOptionCounts, type FilterContext, type FilterGroup, type FilterOption, type FilterKey, type ProjectFilters as Filters } from '@/lib/project-filters'
 import type { RepoProject } from '@/types'
 import './project-filters.css'
 
@@ -59,13 +59,9 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
       <button type="button" className="filter-expand" ref={toggleRef} aria-expanded={open} aria-controls="project-filter-panel" onClick={() => setOpen(!open)}><SlidersHorizontal size={15} />All filters{active.length > 0 && <span className="filter-count">{active.length}</span>}<ChevronDown size={13} className={open ? 'is-open' : ''} /></button>
     </div>
 
-    {(active.length > 0 || query.trim()) && <div className="active-project-filters">
-      <div className="filter-summary"><span aria-live="polite">{matching} of {total} {total === 1 ? 'project' : 'projects'}{query.trim() && packageSearch ? ' · matching declared packages' : ''}</span><button type="button" onClick={() => { setTechnologyQuery(''); onClear() }}>Clear filters <X size={12} /></button></div>
-      <div className="filter-chips" aria-label="Active filters">
-        {query.trim() && <button type="button" className="filter-chip" aria-label="Remove search filter" onClick={onClearSearch}><span>{packageSearch ? 'Package' : 'Search'}: {query.trim()}</span><X size={12} /></button>}
-        {active.map(({ group, option }) => <button type="button" className="filter-chip" key={`${group.key}:${option.value}`} aria-label={`Remove ${group.label}: ${option.label}`} onClick={() => set(group.key, filters[group.key]!.filter(value => value !== option.value))}><span>{group.label}: {option.label}</span><X size={12} /></button>)}
-      </div>
-    </div>}
+    <ActiveFilters active={active} query={query} packageSearch={packageSearch} matching={matching} total={total}
+      onClear={() => { setTechnologyQuery(''); onClear() }} onClearSearch={onClearSearch}
+      onRemove={(key, value) => set(key, filters[key]!.filter(current => current !== value))} />
 
     {open && <section className="filter-panel" id="project-filter-panel" aria-label="Project filters" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close() } }}>
       <div className="filter-panel-heading"><div><h2>Refine your projects</h2><p>Combine filters to narrow your workspace. Counts include your search and other filters.</p></div><button type="button" aria-label="Close filters" onClick={close}><X size={18} /></button></div>
@@ -86,5 +82,18 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
         </section>)}
       </div>
     </section>}
+  </div>
+}
+
+function ActiveFilters({ active, query, packageSearch, matching, total, onClear, onClearSearch, onRemove }: Pick<Props, 'query' | 'packageSearch' | 'matching' | 'total' | 'onClear' | 'onClearSearch'> & {
+  active: { group: FilterGroup; option: FilterOption }[]; onRemove: (key: FilterKey, value: string) => void
+}) {
+  if (!active.length && !query.trim()) return null
+  return <div className="active-project-filters">
+    <div className="filter-summary"><span aria-live="polite">{matching} of {total} {total === 1 ? 'project' : 'projects'}{query.trim() && packageSearch ? ' · matching declared packages' : ''}</span><button type="button" onClick={onClear}>Clear filters <X size={12} /></button></div>
+    <div className="filter-chips" aria-label="Active filters">
+      {query.trim() && <button type="button" className="filter-chip" aria-label="Remove search filter" onClick={onClearSearch}><span>{packageSearch ? 'Package' : 'Search'}: {query.trim()}</span><X size={12} /></button>}
+      {active.map(({ group, option }) => <button type="button" className="filter-chip" key={`${group.key}:${option.value}`} aria-label={`Remove ${group.label}: ${option.label}`} onClick={() => onRemove(group.key, option.value)}><span>{group.label}: {option.label}</span><X size={12} /></button>)}
+    </div>
   </div>
 }
