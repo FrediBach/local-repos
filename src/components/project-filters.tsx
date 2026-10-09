@@ -36,6 +36,7 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
   const counts = useMemo(() => filterOptionCounts(projects, filters, groups, context), [projects, filters, groups, context])
   const active = groups.flatMap(group => group.options.filter(option => filters[group.key]?.includes(option.value)).map(option => ({ group, option })))
   const tagOptions = groups.find(group => group.key === 'tags')?.options ?? []
+  const selectedTags = new Set(filters.tags)
   const set = (key: FilterKey, values: string[]) => {
     const next = { ...filters }
     if (values.length) next[key] = values
@@ -48,7 +49,7 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
     <div className="filter-shortcuts" role="group" aria-label="Quick filters">
       <DropdownMenu modal={false}><DropdownMenuTrigger asChild><button type="button" className="filter-shortcut tag-filter-trigger" data-active={!!filters.tags?.length}><Tag size={14} aria-hidden="true" /><span>Tags</span>{!!filters.tags?.length && <span className="filter-count">{filters.tags.length}</span>}<ChevronDown size={13} /></button></DropdownMenuTrigger><DropdownMenuContent className="tag-filter-menu" align="start" aria-label="Filter by tags">
         <div className="tag-filter-heading">Match any tag</div>
-        {tagOptions.map(option => <DropdownMenuCheckboxItem key={option.value} checked={filters.tags?.includes(option.value) ?? false} onSelect={event => event.preventDefault()} onCheckedChange={() => toggle('tags', option.value)}><span className="tag-filter-name">{option.label}</span><span className="filter-count" aria-hidden="true">{counts.tags[option.value]}</span></DropdownMenuCheckboxItem>)}
+        {tagOptions.map(option => <DropdownMenuCheckboxItem key={option.value} checked={selectedTags.has(option.value)} onSelect={event => event.preventDefault()} onCheckedChange={() => toggle('tags', option.value)}><span className="tag-filter-name">{option.label}</span><span className="filter-count" aria-hidden="true">{counts.tags[option.value]}</span></DropdownMenuCheckboxItem>)}
         {tagOptions.length === 1 && <p className="tag-filter-hint">Use Add tags on a project to get started.</p>}
         {!!filters.tags?.length && <DropdownMenuItem className="tag-filter-clear" onSelect={() => set('tags', [])}><X size={14} />Clear tag filters</DropdownMenuItem>}
       </DropdownMenuContent></DropdownMenu>

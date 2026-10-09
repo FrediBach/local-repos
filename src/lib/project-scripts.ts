@@ -16,8 +16,8 @@ function words(name: string): string[] {
 }
 
 function namedCategory(name: string): ScriptCategory | undefined {
-  const parts = words(name)
-  const has = (...names: string[]) => names.some(value => parts.includes(value))
+  const parts = new Set(words(name))
+  const has = (...names: string[]) => names.some(value => parts.has(value))
   // Task modifiers take precedence over the tool (test:storybook, build:docs).
   if (has('test', 'tests', 'spec', 'unit', 'e2e', 'integration', 'coverage', 'testcafe', 'vitest', 'jest', 'playwright', 'cypress')) return 'test'
   if (has('build', 'bundle', 'compile')) return 'build'
