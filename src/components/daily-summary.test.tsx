@@ -19,6 +19,29 @@ const report: GitDay = { available: true, shallow: false, commits: [
 const props = { projects: [root, member, other], helper: true, onConnect: vi.fn() }
 
 describe('daily summary', () => {
+  it('limits repository requests to three at a time and completes the queued projects', async () => {
+    const projects = Array.from({ length: 5 }, (_, index) => ({ ...root, id: `project-${index}` }))
+    const finish: (() => void)[] = []
+    let active = 0
+    let peak = 0
+    vi.mocked(projectDay).mockImplementation(() => {
+      active += 1
+      peak = Math.max(peak, active)
+      return new Promise(resolve => { finish.push(() => { active -= 1; resolve(report) }) })
+    })
+    render(<DailySummary {...props} projects={projects} />)
+    expect(projectDay).toHaveBeenCalledTimes(3)
+    await act(async () => { finish[0]() })
+    expect(projectDay).toHaveBeenCalledTimes(4)
+    await act(async () => { finish[1]() })
+    expect(projectDay).toHaveBeenCalledTimes(5)
+    await act(async () => { finish.slice(2).forEach(resolve => resolve()) })
+    expect(peak).toBe(3)
+    expect(active).toBe(0)
+    expect(await screen.findByRole('region', { name: 'Commit timeline' })).toBeTruthy()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Copy summary' }).disabled).toBe(false)
+  })
+
   it('loads every repository once, orders the timeline, combines filters and copies the filtered report', async () => {
     const user = userEvent.setup()
     vi.mocked(projectDay).mockImplementation(async id => id === root.id ? report : { ...report, commits: [{ ...report.commits[0], hash: '9876543210', message: 'Website update', committedAt: '2026-10-08T08:00:00Z' }] })

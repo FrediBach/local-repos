@@ -84,10 +84,14 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
     return () => { active = false; clearTimeout(timer) }
   }, [workspace?.mode, workspace?.rootPath, workspace?.handle, mode, minutes, seconds, watcherAudit, watcherOutdated, watcherStorage, online])
 
-  const message = mode === 'manual' ? 'Manual scans only'
-    : !workspace ? 'Connect a directory to enable watching'
-      : !online ? 'Watcher paused while offline'
-        : mode === 'changes' && workspace.mode !== 'helper' ? 'Package-change watching requires the local helper'
-          : status || (mode === 'periodic' ? `Automatic scans every ${minutes} min` : 'Watching for package changes')
-  return { message, error, nextRun }
+  return { message: watcherMessage(workspace, mode, minutes, online, status), error, nextRun }
+}
+
+function watcherMessage(workspace: Workspace | undefined, mode: AppSettings['watcherMode'], minutes: number, online: boolean, status: string): string {
+  if (mode === 'manual') return 'Manual scans only'
+  if (!workspace) return 'Connect a directory to enable watching'
+  if (!online) return 'Watcher paused while offline'
+  if (mode === 'changes' && workspace.mode !== 'helper') return 'Package-change watching requires the local helper'
+  if (status) return status
+  return mode === 'periodic' ? `Automatic scans every ${minutes} min` : 'Watching for package changes'
 }
