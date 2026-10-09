@@ -1,5 +1,5 @@
-import { Code2, Ellipsis, FolderGit2, FolderOpen, GitBranch, LoaderCircle, Star, Tag } from 'lucide-react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
+import { GitBranch, LoaderCircle, Star } from 'lucide-react'
+import { ProjectActionMenu } from './project-action-menu'
 import { ProjectTagChips } from './project-tags'
 import { ProjectAiBadge } from './project-ai-badge'
 import { ProjectAuditBadge } from './project-audit-badge'
@@ -12,8 +12,7 @@ import { PackageMatches } from './project-packages'
 import { formatBytes } from '@/lib/format-bytes'
 import { relativeTime } from '@/lib/relative-time'
 import { useSettings } from '@/hooks/use-settings'
-import type { OpenProjectRequest, RepoProject } from '@/types'
-import { desktopAppName } from '@/lib/desktop-apps'
+import type { RepoProject } from '@/types'
 
 interface Props {
   project: RepoProject; index: number; view: 'grid' | 'list'; query: string; activeTags?: string[]; tagsReady: boolean; favorite: boolean; capturing: boolean; busy: string
@@ -24,7 +23,8 @@ interface Props {
   onTodos?: (project: RepoProject) => void
 }
 
-export function ProjectCard({ project, index, view, query, activeTags, tagsReady, favorite, capturing, busy, onOpen, onEditTags, onToggleFavorite, onTagFilter, onTechnologyFilter, onAction, todoCount = 0, onTodos }: Props) {
+export function ProjectCard({ project, index, view, query, activeTags, tagsReady, favorite, capturing: batchCapturing, busy, onOpen, onEditTags, onToggleFavorite, onTagFilter, onTechnologyFilter, onAction, todoCount = 0, onTodos }: Props) {
+  const capturing = batchCapturing || busy === `${project.id}:screenshot`
   const tags = <CardTags project={project} activeTags={activeTags} tagsReady={tagsReady} onTagFilter={onTagFilter} onEditTags={onEditTags} onTechnologyFilter={onTechnologyFilter} />
   const title = <><button id={`project-open-${project.id}`} className="project-title" onClick={() => onOpen(project)}>{project.name}</button><ProjectAiBadge project={project} /></>
   const favoriteButton = <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} onClick={() => onToggleFavorite(project.id)} aria-label={`${favorite ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorite}><Star size={16} /></button>
@@ -42,6 +42,5 @@ function CardTags({ project, activeTags, tagsReady, onTagFilter, onEditTags, onT
 }
 
 function CardFooter({ project, tagsReady, favorite, busy, onOpen, onEditTags, onToggleFavorite, onAction, todoCount = 0, onTodos }: Pick<Props, 'project' | 'tagsReady' | 'favorite' | 'busy' | 'onOpen' | 'onEditTags' | 'onToggleFavorite' | 'onAction' | 'todoCount' | 'onTodos'>) {
-  const { settings } = useSettings()
-  return <div className="project-footer">{onTodos && <ProjectTodoBadge project={project} count={todoCount} onClick={() => onTodos(project)} />}<span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><DropdownMenu modal={false}><DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onOpen(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem><DropdownMenuItem disabled={!tagsReady} onSelect={() => onEditTags(project)}><Tag size={14} />Edit tags</DropdownMenuItem><DropdownMenuItem onSelect={() => onToggleFavorite(project.id)}><Star size={14} />{favorite ? 'Remove favorite' : 'Add to favorites'}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => onAction(project, 'open', { app: settings.editor } satisfies OpenProjectRequest)}><Code2 size={14} />Open in {desktopAppName(settings.editor)}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => onAction(project, 'open', { app: settings.gitClient } satisfies OpenProjectRequest)}><GitBranch size={14} />Open in {desktopAppName(settings.gitClient)}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => onAction(project, 'open', { app: 'folder' })}><FolderOpen size={14} />Show in folder</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+  return <div className="project-footer">{onTodos && <ProjectTodoBadge project={project} count={todoCount} onClick={() => onTodos(project)} />}<span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><ProjectActionMenu project={project} tagsReady={tagsReady} favorite={favorite} busy={busy} onOpen={onOpen} onEditTags={onEditTags} onToggleFavorite={onToggleFavorite} onAction={onAction} /></div>
 }

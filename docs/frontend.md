@@ -109,6 +109,16 @@ manifest. Cleanup and package mutation suggestions open existing review controls
 and retain their confirmation behavior. No new API or durable search state is
 introduced. Project and tag dialogs restore focus to the search opener.
 
+## Project action menus
+
+[`project-action-menu.tsx`](../src/components/project-action-menu.tsx) supplies the
+same menu for grid and list cards. It reuses `projectCommands` eligibility and
+labels for individual maintenance scans and development-server actions. Preview
+capture exposes all three existing sources in a keyboard-accessible Radix submenu.
+Actions delegate through the existing workspace action hook, preserving helper
+connection prompts, busy checks, stale-response guards, caching, and notices.
+An individual preview capture shows the same card progress badge as batch capture.
+
 ## Persistence and identity
 
 | Storage | Contents | Identity |

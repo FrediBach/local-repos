@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu'
 import { cn } from '@/lib/utils'
-import { Check } from 'lucide-react'
+import { Check, ChevronRight } from 'lucide-react'
 
 export const DropdownMenu = DropdownPrimitive.Root
 export const DropdownMenuTrigger = DropdownPrimitive.Trigger
@@ -13,4 +13,15 @@ export function DropdownMenuItem({ className, ...props }: React.ComponentPropsWi
 }
 export function DropdownMenuCheckboxItem({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof DropdownPrimitive.CheckboxItem>) {
   return <DropdownPrimitive.CheckboxItem className={cn('dropdown-item dropdown-checkbox-item', className)} {...props}><span className="dropdown-checkbox-indicator"><DropdownPrimitive.ItemIndicator><Check size={14} /></DropdownPrimitive.ItemIndicator></span>{children}</DropdownPrimitive.CheckboxItem>
+}
+
+export const DropdownMenuSub = DropdownPrimitive.Sub
+export function DropdownMenuSubTrigger({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof DropdownPrimitive.SubTrigger>) {
+  return <DropdownPrimitive.SubTrigger className={cn('dropdown-item', className)} {...props}>{children}<ChevronRight size={14} className="dropdown-sub-arrow" /></DropdownPrimitive.SubTrigger>
+}
+export function DropdownMenuSubContent({ className, ...props }: React.ComponentPropsWithoutRef<typeof DropdownPrimitive.SubContent>) {
+  return <DropdownPrimitive.Portal><DropdownPrimitive.SubContent className={cn('dropdown-content', className)} {...props} /></DropdownPrimitive.Portal>
+}
+export function DropdownMenuSeparator() {
+  return <DropdownPrimitive.Separator className="dropdown-separator" />
 }

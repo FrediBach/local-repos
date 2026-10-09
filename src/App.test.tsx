@@ -133,6 +133,35 @@ describe('project workspace interactions', () => {
     expect(within(screen.getByRole('dialog')).getByRole('img', { name: label })).toBeTruthy()
   })
 
+  it('reruns an individual scan from the list menu and saves its result', async () => {
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper' })
+    const storageReport = { totalBytes: 1024, nodeModulesBytes: 0, measuredAt: '2026-10-09T12:00:00Z', partial: false }
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/health') return response({ ok: true })
+      if (url === `/api/projects/${project.id}/storage`) return response({ storage: storageReport })
+      throw new Error('Unexpected API request: ' + url)
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('button', { name: `View ${project.name}` })
+    await user.click(screen.getByRole('button', { name: 'List view' }))
+    await user.click(screen.getByRole('button', { name: `Actions for ${project.name}` }))
+    await user.click(screen.getByRole('menuitem', { name: 'Measure disk usage' }))
+    await waitFor(() => expect(storage.saveWorkspace).toHaveBeenCalledWith(expect.objectContaining({ projects: [expect.objectContaining({ id: project.id, storage: storageReport })] })))
+    expect(fetchMock).toHaveBeenCalledWith(`/api/projects/${project.id}/storage`, expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('prompts for the helper when a browser project scan is selected from its menu', async () => {
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'browser' })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('button', { name: `View ${project.name}` })
+    await user.click(screen.getByRole('button', { name: `Actions for ${project.name}` }))
+    await user.click(screen.getByRole('menuitem', { name: 'Scan for vulnerabilities' }))
+    expect(await screen.findByRole('dialog', { name: 'Bring your projects together.' })).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/audit'))).toBe(false)
+  })
+
   it('sends a script terminal request without caching the launch response as project metadata', async () => {
     const scriptsProject = { ...project, scripts: { dev: 'vite', 'test:watch': 'vitest' } }
     const scriptsScan = { ...scan, projects: [scriptsProject] }
