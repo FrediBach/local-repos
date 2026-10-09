@@ -54,12 +54,17 @@ export async function projectDependencies(entry: RegisteredProject): Promise<Map
 
 async function requireLockfile(entry: RegisteredProject): Promise<void> {
   const names: Record<Manager, string[]> = { npm: ['package-lock.json', 'npm-shrinkwrap.json'], pnpm: ['pnpm-lock.yaml'], yarn: ['yarn.lock'], bun: ['bun.lock', 'bun.lockb'] }
+  const candidates = names[entry.project.packageManager]
+  // Read the small candidate list together, preserving validation/error order.
+  const checks = await Promise.allSettled(candidates.map(name => lstat(path.join(entry.workspaceDirectory ?? entry.directory, name))))
   let found = false
-  for (const name of names[entry.project.packageManager]) {
-    try {
-      if (!(await lstat(path.join(entry.workspaceDirectory ?? entry.directory, name))).isFile()) throw new HelperError(`Outdated scanning requires a regular ${name} file; linked lockfiles are not supported.`)
-      found = true
-    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+  for (const [index, check] of checks.entries()) {
+    if (check.status === 'rejected') {
+      if ((check.reason as NodeJS.ErrnoException).code !== 'ENOENT') throw check.reason
+      continue
+    }
+    if (!check.value.isFile()) throw new HelperError(`Outdated scanning requires a regular ${candidates[index]} file; linked lockfiles are not supported.`)
+    found = true
   }
   if (!found) throw new HelperError(`Outdated scanning requires ${names[entry.project.packageManager].join(' or ')}. Create the lockfile with your package manager first.`)
 }

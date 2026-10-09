@@ -147,15 +147,19 @@ async function requireLockfile(entry: RegisteredProject): Promise<void> {
     npm: ['package-lock.json', 'npm-shrinkwrap.json'], pnpm: ['pnpm-lock.yaml'], yarn: ['yarn.lock'], bun: ['bun.lock'],
   }
   const names = lockfiles[entry.project.packageManager]
-  for (const name of names) {
-    try {
-      const info = await lstat(path.join(entry.workspaceDirectory ?? entry.directory, name))
-      if (!info.isFile()) throw new HelperError(`Audit requires a regular ${name} file; linked lockfiles are not supported.`)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  // There are at most two candidates. Inspect both once, then validate in
+  // filename order so a valid alternative never hides an unsafe lockfile.
+  const checks = await Promise.allSettled(names.map(name => lstat(path.join(entry.workspaceDirectory ?? entry.directory, name))))
+  let found = false
+  for (const [index, check] of checks.entries()) {
+    if (check.status === 'rejected') {
+      if ((check.reason as NodeJS.ErrnoException).code !== 'ENOENT') throw check.reason
+      continue
     }
+    if (!check.value.isFile()) throw new HelperError(`Audit requires a regular ${names[index]} file; linked lockfiles are not supported.`)
+    found = true
   }
-  if (!(await Promise.all(names.map(name => hasRegularFile(entry.workspaceDirectory ?? entry.directory, name)))).some(Boolean)) {
+  if (!found) {
     throw new HelperError(`Audit requires ${names.join(' or ')} in this project. ${entry.project.packageManager === 'bun' ? 'Binary bun.lockb files are not supported by this audit action.' : 'Create the lockfile with your package manager first.'}`)
   }
 }

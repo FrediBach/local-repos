@@ -20,6 +20,16 @@ async function entry(manager: RepoProject['packageManager'] = 'npm', manifest = 
 }
 
 describe('outdated scanning', () => {
+  it('reports the first unsafe lockfile when both npm candidates are linked', async () => {
+    const project = await entry()
+    await rm(path.join(directory, 'package-lock.json'))
+    await symlink(path.join(directory, 'package.json'), path.join(directory, 'package-lock.json'))
+    await symlink(path.join(directory, 'package.json'), path.join(directory, 'npm-shrinkwrap.json'))
+    const runner = runnerFor({})
+    await expect(outdatedProject(project, runner)).rejects.toThrow('regular package-lock.json')
+    expect(runner).not.toHaveBeenCalled()
+  })
+
   it('uses bounded read-only npm lookups and computes a conservative weighted sum', async () => {
     const runner = runnerFor(fixture, 1)
     const report = await outdatedProject(await entry(), runner)

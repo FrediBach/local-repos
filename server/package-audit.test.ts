@@ -41,6 +41,16 @@ async function entry(manager: RepoProject['packageManager'] = 'npm', lockfile?: 
 }
 
 describe('package auditing', () => {
+  it('reports the first unsafe lockfile when both npm candidates are linked', async () => {
+    const project = await entry()
+    await rm(path.join(directory, 'package-lock.json'))
+    await symlink(path.join(directory, 'package.json'), path.join(directory, 'package-lock.json'))
+    await symlink(path.join(directory, 'package.json'), path.join(directory, 'npm-shrinkwrap.json'))
+    const runner = runnerFor(cleanReport)
+    await expect(auditProject(project, runner)).rejects.toThrow('regular package-lock.json')
+    expect(runner).not.toHaveBeenCalled()
+  })
+
   it('uses a bounded read-only npm command and accepts its nonzero vulnerability exit', async () => {
     const project = await entry()
     const runner = runnerFor(npmReport, 1)
