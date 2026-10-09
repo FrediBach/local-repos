@@ -80,7 +80,8 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
-  it('caches commit activity after connecting with the helper', async () => {
+  it.each(['', 'alice@example.com'])('caches commit activity for author %s after connecting and syncing', async author => {
+    vi.stubGlobal('localStorage', { getItem: (key: string) => key === 'local-repos:settings:v2' ? JSON.stringify({ commitActivityAuthor: author }) : null, setItem: vi.fn(), removeItem: vi.fn() })
     const today = new Date().toISOString().slice(0, 10)
     fetchMock.mockImplementation((url: string) => {
       if (url === '/api/health') return response({ ok: true })
@@ -96,6 +97,7 @@ describe('project workspace interactions', () => {
     expect(storage.saveCommitActivity).toHaveBeenCalledWith(expect.objectContaining({ repositories: { [project.id]: expect.objectContaining({ activity: [{ date: today, count: 5 }] }) } }))
     await user.click(screen.getByRole('button', { name: /^Synced/ }))
     await waitFor(() => expect(storage.saveCommitActivity).toHaveBeenCalledTimes(2))
+    expect(fetchMock).toHaveBeenCalledWith(`/api/projects/${project.id}/history`, expect.objectContaining({ body: JSON.stringify(author ? { author } : {}) }))
   })
 
   it('shows cached global activity in the header without fetching history', async () => {

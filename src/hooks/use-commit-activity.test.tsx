@@ -87,3 +87,36 @@ it('ignores late results from an earlier sync in the same workspace', async () =
   expect(saveCommitActivity).toHaveBeenCalledOnce()
   expect(saveCommitActivity).toHaveBeenLastCalledWith(expect.objectContaining({ repositories: { root: expect.objectContaining({ activity: [] }) } }))
 })
+
+it('refreshes on author changes, isolates caches, and rejects stale or mismatched history', async () => {
+  let finishOld!: (data: GitHistory) => void
+  vi.mocked(projectHistory).mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))
+  const { result, rerender } = renderHook(({ author }) => useCommitActivity(workspace, undefined, author), { initialProps: { author: '' } })
+  await act(async () => {})
+  const rememberAll = result.current.remember
+  act(() => rememberAll('root', report))
+  rerender({ author: 'alice@example.com' })
+  expect(result.current.activity).toBeUndefined()
+  expect(projectHistory).toHaveBeenLastCalledWith('root', { author: 'alice@example.com' })
+  act(() => result.current.remember('root', report))
+  expect(saveCommitActivity).toHaveBeenCalledOnce()
+  vi.mocked(projectHistory).mockResolvedValue({ ...report, activity: [] })
+  rerender({ author: 'bob@example.com' })
+  await act(async () => {})
+  await act(async () => finishOld(report))
+  act(() => rememberAll('root', report))
+  expect(result.current.activity?.author).toBe('bob@example.com')
+  expect(saveCommitActivity).toHaveBeenCalledTimes(2)
+  expect(saveCommitActivity).toHaveBeenLastCalledWith(expect.objectContaining({ scope: JSON.stringify(['helper', '/projects', 'bob@example.com']), repositories: { root: expect.objectContaining({ activity: [] }) } }))
+  rerender({ author: '' })
+  await act(async () => {})
+  expect(projectHistory).toHaveBeenLastCalledWith('root')
+  expect(result.current.activity?.author).toBe('')
+})
+
+it('restores only a matching author cache without scanning on startup', async () => {
+  vi.mocked(loadCommitActivity).mockResolvedValue({ scope: JSON.stringify(['helper', '/projects', 'alice@example.com']), repositories: { root: { ...report, cachedAt: '2026-10-09T12:00:00Z' } } })
+  const { result } = renderHook(() => useCommitActivity(workspace, undefined, 'alice@example.com'))
+  await waitFor(() => expect(result.current.activity?.author).toBe('alice@example.com'))
+  expect(projectHistory).not.toHaveBeenCalled()
+})

@@ -19,7 +19,7 @@ import type { GitHistory, OpenProjectRequest, RepoProject } from '@/types'
 import { desktopAppName } from '@/lib/desktop-apps'
 
 interface Props {
-  onActivity?: (id: string, data: GitHistory) => void
+  onActivity?: (id: string, data: GitHistory, author?: string) => void
   selected?: RepoProject; helper: boolean; demo: boolean; busy: string; packageBusy: string; detailTab: ProjectTab; logs?: string
   tagsReady: boolean; selectedTags: Set<string>; favorite: boolean
   onTabChange: (tab: ProjectTab) => void; onClose: () => void; onCloseAutoFocus: (event: Event) => void

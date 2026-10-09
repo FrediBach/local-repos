@@ -2,6 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { defaultSettings, LEGACY_SETTINGS_STORAGE_KEY, normalizeSettings, readSettings, SETTINGS_STORAGE_KEY, validateSettings } from './settings'
 
 describe('workspace settings', () => {
+  it('defaults the heatmap to all authors and validates its optional author email', () => {
+    expect(normalizeSettings({}).commitActivityAuthor).toBe('')
+    expect(normalizeSettings({ commitActivityAuthor: ' alice@example.com ' }).commitActivityAuthor).toBe('alice@example.com')
+    for (const value of [null, 12, 'bad\nauthor', 'a'.repeat(1025)]) expect(normalizeSettings({ commitActivityAuthor: value }).commitActivityAuthor).toBe('')
+    expect(validateSettings({ ...defaultSettings, commitActivityAuthor: 'bad\nauthor' })).toHaveProperty('commitActivityAuthor')
+  })
+
   it('keeps application defaults for older settings and rejects unknown or wrong-category choices', () => {
     expect(normalizeSettings({})).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree', terminal: 'auto' })
     expect(normalizeSettings({ editor: 'cursor', gitClient: 'fork' })).toMatchObject({ editor: 'cursor', gitClient: 'fork' })

@@ -13,7 +13,7 @@ import './settings-dialog.css'
 const tabs = ['badges', 'filters', 'watcher', 'interface', 'applications', 'backup'] as const
 type SettingsTab = typeof tabs[number]
 const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface', applications: 'Applications', backup: 'Backup' }
-const fieldTabs = (key: SettingsErrorKey): SettingsTab => key === 'pushReminderTime' ? 'interface' : key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
+const fieldTabs = (key: SettingsErrorKey): SettingsTab => key === 'pushReminderTime' || key === 'commitActivityAuthor' ? 'interface' : key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
 
 export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupControls; triggerRef?: Ref<HTMLButtonElement> }) {
   const { settings, saveSettings } = useSettings()
@@ -112,6 +112,14 @@ export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupCon
             <fieldset className="settings-section"><legend>Disk usage</legend><p>Thresholds for the large-project and large-node_modules filters.</p><div className="settings-grid">{field('largeProjectGiB')}{field('heavyNodeModulesMiB')}</div></fieldset>
           </>}
           {tab === 'interface' && <>
+            <fieldset className="settings-section"><legend>Global commit heatmap</legend>
+              <div className="settings-field"><label htmlFor={`${id}-commitActivityAuthor`}>Author email (optional)</label>
+                <input id={`${id}-commitActivityAuthor`} type="text" value={draft.commitActivityAuthor} maxLength={1024} placeholder="All authors" autoComplete="off" spellCheck={false}
+                  aria-invalid={!!(submitted && errors.commitActivityAuthor)} aria-describedby={`${id}-commitActivityAuthor-hint`}
+                  onChange={event => { setDraft(current => ({ ...current, commitActivityAuthor: event.target.value })); setSaveError('') }} />
+                <small id={`${id}-commitActivityAuthor-hint`} className={submitted && errors.commitActivityAuthor ? 'settings-field-error' : ''}>{submitted && errors.commitActivityAuthor || 'Leave blank for all authors, or enter the exact Git author email. Saving refreshes the heatmap when connected to the local helper.'}</small>
+              </div>
+            </fieldset>
             <fieldset className="settings-section" aria-describedby={`${id}-scheme-hint`}><legend>Color scheme</legend>
               <p id={`${id}-scheme-hint`}>Make this space your own. Every scheme works with the System, Light, and Dark modes in the top bar.</p>
               <div className="scheme-options">{colorSchemes.map(scheme => <label className="scheme-option" key={scheme.id}>

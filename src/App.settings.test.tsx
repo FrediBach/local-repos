@@ -36,6 +36,29 @@ const auditBadge = () => screen.getByRole('button', { name: /Alpha: 1 vulnerabil
 const outdatedBadge = () => screen.getByRole('button', { name: /Alpha: 1 outdated package/ })
 
 describe('workspace settings dialog', () => {
+  it('saves, reloads, cancels, and clears the optional heatmap author', async () => {
+    const { user, unmount } = await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    const field = screen.getByRole('textbox', { name: 'Author email (optional)' })
+    await user.type(field, 'alice@example.com')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!).commitActivityAuthor).toBe('alice@example.com')
+    unmount()
+    await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    expect((screen.getByRole('textbox', { name: 'Author email (optional)' }) as HTMLInputElement).value).toBe('alice@example.com')
+    await user.clear(screen.getByRole('textbox', { name: 'Author email (optional)' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!).commitActivityAuthor).toBe('alice@example.com')
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    await user.clear(screen.getByRole('textbox', { name: 'Author email (optional)' }))
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!).commitActivityAuthor).toBe('')
+  })
+
   it('saves application choices, updates both action surfaces, and restores choices after reload', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/history') ? { available: false, branches: [], authors: [], commits: [], total: 0, offset: 0, hasMore: false, activity: [], from: '', to: '', shallow: false } : { ok: true } })))
     storage.loadWorkspace.mockResolvedValue({ rootName: 'Projects', rootPath: '/projects', mode: 'helper', projects: [project], syncedAt: project.scannedAt })

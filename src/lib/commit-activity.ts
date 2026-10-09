@@ -22,7 +22,7 @@ export function commitRepositoryId(project: RepoProject, projects: RepoProject[]
   return project.id
 }
 
-export function aggregateCommitActivity(projects: RepoProject[], cache: Record<string, CachedCommitActivity>, today = new Date().toISOString().slice(0, 10)) {
+export function aggregateCommitActivity(projects: RepoProject[], cache: Record<string, CachedCommitActivity>, today = new Date().toISOString().slice(0, 10), author = '') {
   const repositories = summaryRepositories(projects).filter(project => projects.find(item => item.id === project.id)?.git || validCommitActivity(cache[project.id]))
   const reports = repositories.flatMap(project => validCommitActivity(cache[project.id]) ? [cache[project.id]] : [])
   if (!reports.length) return
@@ -40,6 +40,6 @@ export function aggregateCommitActivity(projects: RepoProject[], cache: Record<s
     })
     days.push({ date, count, covered, partial: covered < repositories.length || reports.some(report => report.shallow) })
   }
-  return { days, repositories: repositories.length, cachedRepositories: reports.length, cachedAt: reports.map(report => report.cachedAt).sort()[0] }
+  return { days, author, repositories: repositories.length, cachedRepositories: reports.length, cachedAt: reports.map(report => report.cachedAt).sort()[0] }
 }
 export type GlobalCommitActivity = NonNullable<ReturnType<typeof aggregateCommitActivity>>

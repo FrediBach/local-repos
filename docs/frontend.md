@@ -112,15 +112,19 @@ introduced. Project and tag dialogs restore focus to the search opener.
 ## Cached header commit activity
 
 [`use-commit-activity.ts`](../src/hooks/use-commit-activity.ts) retains only successful,
-unfiltered first-page history activity supplied by `ProjectHistory`. Successful
+first-page, all-branch history activity supplied by `ProjectHistory` whose author
+filter matches the optional `commitActivityAuthor` setting. Successful
 helper connection, manual sync, and watcher sync also supply an explicit refresh
 snapshot through `persist`. The hook reads history for deduplicated Git repositories
 with at most three requests in flight, preserving prior reports on failure. It
-does not refresh on cache restoration, settings changes, or unrelated report writes.
-New refresh snapshots and workspace changes cancel queued reads and ignore late responses. The optional `commit-activity` preference in IndexedDB stores daily
+also refreshes when the configured author changes, using an exact Git author-email
+filter. It does not refresh on cache restoration, unrelated settings changes, or
+report writes. New refresh snapshots and workspace changes cancel queued reads
+and ignore late responses. The optional `commit-activity` preference in IndexedDB stores daily
 counts, date coverage, shallow status, and cache timestamps for the most recently
-cached workspace, scoped by connection mode and root. It does not store commit
-messages or authors. Existing caches need no database version change.
+cached workspace, scoped by connection mode, root, and author selection. Older
+scopes without an author remain compatible with the all-authors default. It does not store commit
+messages or author lists. Existing caches need no database version change.
 
 [`commit-activity.ts`](../src/lib/commit-activity.ts) uses the summary repository
 identity rules to avoid counting monorepo history twice and aggregates 13 calendar

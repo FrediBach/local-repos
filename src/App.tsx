@@ -56,7 +56,7 @@ function WorkspaceApp() {
   const hosted = isVercelHosted()
   const [workspace, setWorkspace] = useState<Workspace>()
   const [activitySync, setActivitySync] = useState<Workspace>()
-  const commitActivity = useCommitActivity(workspace, activitySync)
+  const commitActivity = useCommitActivity(workspace, activitySync, settings.commitActivityAuthor)
   const [favorites, setFavorites] = useState<string[]>([])
   const [projectTags, setProjectTags] = useState<ProjectTags>({})
   const [tagsReady, setTagsReady] = useState(false)

@@ -36,9 +36,11 @@ export const numericSettings = {
 } as const
 
 export type NumericSettingKey = keyof typeof numericSettings
-export type SettingsErrorKey = NumericSettingKey | 'pushReminderTime'
+export type SettingsErrorKey = NumericSettingKey | 'pushReminderTime' | 'commitActivityAuthor'
 export const validReminderTime = (value: unknown): value is string => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+export const validCommitAuthor = (value: unknown): value is string => typeof value === 'string' && value.length <= 1024 && !/[\u0000-\u001f\u007f]/.test(value)
 export type AppSettings = Record<NumericSettingKey, number> & {
+  commitActivityAuthor: string
   terminal: TerminalId
   editor: EditorId
   gitClient: GitClientId
@@ -53,6 +55,7 @@ export type AppSettings = Record<NumericSettingKey, number> & {
   watcherStorage: boolean
 }
 export const defaultSettings: AppSettings = {
+  commitActivityAuthor: '',
   terminal: 'auto',
   editor: 'vscode',
   gitClient: 'sourcetree',
@@ -78,6 +81,7 @@ function validNumber(key: NumericSettingKey, value: unknown): value is number {
 export function normalizeSettings(value: unknown): AppSettings {
   const result = { ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }
   if (!isRecord(value)) return result
+  if (validCommitAuthor(value.commitActivityAuthor)) result.commitActivityAuthor = value.commitActivityAuthor.trim()
   if (isTerminalId(value.terminal)) result.terminal = value.terminal
   if (isEditorId(value.editor)) result.editor = value.editor
   if (isGitClientId(value.gitClient)) result.gitClient = value.gitClient
@@ -117,6 +121,7 @@ const orderedSettings: [NumericSettingKey, NumericSettingKey][] = [
 
 export function validateSettings(settings: AppSettings): Partial<Record<SettingsErrorKey, string>> {
   const errors: Partial<Record<SettingsErrorKey, string>> = {}
+  if (!validCommitAuthor(settings.commitActivityAuthor)) errors.commitActivityAuthor = 'Enter an author email of at most 1024 characters without control characters.'
   if (settings.pushReminderEnabled && !validReminderTime(settings.pushReminderTime)) errors.pushReminderTime = 'Choose a valid reminder time.'
   for (const key of Object.keys(numericSettings) as NumericSettingKey[]) {
     if (key === 'watcherIntervalMinutes' && settings.watcherMode !== 'periodic' || key === 'watcherPollSeconds' && settings.watcherMode !== 'changes') continue

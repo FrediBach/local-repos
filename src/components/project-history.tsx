@@ -7,7 +7,7 @@ import { projectHistory } from '@/lib/api'
 import type { GitHistory, RepoProject } from '@/types'
 import './project-history.css'
 
-export function ProjectHistory({ project, helper, demo, onActivity }: { onActivity?: (id: string, data: GitHistory) => void; project: RepoProject; helper: boolean; demo: boolean }) {
+export function ProjectHistory({ project, helper, demo, onActivity }: { onActivity?: (id: string, data: GitHistory, author?: string) => void; project: RepoProject; helper: boolean; demo: boolean }) {
   const [branch, setBranch] = useState('')
   const [author, setAuthor] = useState('')
   const [offset, setOffset] = useState(0)
@@ -21,7 +21,10 @@ export function ProjectHistory({ project, helper, demo, onActivity }: { onActivi
     projectHistory(project.id, { branch, author, offset }).then(data => {
       if (active) {
         setState({ data, loading: false, key })
-        if (!branch && !author && offset === 0) onActivity?.(project.id, data)
+        if (!branch && offset === 0) {
+          if (author) onActivity?.(project.id, data, author)
+          else onActivity?.(project.id, data)
+        }
       }
     }, error => {
       if (active) setState(previous => ({ ...previous, loading: false, key, error: error instanceof Error ? error.message : 'Could not load commit history.' }))
