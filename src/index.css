@@ -64,6 +64,8 @@ svg { flex-shrink: 0; }
 .sidebar-help:hover { color: var(--accent); }
 .sidebar-footnote { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--border); padding: 19px 3px; font-size: 0.8125rem; color: var(--muted-foreground); }
 .sidebar-footnote > span:last-child { margin-left: auto; color: var(--muted-foreground); font-family: monospace; }
+.sidebar-footnote a { display: inline-flex; align-items: center; gap: 6px; }
+.sidebar-footnote a:hover { color: var(--foreground); text-decoration: underline; }
 .status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }.status-dot.neutral { background: var(--accent); }
 .main-content { margin-left: 246px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; height: 74px; padding: 0 44px; border-bottom: 1px solid var(--border); }

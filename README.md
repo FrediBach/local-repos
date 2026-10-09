@@ -23,6 +23,8 @@ The initial screen contains labeled sample projects and illustrative previews. C
 
 ## Appearance and keyboard navigation
 
+The sidebar footer links to the project's GitHub repository and displays the current version, v0.5.
+
 Use the **System / Light / Dark** selector in the top bar to choose a theme. System follows your operating system and updates when it changes. The preference is saved locally and applied before the first paint; if browser storage is blocked, changes still work for the current session.
 
 Choose **Settings → Interface → Color scheme** to personalize the palette: **Forest** (the original soft greens), **Ocean** (cool blues), **Plum** (muted violet), or **Sand** (warm stone). Each option previews both light and dark mode and follows the top-bar mode selector. **Save settings** applies the scheme and stores it alongside your other settings, including across reloads and open tabs. Cancel discards the draft; saving Reset defaults restores Forest. Text, controls, and focus indicators use contrast-checked colors, while vulnerability and update status colors keep their meaning across schemes.

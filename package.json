@@ -1,7 +1,7 @@
 {
   "name": "local-repos",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "Bring your local repositories together. Browse READMEs, search packages, track Git activity, and pick up where you left off.",
   "scripts": {
