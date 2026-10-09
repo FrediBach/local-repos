@@ -6,12 +6,13 @@ import { useSettings } from '@/hooks/use-settings'
 import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type SettingsErrorKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
 import { colorSchemes } from '@/lib/color-schemes'
+import { desktopPlatforms, editors, gitClients, type EditorId, type GitClientId } from '@/lib/desktop-apps'
 import { ConfigBackupPanel, type ConfigBackupControls } from './config-backup'
 import './settings-dialog.css'
 
-const tabs = ['badges', 'filters', 'watcher', 'interface', 'backup'] as const
+const tabs = ['badges', 'filters', 'watcher', 'interface', 'applications', 'backup'] as const
 type SettingsTab = typeof tabs[number]
-const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface', backup: 'Backup' }
+const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface', applications: 'Applications', backup: 'Backup' }
 const fieldTabs = (key: SettingsErrorKey): SettingsTab => key === 'pushReminderTime' ? 'interface' : key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
 
 export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
@@ -67,6 +68,18 @@ export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
         </div>
         <div className="settings-body" role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`} tabIndex={0} key={tab}>
           {tab === 'backup' && <ConfigBackupPanel {...backup} onWorkingChange={setTransferring} onImported={value => { setDraft(value.settings); setSubmitted(false); setSaveError('') }} />}
+          {tab === 'applications' && <fieldset className="settings-section"><legend>Open projects with</legend>
+            <p>Choose the editor and Git client for project menus and detail buttons. Applications must be installed on the computer running the local helper.</p>
+            <div className="settings-grid">
+              <label className="settings-field"><span>Code editor</span><select value={draft.editor} onChange={event => { setDraft(current => ({ ...current, editor: event.target.value as EditorId })); setSaveError('') }}>
+                {editors.map(app => <option key={app.id} value={app.id}>{app.name}{app.platforms.length < 3 ? ` (${app.platforms.map(platform => desktopPlatforms[platform]).join(', ')})` : ''}</option>)}
+              </select></label>
+              <label className="settings-field"><span>Git client</span><select value={draft.gitClient} onChange={event => { setDraft(current => ({ ...current, gitClient: event.target.value as GitClientId })); setSaveError('') }}>
+                {gitClients.map(app => <option key={app.id} value={app.id}>{app.name}{app.platforms.length < 3 ? ` (${app.platforms.map(platform => desktopPlatforms[platform]).join(', ')})` : ''}</option>)}
+              </select></label>
+            </div>
+            <p className="watcher-hint">Opening applications requires a local helper connection. On Linux, enable the application's command-line launcher. On Windows, add its executable folder to PATH. Restart the helper after changing PATH.</p>
+          </fieldset>}
           {tab === 'badges' && <>
             <fieldset className="settings-section"><legend>Vulnerability colors</legend><p>The project badge uses the highest reported severity. Severity labels and counts stay as reported by the package manager.</p>
               <div className="settings-color-grid">{auditSeverities.map(severity => <label className="settings-field" key={severity}>

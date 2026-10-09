@@ -98,12 +98,24 @@ The cog beside the top-right help icon opens **Settings**:
 - **Filter thresholds:** set recent/active/inactive windows in days and large-project/node_modules size thresholds.
 - **Watcher:** choose manual-only, periodic, or package-change scans; set the interval and select vulnerability, outdated-package, and optional disk-usage checks.
 - **Interface:** choose a color scheme, sidebar technology, project tag, and package-match limits; configure the end-of-day push reminder, running-server polling, and success-notification duration. A notification duration of 0 keeps it visible until dismissed; errors always remain visible.
+- **Applications:** choose your code editor and Git client. Project action menus and detail buttons use these choices; defaults remain VS Code and Sourcetree.
 
 **Save settings** applies changes immediately to cached project badges, package details, package-lag sorting, filter labels/counts, and batch lag totals. No rescan or helper restart is required. **Cancel** discards the draft; **Reset defaults** fills in the original values and takes effect when saved. Invalid values are highlighted and cannot be saved.
 
 Settings are stored in localStorage for this browser and app origin, independently of the connected directory, and changes synchronize between open tabs. If storage is unavailable, the dialog reports the failure and keeps the previously applied settings. Package lag measures version distance, not release age in days; vulnerability labels and counts continue to reflect the package manager's report.
 
 The desktop sidebar shows up to 50 technologies by default. Only the technology list scrolls, keeping workspace navigation and directory/help controls visible. Adjust the limit in **Settings → Interface → Technologies in sidebar**. Saved preferences using the old seven-technology default expand to 50; other saved limits are preserved.
+
+### Preferred editor and Git client
+
+Open **Settings → Applications**, choose **Code editor** and **Git client**, then **Save settings**. Choices persist across reloads, synchronize between tabs, and are included in configuration exports. Older settings and backups retain VS Code and Sourcetree as defaults.
+
+- **Editors:** VS Code, VS Code Insiders, VSCodium, Cursor, Windsurf, Zed, Sublime Text, WebStorm, IntelliJ IDEA, PyCharm, PhpStorm, Rider, GoLand, CLion, RubyMine, RustRover, Android Studio, Xcode, Nova, BBEdit, Notepad++, and Visual Studio.
+- **Git clients:** Sourcetree, Fork, GitHub Desktop, GitKraken, Tower, Sublime Merge, SmartGit, Git Cola, Git Extensions, and TortoiseGit.
+
+The list shows supported launcher platforms, not detected installations. Opening an application requires a helper-connected workspace and the application installed on that computer. On macOS, the helper uses the installed application name. On Linux, enable the application's command-line launcher on the helper's `PATH` (for example, `code`, `zed`, `webstorm`, or `smerge`). On Windows, add the folder containing the actual executable (for example, `Code.exe`, `Fork.exe`, or `GitHubDesktop.exe`) to the helper's `PATH`; `.cmd` wrappers are not used. Restart the helper after changing `PATH` or updating Local Repos. Missing applications and unsupported platforms show an error with setup guidance. Opened applications remain running independently of the helper.
+
+Launchers pass the selected project's registered local directory. GitHub Desktop uses its [local repository opening interface](https://github.com/desktop/desktop/blob/development/app/src/main-process/main.ts); SmartGit and Sublime Merge use their documented [SmartGit](https://docs.syntevo.com/SmartGit/Latest/Manual/GUI/Command-Line-Options) and [Sublime Merge](https://www.sublimemerge.com/docs/command_line) launch options. No custom executable or shell command can be entered through settings.
 
 ### Export and import configuration
 
@@ -323,7 +335,7 @@ The helper binds only to loopback, checks the request host and origin, rejects c
 - Server logs belong to the current helper session. The helper's temporary screenshot files are removed on normal shutdown; successfully cached previews survive helper restarts in IndexedDB. Browser storage limits or clearing site data can remove cached content.
 - Captures use a fresh browser session without authentication. Apps requiring login or interactive setup cannot be previewed automatically. Local startup has a 45-second readiness limit; each page capture has a 25-second rendering limit. A configured project URL can bypass local startup or select a custom route.
 - GitHub website discovery supports public repositories on `github.com`. Other Git hosts need a package homepage or explicit preview URL. A deployed preview may differ from your local branch or uncommitted changes.
-- VS Code and file-browser opening depend on installed local applications. Sourcetree opening is implemented for macOS. Windows local dev-server startup and process-tree cleanup are not supported; **Project URL** capture does not require launching a local dev server and needs the helper and Chromium.
+- Editor, Git-client, and file-browser opening depend on installed local applications and their supported platforms; configure them under **Settings → Applications**. Windows local dev-server startup and process-tree cleanup are not supported; **Project URL** capture does not require launching a local dev server and needs the helper and Chromium.
 - Automatic rescans require an open app tab; there is no system background service or management of development servers launched outside Local Repos.
 
 ## Checks

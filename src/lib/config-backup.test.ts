@@ -3,6 +3,14 @@ import type { RepoProject } from '@/types'
 import { createConfigBackup, mergeConfigProjects, parseConfigBackup } from './config-backup'
 import { defaultSettings } from './settings'
 
+it('round-trips application preferences and accepts older backups while rejecting invalid choices', () => {
+  const backup = createConfigBackup({ ...defaultSettings, editor: 'zed', gitClient: 'gitkraken' }, 'system', [], [], {})
+  expect(parseConfigBackup(JSON.stringify(backup)).settings).toMatchObject({ editor: 'zed', gitClient: 'gitkraken' })
+  const { editor: _editor, gitClient: _gitClient, ...legacy } = backup.settings
+  expect(parseConfigBackup(JSON.stringify({ ...backup, settings: legacy })).settings).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+  expect(() => parseConfigBackup(JSON.stringify({ ...backup, settings: { ...backup.settings, editor: 'arbitrary-command' } }))).toThrow('invalid setting: editor')
+})
+
 const project = (id: string, relativePath = id, origin?: string, packagePath?: string): RepoProject => ({
   id, relativePath, name: 'Same display name', dirName: relativePath.split('/').at(-1)!, description: '', stack: [], scripts: {}, packageManager: 'npm', scannedAt: '',
   ...(origin ? { git: { origin } } : {}),

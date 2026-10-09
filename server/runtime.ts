@@ -1,11 +1,10 @@
-import { spawn, execFile, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import type { Browser } from 'playwright'
 import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
@@ -23,10 +22,11 @@ import { unusedProject } from './package-unused'
 import { reactDoctorProject } from './react-doctor'
 import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
 import { openScriptTerminal, validateProjectScript } from './project-scripts'
+import { isDesktopAppId } from '../src/lib/desktop-apps'
+import { openDesktopApp } from './desktop-apps'
 
 export { devCommand } from './dev-server'
 
-const execFileAsync = promisify(execFile)
 type DevState = NonNullable<RepoProject['dev']>
 type PreviewDetails = Omit<NonNullable<RepoProject['preview']>, 'capturedAt'>
 type CaptureTarget = { url: string; source: 'local' | 'configured' | 'package' | 'github' }
@@ -540,22 +540,10 @@ export class ProjectRuntime {
   }
 
   async open(id: string, app: unknown): Promise<void> {
-    if (app !== 'vscode' && app !== 'sourcetree' && app !== 'folder') throw new HelperError('Choose VS Code, Sourcetree, or the system file browser.')
+    if (app !== 'folder' && !isDesktopAppId(app)) throw new HelperError('Choose a supported editor, Git client, or the system file browser.')
     const entry = await this.registry.get(id)
-    try {
-      if (process.platform === 'darwin') {
-        await execFileAsync('/usr/bin/open', app === 'folder' ? [entry.directory] : ['-a', app === 'vscode' ? 'Visual Studio Code' : 'Sourcetree', entry.directory], { timeout: 10_000 })
-      } else if (app === 'vscode') {
-        await execFileAsync(process.platform === 'win32' ? 'code.cmd' : 'code', [entry.directory], { timeout: 10_000 })
-      } else if (app === 'folder') {
-        await execFileAsync(process.platform === 'win32' ? 'explorer.exe' : 'xdg-open', [entry.directory], { timeout: 10_000 })
-      } else {
-        throw new HelperError('Opening Sourcetree is currently supported on macOS. Open this project from Sourcetree directly.')
-      }
-    } catch (error) {
-      if (error instanceof HelperError) throw error
-      throw new HelperError(`Could not open ${app === 'vscode' ? 'VS Code' : app === 'sourcetree' ? 'Sourcetree' : 'the file browser'}. Make sure it is installed and available on this computer.`)
-    }
+    this.available(id)
+    await openDesktopApp(app, entry.directory)
   }
 
   async runScript(id: string, name: unknown, command: unknown): Promise<void> {

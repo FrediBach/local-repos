@@ -1,3 +1,9 @@
+import type { DesktopAppId } from './lib/desktop-apps'
+
+export interface OpenProjectRequest {
+  app: DesktopAppId | 'folder'
+}
+
 export type PreviewMode = 'auto' | 'local' | 'website'
 export type PreviewKind = 'screenshot' | 'og-image' | 'logo' | 'favicon'
 

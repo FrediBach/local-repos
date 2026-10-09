@@ -1,5 +1,6 @@
 import type { AuditSeverity, PackageAudit } from '../types'
 import { normalizeColorScheme, type ColorScheme } from './color-schemes'
+import { isEditorId, isGitClientId, type EditorId, type GitClientId } from './desktop-apps'
 
 export type BadgeColor = 'red' | 'orange' | 'blue' | 'neutral'
 export const badgeColors: BadgeColor[] = ['red', 'orange', 'blue', 'neutral']
@@ -38,6 +39,8 @@ export type NumericSettingKey = keyof typeof numericSettings
 export type SettingsErrorKey = NumericSettingKey | 'pushReminderTime'
 export const validReminderTime = (value: unknown): value is string => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 export type AppSettings = Record<NumericSettingKey, number> & {
+  editor: EditorId
+  gitClient: GitClientId
   pushReminderEnabled: boolean
   pushReminderTime: string
   colorScheme: ColorScheme
@@ -49,6 +52,8 @@ export type AppSettings = Record<NumericSettingKey, number> & {
   watcherStorage: boolean
 }
 export const defaultSettings: AppSettings = {
+  editor: 'vscode',
+  gitClient: 'sourcetree',
   pushReminderEnabled: true,
   pushReminderTime: '18:00',
   colorScheme: 'forest',
@@ -71,6 +76,8 @@ function validNumber(key: NumericSettingKey, value: unknown): value is number {
 export function normalizeSettings(value: unknown): AppSettings {
   const result = { ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }
   if (!isRecord(value)) return result
+  if (isEditorId(value.editor)) result.editor = value.editor
+  if (isGitClientId(value.gitClient)) result.gitClient = value.gitClient
   result.colorScheme = normalizeColorScheme(value.colorScheme)
   if (validReminderTime(value.pushReminderTime)) result.pushReminderTime = value.pushReminderTime
   for (const key of Object.keys(numericSettings) as NumericSettingKey[]) {

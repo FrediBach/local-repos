@@ -2,6 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { defaultSettings, LEGACY_SETTINGS_STORAGE_KEY, normalizeSettings, readSettings, SETTINGS_STORAGE_KEY, validateSettings } from './settings'
 
 describe('workspace settings', () => {
+  it('keeps application defaults for older settings and rejects unknown or wrong-category choices', () => {
+    expect(normalizeSettings({})).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+    expect(normalizeSettings({ editor: 'cursor', gitClient: 'fork' })).toMatchObject({ editor: 'cursor', gitClient: 'fork' })
+    for (const value of [undefined, null, '', 'unknown', 'toString', '__proto__', ['cursor'], {}, 42]) {
+      expect(normalizeSettings({ editor: value, gitClient: value })).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+    }
+    expect(normalizeSettings({ editor: 'fork', gitClient: 'cursor' })).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+  })
+
   it('expands the legacy sidebar default while retaining other preferences and subsequent custom limits', () => {
     const saved = new Map<string, string>()
     vi.stubGlobal('localStorage', { getItem: (key: string) => saved.get(key) ?? null })

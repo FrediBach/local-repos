@@ -1,10 +1,12 @@
-import { lstat, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { request, type Server } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from './app'
 import { devCommand } from './runtime'
+import { desktopApps } from '../src/lib/desktop-apps'
+import * as desktopLaunch from './desktop-apps'
 import type { PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, ProjectStorage, RepoProject } from '../src/types'
 import * as packageAudit from './package-audit'
 import * as packageOutdated from './package-outdated'
@@ -50,6 +52,18 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
 }
 
 describe('local helper API security', () => {
+  it('opens only the registered directory in the selected app and revalidates it on each request', async () => {
+    const launch = vi.spyOn(desktopLaunch, 'openDesktopApp').mockResolvedValue()
+    const project = await createProject()
+    const endpoint = `/api/projects/${project.id}/open`
+    expect((await post(endpoint, { app: 'cursor', directory: '/unregistered', command: 'arbitrary' })).status).toBe(200)
+    expect(launch).toHaveBeenCalledExactlyOnceWith('cursor', await realpath(path.join(directory, 'project')))
+    expect((await post(endpoint, { app: 'fork' }, { Origin: 'https://untrusted.example' })).status).toBe(403)
+    await rename(path.join(directory, 'project'), path.join(directory, 'moved'))
+    expect((await post(endpoint, { app: 'fork' })).status).toBe(404)
+    expect(launch).toHaveBeenCalledOnce()
+  })
+
   it('restricts push checks to registered, accessible projects and the local app', async () => {
     expect((await post('/api/projects/unknown/push-status')).status).toBe(404)
     const project = await createProject()
@@ -61,15 +75,15 @@ describe('local helper API security', () => {
     expect((await post(endpoint)).status).toBe(404)
   })
 
-  it.each([undefined, null, 'arbitrary-command', 42, {}])('rejects unsupported open targets before project lookup: %j', async app => {
+  it.each([undefined, null, 'arbitrary-command', 'toString', '__proto__', 'code; touch /tmp/injected', 42, {}, ['vscode']])('rejects unsupported open targets before project lookup: %j', async app => {
     const lookup = vi.spyOn(helper.registry, 'get')
     const response = await post('/api/projects/unknown/open', { app })
     expect(response.status).toBe(400)
-    expect(await response.json()).toEqual({ error: 'Choose VS Code, Sourcetree, or the system file browser.' })
+    expect(await response.json()).toEqual({ error: 'Choose a supported editor, Git client, or the system file browser.' })
     expect(lookup).not.toHaveBeenCalled()
   })
 
-  it.each(['vscode', 'sourcetree', 'folder'])('still validates project registration before opening %s', async app => {
+  it.each([...desktopApps.map(app => app.id), 'folder'])('still validates project registration before opening %s', async app => {
     const lookup = vi.spyOn(helper.registry, 'get')
     const response = await post('/api/projects/unknown/open', { app })
     expect(response.status).toBe(404)

@@ -133,7 +133,17 @@ Individual service modules handle command construction, validation, and parsing.
   250,000-entry, 128-level, and 20-second limits produce `partial` results. Cleanup
   requires `confirm: true` and removes only the selected project's real root-level
   `node_modules` directory, then measures storage again.
-- **Desktop actions:** `open` uses platform application launchers.
+- **Desktop actions:** `open` validates an application ID against the shared
+  [`desktop-apps.ts`](../src/lib/desktop-apps.ts) catalog, revalidates the directory
+  through `ProjectRegistry.get()`, and checks the runtime maintenance/shutdown
+  guard before delegating to [`desktop-apps.ts`](../server/desktop-apps.ts).
+  Launchers use fixed executable names and argument arrays without a shell;
+  requests cannot supply a command or directory. macOS uses a bounded `open`
+  process; Linux and Windows require the launcher/executable on the helper's
+  `PATH`. Desktop processes are detached, like script terminals, and belong to
+  the user rather than the helper's development-server lifecycle. A successful
+  spawn acknowledges the launch request, not the application's subsequent UI
+  state. Missing executables and unsupported platforms produce setup guidance.
   [`project-scripts.ts`](../server/project-scripts.ts) checks the requested script
   name and displayed command against both registered metadata and a fresh regular
   `package.json`, then launches the package-manager script in a system terminal.
