@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Tag, Terminal, Unplug, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -120,7 +120,9 @@ function WorkspaceApp() {
   const hasRefinements = !!query.trim() || Object.entries(filters).some(([key, values]) => values.length > 0 && !(key === 'stars' && values[0] === 'starred') && !(key === 'server' && values[0] === 'running')) || (filter === 'favorites' && !!filters.server?.length)
   const watcher = useWorkspaceWatcher({ workspace, settings, busy: !!busy, online, run: runAutomaticScan })
   const configContext = useRef({ workspace, favorites, projectTags, busy, ready: tagsReady && cacheReady })
-  configContext.current = { workspace, favorites, projectTags, busy, ready: tagsReady && cacheReady }
+  useLayoutEffect(() => {
+    configContext.current = { workspace, favorites, projectTags, busy, ready: tagsReady && cacheReady }
+  }, [workspace, favorites, projectTags, busy, tagsReady, cacheReady])
 
   useEffect(() => {
     let active = true

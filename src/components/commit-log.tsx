@@ -1,11 +1,13 @@
 import { Clock3, GitCommitHorizontal, UserRound } from 'lucide-react'
 import type { GitCommit } from '@/types'
 
+const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+
 function relativeDate(date: string) {
   const seconds = (Date.parse(date) - Date.now()) / 1000
   const unit = Math.abs(seconds) < 3600 ? 'minute' : Math.abs(seconds) < 86400 ? 'hour' : 'day'
   const value = Math.round(seconds / (unit === 'minute' ? 60 : unit === 'hour' ? 3600 : 86400))
-  return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(value, unit)
+  return relativeTimeFormatter.format(value, unit)
 }
 
 // Local adaptation of https://www.shadcn.io/blocks/changelog-commit-log.

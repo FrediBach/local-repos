@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { defaultSettings, normalizeSettings, PREFERENCES_CHANGED_EVENT, readSettings, SETTINGS_STORAGE_KEY, validateSettings, type AppSettings } from '@/lib/settings'
 
 const SettingsContext = createContext({
@@ -18,14 +18,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => { window.removeEventListener('storage', onStorage); window.removeEventListener(PREFERENCES_CHANGED_EVENT, onImport) }
   }, [])
 
-  function saveSettings(next: AppSettings) {
+  const saveSettings = useCallback((next: AppSettings) => {
     if (Object.keys(validateSettings(next)).length) throw new Error('Correct the invalid settings before saving.')
     const normalized = normalizeSettings(next)
     try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(normalized)) }
     catch { throw new Error('Could not save settings in this browser. Check browser storage permissions and try again.') }
     setSettings(normalized)
-  }
-  return <SettingsContext.Provider value={{ settings, saveSettings }}>{children}</SettingsContext.Provider>
+  }, [])
+  const value = useMemo(() => ({ settings, saveSettings }), [settings, saveSettings])
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }
 
 export const useSettings = () => useContext(SettingsContext)

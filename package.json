@@ -12,7 +12,8 @@
     "assets:generate": "node scripts/generate-brand-assets.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "doctor": "react-doctor --verbose --no-score"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -51,6 +52,7 @@
     "@types/wicg-file-system-access": "^2023.10.7",
     "@vitejs/plugin-react": "^6.1.2",
     "jsdom": "^29.1.1",
+    "react-doctor": "^0.9.17",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

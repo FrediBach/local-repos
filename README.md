@@ -237,6 +237,7 @@ Fresh scans read local metadata only and make no website or GitHub requests. Cap
 
 ```sh
 npm run build
+npm run doctor
 npm run preview
 ```
 
@@ -300,3 +301,5 @@ npm run build
 ```
 
 Tests cover metadata parsing, browser scanning, helper scanning, and local API behavior. Build output is written to `dist/`.
+
+React Doctor reports React and related code findings with file locations. `npm run doctor` scans the full project with scoring and telemetry disabled; it exits nonzero when error-level findings remain. Findings should be checked against the code before making changes.

@@ -70,6 +70,17 @@ describe('workspace watcher scheduling', () => {
     expect(result.current.error).toBe(false)
   })
 
+  it('uses the latest committed callback without restarting the scheduled interval', async () => {
+    const props = options()
+    const { rerender } = renderHook(useWorkspaceWatcher, { initialProps: props })
+    await advance(30_000)
+    const run = vi.fn().mockResolvedValue(workspace)
+    rerender({ ...props, workspace: { ...workspace }, run })
+    await advance(30_000)
+    expect(props.run).not.toHaveBeenCalled()
+    expect(run).toHaveBeenCalledOnce()
+  })
+
   it('registers a restarted helper, backs off after errors, and retries', async () => {
     const props = { ...options(), settings: { ...defaultSettings, watcherMode: 'changes' as const } }
     api.mockRejectedValueOnce(new Error('Helper offline')).mockResolvedValue({ fingerprints: null })

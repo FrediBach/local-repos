@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api } from '@/lib/api'
 import type { AppSettings } from '@/lib/settings'
 import type { Workspace } from '@/types'
@@ -15,7 +15,7 @@ const fingerprintsOf = (workspace: Workspace) => Object.fromEntries(workspace.pr
 
 export function useWorkspaceWatcher(options: WatcherOptions) {
   const latest = useRef(options)
-  latest.current = options
+  useLayoutEffect(() => { latest.current = options }, [options])
   const running = useRef(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState(false)
@@ -54,8 +54,9 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
             if (!changedIds.length) { setError(false); publish('Watching for package changes'); return }
             // Expand to the whole repository when any workspace member changes.
             const projects = latest.current.workspace!.projects
-            const repositories = new Set(projects.filter(project => changedIds!.includes(project.id)).map(project => project.monorepo?.id ?? project.id))
-            changedIds = projects.filter(project => changedIds!.includes(project.id) || repositories.has(project.monorepo?.id ?? project.id)).map(project => project.id)
+            const changed = new Set(changedIds)
+            const repositories = new Set(projects.filter(project => changed.has(project.id)).map(project => project.monorepo?.id ?? project.id))
+            changedIds = projects.filter(project => changed.has(project.id) || repositories.has(project.monorepo?.id ?? project.id)).map(project => project.id)
           }
         }
         // A manual action may have started while the lightweight change check
