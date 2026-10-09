@@ -1,5 +1,8 @@
+import { ConnectWorkspaceDialog } from '@/components/connect-workspace-dialog'
+import { WorkspaceHelpDialog } from '@/components/workspace-help-dialog'
+import { Logo } from '@/components/brand-logo'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Tag, Terminal, Unplug, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Tag, Terminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -41,7 +44,7 @@ import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveConfigPreferences, saveFavorites, saveProjectTags, saveWorkspace } from '@/lib/storage'
 import { cachePreview, preservePreviews } from '@/lib/workspace'
-import { installationUrl, isVercelHosted } from '@/lib/deployment'
+import { isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, PackageOutdated, RepoProject, Workspace } from '@/types'
 
 type Filter = 'all' | 'favorites' | 'running'
@@ -57,9 +60,7 @@ function relativeTime(value?: string) {
   return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function Logo({ small = false }: { small?: boolean }) {
-  return <span className={`brand-mark ${small ? 'small' : ''}`} aria-hidden="true"><i /><i /><i /></span>
-}
+
 
 export default function App() {
   return <SettingsProvider><WorkspaceApp /></SettingsProvider>
@@ -520,33 +521,13 @@ function WorkspaceApp() {
       </div>
     </main>
 
-    <Dialog open={connectOpen} onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }}><DialogContent className="connect-dialog">
-      <div className="dialog-symbol"><FolderOpen size={24} /></div><span className="eyebrow">A PLACE TO START</span>
-      <DialogTitle>Bring your projects together.</DialogTitle>
-      <DialogDescription>Connect the directory where your repositories live. Your files stay on your computer.</DialogDescription>
-      <Button variant="outline" className="browse-button" disabled={!!busy || !('showDirectoryPicker' in window)} onClick={() => connect('browser')}><FolderOpen size={17} />Choose a local directory<ArrowUpRight size={15} /></Button>
-      <p className="field-hint">{'showDirectoryPicker' in window ? 'Read-only folder access. Remembered in this browser for your next visit.' : hosted ? 'Folder picking needs desktop Chrome or Edge. You can still explore the demo here.' : 'Folder picking needs Chrome or Edge. Use the local helper below in this browser.'}</p>
-      {hosted ? <div className="hosted-install-guidance">
-        <h3>Want to run servers or manage packages?</h3>
-        <p>Run Local Repos and its helper on your computer, then open the local address. This hosted page cannot connect to the helper.</p>
-        <Button asChild variant="outline"><a href={installationUrl} target="_blank" rel="noopener noreferrer">Installation on GitHub<ArrowUpRight size={16} /></a></Button>
-      </div> : <>
-        <div className="or-divider"><span />FOR DEV SERVERS & LOCAL ACTIONS<span /></div>
-        <label className="input-label" htmlFor="directory-path">Connect with the local helper <span className={`helper-status ${helper ? 'connected' : ''}`}><span className="status-dot" />{helper ? 'Available' : 'Not connected'}</span></label>
-        <form onSubmit={event => { event.preventDefault(); void connect('helper') }}>
-          <div className="path-input"><Folder size={16} /><input id="directory-path" placeholder="/Users/you/Projects" value={path} onChange={event => setPath(event.target.value)} autoComplete="off" spellCheck={false} /></div>
-          <p className="field-hint">Enter an absolute path. The helper enables previews, dev servers, disk cleanup, package scans, and editor shortcuts.</p>
-          {!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run dev</code>.</p>}
-          <Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button>
-        </form>
-      </>}
-      {connectError && <p className="inline-error" role="alert">{connectError}</p>}
-      <div className="dialog-privacy"><ShieldCheck size={14} />{hosted ? 'Read-only access. Your workspace stays in this browser.' : 'Local workspace. Package scans contact your package registry.'}</div>
-    </DialogContent></Dialog>
+    <ConnectWorkspaceDialog open={connectOpen} busy={busy} hosted={hosted} helper={helper} path={path} error={connectError}
+      onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }} onPathChange={setPath} onConnect={connect} />
 
     <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelectedId(undefined) }}><DialogContent className="project-dialog" onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}>{selected && <><div className="detail-header" role="region" aria-label="Project summary" tabIndex={0}><span className="eyebrow"><FolderGit2 size={14} /> PROJECT OVERVIEW</span><DialogTitle>{selected.name}</DialogTitle><DialogDescription>{selected.description || 'Your local project, at a glance.'}</DialogDescription><div className="detail-tags"><ProjectAiBadge project={selected} />{selected.monorepo && <span>{selected.monorepo.name} / {selected.monorepo.packagePath}</span>}{!!selected.workspacePackageCount && <span>{selected.workspacePackageCount} workspace packages</span>}{selected.stack.map(tech => <span key={tech}>{tech}</span>)}{isDemo && <span className="sample-badge">SAMPLE PROJECT</span>}</div><div className="detail-user-tags">{selected.tags?.map(tag => <button type="button" className="user-project-tag" key={tag} onClick={() => { toggleTag(tag); setSelectedId(undefined) }} aria-label={`Filter by tag: ${tag}`} aria-pressed={selectedTags.has(tagFilterValue(tag))}><Tag size={12} /><span>{tag}</span></button>)}<button id="edit-detail-tags" type="button" className="edit-project-tags" disabled={!tagsReady} onClick={() => editTags(selected)}><Tag size={13} />{selected.tags?.length ? 'Edit tags' : 'Add tags'}</button></div></div><ProjectTabs value={detailTab} onChange={setDetailTab}>{detailTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === selected.id ? `${selected.id}:outdated` : busy} onAction={name => { void action(selected, name) }} /> : detailTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <><ProjectPreview project={selected} large /><div className="metadata-grid"><div><span>VERSION</span><strong>{selected.version ? `v${selected.version}` : 'Not specified'}</strong></div><div><span>AUTHOR</span><strong>{selected.author || 'Not specified'}</strong></div><div><span>BRANCH</span><strong><GitBranch size={14} />{selected.git?.branch || 'Not available'}</strong></div><div><span>LICENSE</span><strong>{selected.license || 'Not specified'}</strong></div></div><div className="commit-row"><GitCommitHorizontal size={18} /><div><strong>{selected.git?.message || 'No commit information available'}</strong><span>{selected.git?.commit?.slice(0, 7)} {selected.git?.committedAt && `· ${relativeTime(selected.git.committedAt)}`}{selected.git?.dirty && ' · Uncommitted changes'}</span></div>{originUrl(selected.git?.origin) && <a href={originUrl(selected.git?.origin)} target="_blank" rel="noreferrer" title="Open Git remote"><ExternalLink size={16} /></a>}</div><ProjectHistory key={`history:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} /><ProjectControls key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} logs={logs} onAction={(name, body) => { void action(selected, name, body) }} /><ProjectStoragePanel key={`storage:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={(name, body) => { void action(selected, name, body) }} /></>}</ProjectTabs><div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'vscode' })}><Code2 size={15} />VS Code</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'sourcetree' })}><GitBranch size={15} />Sourcetree</Button><Button variant="ghost" size="sm" aria-pressed={favoriteIds.has(selected.id)} onClick={() => toggleFavorite(selected.id)}><Star size={15} fill={favoriteIds.has(selected.id) ? 'currentColor' : 'none'} />{favoriteIds.has(selected.id) ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
 
-    <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent className="help-dialog"><Logo /><DialogTitle>A little order. A lot of possibility.</DialogTitle><DialogDescription>Local Repos is a quiet home for your checked-out projects.</DialogDescription><div className="help-steps"><div><span>01</span><div><h3>Connect a directory.</h3><p>Choose your projects folder. We look for repositories and package.json files up to two folders deep, including declared monorepo workspaces and skipping dependencies and build output.</p></div></div><div><span>02</span><div><h3>Find your bearings.</h3><p>README introductions, technologies, package details, and Git history come together in one place. Favorite the projects you return to.</p></div></div><div><span>03</span><div><h3>Pick up where you left off.</h3><p>The local helper opens your editor, runs your dev script, and captures a preview. Only projects you explicitly start are run.</p></div></div></div><div className="help-cache"><ShieldCheck size={20} /><p>Your directory connection and project metadata are cached in IndexedDB. Use resync to read changes or configure automatic scans in Settings → Watcher. The production PWA keeps the interface available offline.</p></div>{workspace?.warnings?.length ? <details className="scan-warnings"><summary>{workspace.warnings.length} scan notes</summary><ul>{workspace.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}{workspace && <Button variant="outline" disabled={!!busy} onClick={() => { void forgetWorkspace(); setHelpOpen(false) }}><Unplug size={15} />Forget this directory</Button>}</DialogContent></Dialog>
+    <WorkspaceHelpDialog open={helpOpen} onOpenChange={setHelpOpen} workspace={workspace} busy={!!busy}
+      onForget={() => { void forgetWorkspace(); setHelpOpen(false) }} />
     {tagProject && <ProjectTagDialog key={tagProject.id} project={tagProject} availableTags={availableTags} onSave={tags => updateTags(tagProject.id, tags)} onClose={() => setTagProjectId(undefined)} returnFocus={restoreTagFocus} />}
     <CriticalVulnerabilityDialog alerts={criticalAlerts} onDismiss={() => setCriticalAlerts([])} onReview={id => { const project = projects.find(item => item.id === id); setCriticalAlerts([]); if (project) openProject(project, 'packages') }} />
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <CircleHelp size={18} /> : <Check size={18} />}<span>{notice.text}</span><button aria-label="Dismiss notification" onClick={() => setNotice(undefined)}><X size={15} /></button></div>}
