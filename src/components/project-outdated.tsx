@@ -35,7 +35,7 @@ export function ProjectOutdated({ project, helper, demo, busy, onAction }: {
     {project.packageUpdate && <div className="package-update-result">
       <p className="maintenance-hint">Last update · {new Date(project.packageUpdate.updatedAt).toLocaleString()} · {project.packageUpdate.packages.length} packages updated. Scan again to refresh outdated and vulnerability results.</p>
       {!!project.packageUpdate.packages.length && <ul>{project.packageUpdate.packages.map(item => <li key={item.name}><strong>{item.name}</strong> <code>{item.from}</code> → <code>{item.to}</code></li>)}</ul>}
-      {!!project.packageUpdate.skipped.length && <details><summary>{project.packageUpdate.skipped.length} packages skipped</summary><ul>{project.packageUpdate.skipped.map((item, index) => <li key={`${item.name}:${index}`}>{item.name}: {item.reason}</li>)}</ul></details>}
+      {!!project.packageUpdate.skipped.length && <details><summary>{project.packageUpdate.skipped.length} packages skipped</summary><ul>{project.packageUpdate.skipped.map(item => <li key={JSON.stringify([item.name, item.reason])}>{item.name}: {item.reason}</li>)}</ul></details>}
     </div>}
     {report ? <>
       <div className="outdated-result" role="status" aria-label="Outdated package scan result">
@@ -44,7 +44,7 @@ export function ProjectOutdated({ project, helper, demo, busy, onAction }: {
       </div>
       <p className="maintenance-hint outdated-explanation">{outdatedScoreExplanation(settings)}</p>
       {!!count && <DependencyUpdates findings={report.findings} />}
-      {!!skipped.length && <details className="outdated-skipped"><summary>{skipped.length} {skipped.length === 1 ? 'package was' : 'packages were'} not compared</summary><p>Skipped packages do not contribute to the score.</p><ul>{skipped.map((item, index) => <li key={`${item.name}:${index}`}><strong>{item.name}</strong><span>{item.reason}</span></li>)}</ul></details>}
+      {!!skipped.length && <details className="outdated-skipped"><summary>{skipped.length} {skipped.length === 1 ? 'package was' : 'packages were'} not compared</summary><p>Skipped packages do not contribute to the score.</p><ul>{skipped.map(item => <li key={JSON.stringify([item.name, item.reason])}><strong>{item.name}</strong><span>{item.reason}</span></li>)}</ul></details>}
       <p className="maintenance-hint">Result saved from the last successful scan. Check again after dependency changes.</p>
     </> : <p className="maintenance-empty">Outdated packages not scanned yet.</p>}
   </section>

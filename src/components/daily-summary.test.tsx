@@ -84,6 +84,41 @@ describe('daily summary', () => {
     expect(text.readOnly).toBe(true)
   })
 
+  it.each(['resolve', 'reject'] as const)('ignores a clipboard %s after the summary filters change', async outcome => {
+    const user = userEvent.setup()
+    vi.mocked(projectDay).mockResolvedValue(report)
+    let resolve!: () => void
+    let reject!: (error: Error) => void
+    vi.spyOn(navigator.clipboard, 'writeText').mockReturnValue(new Promise<void>((yes, no) => { resolve = yes; reject = no }))
+    render(<DailySummary {...props} projects={[root]} />)
+    await screen.findByRole('region', { name: 'Commit timeline' })
+    await user.click(screen.getByRole('button', { name: 'Copy summary' }))
+    await user.selectOptions(screen.getByLabelText('Author'), 'alice@example.com')
+    await act(async () => { if (outcome === 'resolve') resolve(); else reject(new Error('Denied')) })
+    expect(screen.queryByText('Summary copied for your report or bookings.')).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Daily summary report' })).toBeNull()
+    await user.selectOptions(screen.getByLabelText('Author'), '')
+    expect(screen.queryByText('Summary copied for your report or bookings.')).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Daily summary report' })).toBeNull()
+  })
+
+  it('keeps the latest copy feedback when an older request finishes later', async () => {
+    const user = userEvent.setup()
+    vi.mocked(projectDay).mockResolvedValue(report)
+    let rejectOld!: (error: Error) => void
+    vi.spyOn(navigator.clipboard, 'writeText')
+      .mockReturnValueOnce(new Promise<void>((_resolve, reject) => { rejectOld = reject }))
+      .mockResolvedValueOnce()
+    render(<DailySummary {...props} projects={[root]} />)
+    await screen.findByRole('region', { name: 'Commit timeline' })
+    await user.click(screen.getByRole('button', { name: 'Copy summary' }))
+    await user.click(screen.getByRole('button', { name: 'Copy summary' }))
+    expect(await screen.findByText('Summary copied for your report or bookings.')).toBeTruthy()
+    await act(async () => { rejectOld(new Error('Denied')) })
+    expect(screen.getByText('Summary copied for your report or bookings.')).toBeTruthy()
+    expect(screen.queryByRole('textbox', { name: 'Daily summary report' })).toBeNull()
+  })
+
   it('has honest disconnected, empty, invalid-date and complete-failure states', async () => {
     const user = userEvent.setup()
     const { rerender } = render(<DailySummary {...props} helper={false} />)

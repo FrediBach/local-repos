@@ -91,6 +91,21 @@ describe('declared package details', () => {
 })
 
 describe('package audit status', () => {
+  it('keeps focus on the same advisory when findings for one package are reordered', () => {
+    const findings: PackageAudit['findings'] = [
+      { name: 'shared-package', severity: 'high', title: 'First advisory', url: 'https://example.com/first' },
+      { name: 'shared-package', severity: 'high', title: 'Second advisory', url: 'https://example.com/second' },
+    ]
+    const audit = { ...cleanReport, findings }
+    const { rerender } = render(<ProjectPackages {...props} project={{ ...project, audit }} />)
+    const firstLink = screen.getAllByRole('link', { name: /Advisory/ })[0]
+    firstLink.focus()
+    rerender(<ProjectPackages {...props} project={{ ...project, audit: { ...audit, findings: [...findings].reverse() } }} />)
+    expect(document.activeElement).toBe(firstLink)
+    expect(firstLink.getAttribute('href')).toBe('https://example.com/first')
+    expect(screen.getAllByRole('link', { name: /Advisory/ })[1]).toBe(firstLink)
+  })
+
   it('does not imply an unscanned project is clean and starts scanning only on request', async () => {
     const onAction = vi.fn()
     const user = userEvent.setup()

@@ -43,7 +43,7 @@ export function ProjectPackages({ project, helper, demo, busy, onAction }: {
       {report ? <>
         <p className="audit-result" role="status">{total ? `${total} reported ${total === 1 ? 'vulnerability' : 'vulnerabilities'}` : 'No known vulnerabilities reported'}<span>Last scan · {new Date(report.scannedAt).toLocaleString()} · {report.manager}</span></p>
         <div className="audit-counts">{severities.map(severity => <span key={severity} className={`severity severity-${severity} audit-color-${settings.auditColors[severity]}`}><b>{report.counts[severity]}</b> {severity}</span>)}</div>
-        {!!report.findings.length && <ul className="audit-findings">{report.findings.map((finding, index) => <li key={`${finding.name}:${index}`}>
+        {!!report.findings.length && <ul className="audit-findings">{report.findings.map(finding => <li key={JSON.stringify([finding.name, finding.severity, finding.title, finding.range, finding.url])}>
           <div><strong>{finding.name}</strong><span className={`severity severity-${finding.severity} audit-color-${settings.auditColors[finding.severity]}`}>{finding.severity}</span></div>
           <p>{finding.title}</p>
           <div className="finding-detail">{finding.range && <code>{finding.range}</code>}{finding.direct !== undefined && <span>{finding.direct ? 'Direct dependency' : 'Transitive dependency'}</span>}{finding.fixAvailable !== undefined && <span>{finding.fixAvailable ? 'Fix available' : 'No fix reported'}</span>}{advisoryUrl(finding.url) && <a href={advisoryUrl(finding.url)} target="_blank" rel="noreferrer">Advisory <ExternalLink size={11} /></a>}</div>

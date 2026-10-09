@@ -3,12 +3,7 @@ import { HardDrive, LoaderCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import type { RepoProject } from '@/types'
-
-export function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 4)
-  return `${(bytes / 1024 ** index).toFixed(1)} ${['B', 'KiB', 'MiB', 'GiB', 'TiB'][index]}`
-}
+import { formatBytes } from '@/lib/format-bytes'
 
 export function ProjectStoragePanel({ project, helper, demo, busy, onAction }: {
   project: RepoProject; helper: boolean; demo: boolean; busy: string; onAction: (name: string, body?: unknown) => void

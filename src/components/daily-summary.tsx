@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Copy, Download, FolderGit2, GitBranch, GitCommitHorizontal, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { projectDay } from '@/lib/api'
@@ -7,6 +7,7 @@ import type { RepoProject } from '@/types'
 import './daily-summary.css'
 
 interface Props { projects: RepoProject[]; helper: boolean; onConnect: () => void }
+interface CopyContext { key: string; author: string; projectId: string }
 
 export function DailySummary({ projects, helper, onConnect }: Props) {
   const id = useId()
@@ -14,12 +15,16 @@ export function DailySummary({ projects, helper, onConnect }: Props) {
   const [author, setAuthor] = useState('')
   const [projectId, setProjectId] = useState('')
   const [revision, setRevision] = useState(0)
-  const [copied, setCopied] = useState(false)
-  const [copyError, setCopyError] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState<{ context: CopyContext; status: 'copied' | 'error' }>()
+  const copyRequest = useRef(0)
   const [state, setState] = useState<{ key: string; results: SummaryResult[] }>({ key: '', results: [] })
   const repositories = summaryRepositories(projects)
   const repositoryKey = JSON.stringify(repositories)
   const key = JSON.stringify([day, revision, repositoryKey, helper])
+  // A fresh context also prevents old feedback reappearing when filters are restored.
+  const copyContext = useMemo(() => ({ key, author, projectId }), [key, author, projectId])
+  const copied = copyFeedback?.context === copyContext && copyFeedback.status === 'copied'
+  const copyError = copyFeedback?.context === copyContext && copyFeedback.status === 'error'
   const range = dayRange(day)
 
   useEffect(() => {
@@ -44,12 +49,12 @@ export function DailySummary({ projects, helper, onConnect }: Props) {
     return () => { active = false }
   }, [day, helper, repositoryKey, revision, key])
 
-  useEffect(() => { setCopied(false); setCopyError(false) }, [key, author, projectId])
+  useLayoutEffect(() => () => { copyRequest.current += 1 }, [copyContext])
   useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 2500)
+    if (copyFeedback?.status !== 'copied') return
+    const timer = setTimeout(() => setCopyFeedback(undefined), 2500)
     return () => clearTimeout(timer)
-  }, [copied])
+  }, [copyFeedback])
 
   const results = useMemo(() => state.key === key ? state.results : [], [state, key])
   const loading = helper && !!range && (state.key !== key || results.length < repositories.length)
@@ -64,8 +69,14 @@ export function DailySummary({ projects, helper, onConnect }: Props) {
   const changeDay = (value: string) => { setDay(value) }
 
   async function copyReport() {
-    try { await navigator.clipboard.writeText(report); setCopied(true); setCopyError(false) }
-    catch { setCopyError(true) }
+    const request = ++copyRequest.current
+    setCopyFeedback(undefined)
+    try {
+      await navigator.clipboard.writeText(report)
+      if (request === copyRequest.current) setCopyFeedback({ context: copyContext, status: 'copied' })
+    } catch {
+      if (request === copyRequest.current) setCopyFeedback({ context: copyContext, status: 'error' })
+    }
   }
   function downloadReport() {
     const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }))

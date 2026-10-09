@@ -123,6 +123,7 @@ function verifyOutput(output: OutdatedOutput, allowOutdatedExit: boolean): void 
 }
 
 async function modernYarnRows(names: string[], runner: OutdatedRunner, options: ExecFileOptionsWithStringEncoding): Promise<{ rows: VersionRow[]; missing: string[] }> {
+  const requestedNames = new Set(names)
   const installed = await runner('yarn', ['info', '--json', ...names], options)
   verifyOutput(installed, false)
   const current = new Map<string, string>()
@@ -131,7 +132,7 @@ async function modernYarnRows(names: string[], runner: OutdatedRunner, options: 
     const name = /^(@[^/]+\/[^@]+|[^@]+)@/.exec(record.value)?.[1]
     const version = text(record.children.Version)
     if (!name || !version) unsupportedReport()
-    if (names.includes(name)) current.set(name, version)
+    if (requestedNames.has(name)) current.set(name, version)
   }
   const resolved = names.filter(name => current.has(name))
   if (!resolved.length) unsupportedReport()
@@ -277,8 +278,9 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
     // Classic Yarn includes child workspace reports even without recursion.
     if (manager === 'yarn' && !modernYarn) rows = rows.filter(row => row.dependentLocation === undefined || row.dependentLocation === '' || (entry.workspaceDirectory && row.dependentLocation === entry.project.name))
     const findings = new Map<string, OutdatedFinding>()
+    const requestedNames = new Set(names)
     for (const row of rows) {
-      if (!names.includes(row.name)) continue
+      if (!requestedNames.has(row.name)) continue
       const gap = row.current ? scoreVersionGap(row.current, row.latest) : undefined
       if (gap === undefined) {
         if (!skipped.some(value => value.name === row.name)) skipped.push({ name: row.name, reason: row.current ? 'The current or latest version is not a comparable semantic version.' : 'No resolved current version is available; install this dependency before comparing it.' })
