@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { defaultSettings, normalizeSettings, PREFERENCES_CHANGED_EVENT, readSettings, SETTINGS_STORAGE_KEY, validateSettings, type AppSettings } from '@/lib/settings'
+import { defaultSettings, LEGACY_SETTINGS_STORAGE_KEY, normalizeSettings, PREFERENCES_CHANGED_EVENT, readSettings, SETTINGS_STORAGE_KEY, validateSettings, type AppSettings } from '@/lib/settings'
 
 const SettingsContext = createContext({
   settings: defaultSettings,
@@ -10,7 +10,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState(readSettings)
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === SETTINGS_STORAGE_KEY || event.key === null) setSettings(readSettings())
+      if (event.key === SETTINGS_STORAGE_KEY || event.key === LEGACY_SETTINGS_STORAGE_KEY || event.key === null) setSettings(readSettings())
     }
     const onImport = () => setSettings(readSettings())
     window.addEventListener('storage', onStorage)

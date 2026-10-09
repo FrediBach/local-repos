@@ -32,7 +32,11 @@ export function ProjectResults({ projects, allProjects = projects, favoriteIds, 
           </section>
           : renderProject(group.items[0]))}</div> : <ProjectEmptyState filter={filter} hasRefinements={hasRefinements} emptyWorkspace={emptyWorkspace}
           onReset={onReset} />}
-        <footer className="page-footer"><span>{projects.length.toString().padStart(2, '0')} {projects.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span><span><ShieldCheck size={13} /> No cloud. No clutter.</span></footer>
+        <footer className="page-footer">
+          <span>{projects.length.toString().padStart(2, '0')} {projects.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span>
+          <span className="footer-privacy"><ShieldCheck size={13} /> No cloud. No clutter.</span>
+          <span className="footer-copyright">© {new Date().getFullYear()} <a href="https://fredibach.com" target="_blank" rel="noopener noreferrer">Fredi Bach</a></span>
+        </footer>
         {isDemo && <div className="demo-note"><span>You’re looking at an example workspace.</span><button onClick={onConnect}>Make it yours <ArrowRight size={13} /></button></div>}
   </>
 }

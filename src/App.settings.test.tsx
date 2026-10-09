@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import { defaultSettings, SETTINGS_STORAGE_KEY } from './lib/settings'
+import { defaultSettings, LEGACY_SETTINGS_STORAGE_KEY, SETTINGS_STORAGE_KEY } from './lib/settings'
 import type { RepoProject } from './types'
 
 const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
@@ -36,6 +36,27 @@ const auditBadge = () => screen.getByRole('button', { name: /Alpha: 1 vulnerabil
 const outdatedBadge = () => screen.getByRole('button', { name: /Alpha: 1 outdated package/ })
 
 describe('workspace settings dialog', () => {
+  it('shows technologies beyond the old default and remembers a newly chosen smaller limit', async () => {
+    preferences.set(LEGACY_SETTINGS_STORAGE_KEY, JSON.stringify({ ...defaultSettings, sidebarTechnologyLimit: 7, colorScheme: 'sand' }))
+    storage.loadWorkspace.mockResolvedValue({ rootName: 'Projects', mode: 'browser', projects: [{ ...project, stack: Array.from({ length: 12 }, (_, index) => `Technology ${index + 1}`) }], syncedAt: project.scannedAt })
+    const { user, unmount } = await setup()
+    const technologyButtons = () => within(screen.getByRole('navigation', { name: 'Filter by technology' })).getAllByRole('button')
+    expect(technologyButtons()).toHaveLength(12)
+    expect(document.documentElement.dataset.colorScheme).toBe('sand')
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    const limit = screen.getByRole('spinbutton', { name: 'Technologies in sidebar' })
+    expect((limit as HTMLInputElement).value).toBe('50')
+    await user.clear(limit)
+    await user.type(limit, '7')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(technologyButtons()).toHaveLength(7)
+    unmount()
+    await setup()
+    expect(technologyButtons()).toHaveLength(7)
+    expect(document.documentElement.dataset.colorScheme).toBe('sand')
+  })
+
   it('validates, saves and restores a custom push-reminder time and disabled preference', async () => {
     const { user, unmount } = await setup()
     await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))

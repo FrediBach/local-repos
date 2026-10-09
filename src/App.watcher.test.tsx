@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { defaultSettings } from './lib/settings'
+import { defaultSettings, SETTINGS_STORAGE_KEY } from './lib/settings'
 import type { Workspace } from './types'
 
 const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
@@ -22,6 +22,7 @@ const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
 
 beforeEach(() => {
   vi.useFakeTimers(); vi.resetAllMocks()
+  vi.setSystemTime(new Date(2026, 9, 9, 12))
   settings = { ...defaultSettings, watcherMode: 'periodic', watcherIntervalMinutes: 1 }
   vi.stubGlobal('localStorage', { getItem: () => JSON.stringify(settings), setItem: vi.fn() })
   storage.loadWorkspace.mockResolvedValue(workspace)
@@ -111,7 +112,7 @@ describe('automatic workspace scans', () => {
     await setup()
     await advance(60_000)
     settings.watcherMode = 'manual'
-    await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: 'local-repos:settings:v1' })) })
+    await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: SETTINGS_STORAGE_KEY })) })
     await act(async () => { finish(response({ audit })) })
     await advance(120_000)
     expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/health', '/api/scan', '/api/projects/alpha/audit'])

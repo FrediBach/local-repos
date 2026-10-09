@@ -101,6 +101,8 @@ The cog beside the top-right help icon opens **Settings**:
 
 Settings are stored in localStorage for this browser and app origin, independently of the connected directory, and changes synchronize between open tabs. If storage is unavailable, the dialog reports the failure and keeps the previously applied settings. Package lag measures version distance, not release age in days; vulnerability labels and counts continue to reflect the package manager's report.
 
+The desktop sidebar shows up to 50 technologies by default. Only the technology list scrolls, keeping workspace navigation and directory/help controls visible. Adjust the limit in **Settings → Interface → Technologies in sidebar**. Saved preferences using the old seven-technology default expand to 50; other saved limits are preserved.
+
 ### Export and import configuration
 
 Open **Settings → Backup → Export JSON** to download your saved settings (including watcher rules and color scheme), System/Light/Dark preference, favorites, and project tags. Save pending settings edits before exporting. The versioned JSON contains project identifiers, relative paths, and Git remotes for matching; it excludes remote credentials, absolute workspace paths, directory permissions, project files, previews, and scan results.

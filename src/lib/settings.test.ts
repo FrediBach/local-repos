@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest'
-import { defaultSettings, normalizeSettings, validateSettings } from './settings'
+import { describe, expect, it, vi } from 'vitest'
+import { defaultSettings, LEGACY_SETTINGS_STORAGE_KEY, normalizeSettings, readSettings, SETTINGS_STORAGE_KEY, validateSettings } from './settings'
 
 describe('workspace settings', () => {
+  it('expands the legacy sidebar default while retaining other preferences and subsequent custom limits', () => {
+    const saved = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (key: string) => saved.get(key) ?? null })
+    try {
+      expect(readSettings().sidebarTechnologyLimit).toBe(50)
+      saved.set(LEGACY_SETTINGS_STORAGE_KEY, JSON.stringify({ sidebarTechnologyLimit: 7, colorScheme: 'sand', watcherMode: 'changes', projectTagLimit: 2 }))
+      expect(readSettings()).toMatchObject({ sidebarTechnologyLimit: 50, colorScheme: 'sand', watcherMode: 'changes', projectTagLimit: 2 })
+      saved.set(LEGACY_SETTINGS_STORAGE_KEY, JSON.stringify({ sidebarTechnologyLimit: 12, colorScheme: 'plum' }))
+      expect(readSettings()).toMatchObject({ sidebarTechnologyLimit: 12, colorScheme: 'plum' })
+      saved.set(SETTINGS_STORAGE_KEY, JSON.stringify({ ...defaultSettings, sidebarTechnologyLimit: 7, colorScheme: 'ocean' }))
+      expect(readSettings()).toMatchObject({ sidebarTechnologyLimit: 7, colorScheme: 'ocean' })
+    } finally { vi.unstubAllGlobals() }
+  })
+
   it('defaults push reminders to 18:00 and validates configurable local times', () => {
     expect(normalizeSettings({})).toMatchObject({ pushReminderEnabled: true, pushReminderTime: '18:00' })
     expect(normalizeSettings({ pushReminderEnabled: false, pushReminderTime: '17:30' })).toMatchObject({ pushReminderEnabled: false, pushReminderTime: '17:30' })

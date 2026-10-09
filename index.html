@@ -10,7 +10,7 @@
       (() => {
         let preference, scheme;
         try { preference = localStorage.getItem('local-repos:theme'); } catch {}
-        try { scheme = JSON.parse(localStorage.getItem('local-repos:settings:v1'))?.colorScheme; } catch {}
+        try { scheme = JSON.parse(localStorage.getItem('local-repos:settings:v2') ?? localStorage.getItem('local-repos:settings:v1'))?.colorScheme; } catch {}
         const backgrounds = {
           forest: ['#f8f9f5', '#181d17'], ocean: ['#f5f8fa', '#161d24'],
           plum: ['#faf7fb', '#201a23'], sand: ['#faf8f4', '#211c17'],

@@ -4,7 +4,8 @@ import { normalizeColorScheme, type ColorScheme } from './color-schemes'
 export type BadgeColor = 'red' | 'orange' | 'blue' | 'neutral'
 export const badgeColors: BadgeColor[] = ['red', 'orange', 'blue', 'neutral']
 export const auditSeverities: AuditSeverity[] = ['critical', 'high', 'moderate', 'low', 'info']
-export const SETTINGS_STORAGE_KEY = 'local-repos:settings:v1'
+export const SETTINGS_STORAGE_KEY = 'local-repos:settings:v2'
+export const LEGACY_SETTINGS_STORAGE_KEY = 'local-repos:settings:v1'
 export const PREFERENCES_CHANGED_EVENT = 'local-repos:preferences-changed'
 export type WatcherMode = 'manual' | 'periodic' | 'changes'
 
@@ -26,7 +27,7 @@ export const numericSettings = {
   dormantActivityDays: { label: 'Long inactive after (days)', default: 365, min: 1, max: 36500, step: 1 },
   largeProjectGiB: { label: 'Large project threshold (GiB)', default: 1, min: 0.1, max: 10000, step: 0.1 },
   heavyNodeModulesMiB: { label: 'Large node_modules threshold (MiB)', default: 500, min: 1, max: 1000000, step: 1 },
-  sidebarTechnologyLimit: { label: 'Technologies in sidebar', default: 7, min: 1, max: 50, step: 1 },
+  sidebarTechnologyLimit: { label: 'Technologies in sidebar', default: 50, min: 1, max: 50, step: 1 },
   projectTagLimit: { label: 'Technology tags per project', default: 3, min: 0, max: 20, step: 1 },
   packageMatchLimit: { label: 'Package matches per project', default: 3, min: 1, max: 20, step: 1 },
   statusPollSeconds: { label: 'Server status refresh (seconds)', default: 4, min: 1, max: 300, step: 1 },
@@ -119,7 +120,16 @@ export function validateSettings(settings: AppSettings): Partial<Record<Settings
 }
 
 export function readSettings(): AppSettings {
-  try { return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? 'null')) } catch { return normalizeSettings(null) }
+  try {
+    const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (saved !== null) return normalizeSettings(JSON.parse(saved))
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY) ?? 'null')
+    const settings = normalizeSettings(legacy)
+    // Expand the old default for the scrollable sidebar. New saves use v2 so
+    // choosing a limit of seven again remains an explicit, persistent choice.
+    if (isRecord(legacy) && legacy.sidebarTechnologyLimit === 7) settings.sidebarTechnologyLimit = defaultSettings.sidebarTechnologyLimit
+    return settings
+  } catch { return normalizeSettings(null) }
 }
 
 export function highestAuditSeverity(report: PackageAudit): AuditSeverity | undefined {
