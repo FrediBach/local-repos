@@ -102,7 +102,7 @@ describe('workspace vulnerability scans', () => {
     const reactScan = screen.getByRole('button', { name: 'Scan React projects', exact: true })
     expect(scanButton().nextElementSibling).toBe(reactScan)
     expect(reactScan.nextElementSibling).toBe(screen.getByRole('button', { name: 'Capture previews', exact: true }))
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'Bravo site')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo site')
     expect(screen.getAllByRole('article')).toHaveLength(1)
     const savedFirst = deferred<void>()
     storage.saveWorkspace.mockReturnValueOnce(savedFirst.promise)

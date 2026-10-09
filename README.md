@@ -52,6 +52,39 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 
 Only one workspace is displayed at a time. Metadata, captured previews, favorites, project tags, and the browser directory handle are stored in IndexedDB for this browser and app origin. Tags are saved independently of scanned metadata and survive rescans, helper restarts, and reconnecting the same directory using the same connection method. They belong to individual projects, including workspace members; repository files are never edited. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
 
+## Search and launch actions
+
+Focus search or press **⌘K / Ctrl+K** to discover projects, actions, scripts,
+filters, and workspace shortcuts. Suggestions include projects hidden by the
+current filters. Choose a project to browse its available actions, or choose an
+action first and then its project. You can also combine terms, such as
+`finder my-app`, `my-app vulnerability check`, or `build my-app`.
+
+- Open a project folder in Finder / your system file manager, your preferred
+  editor, or your Git client.
+- Rerun vulnerability, outdated-package, unused-package, React Doctor, and disk
+  checks; start or stop development servers; view logs; or capture a preview.
+- Choose **Run a script** to discover named scripts across projects, including
+  custom scripts. Each suggestion shows its project, directory, and command.
+  Selecting it launches the existing script in your terminal, where you can
+  follow its output and stop it.
+- Choose **Add or edit tags** for existing tag suggestions and custom labels,
+  toggle favorites, read documentation, or review project todos.
+- Find filters by tag, technology, branch, maintenance status, and other scanned
+  metadata. Package suggestions complete dependency names and declared versions;
+  **Package name & version** restricts suggestions and filtering to dependencies.
+- Open settings, daily summaries, todos, resync, or scans across the workspace.
+  Package updates and dependency cleanup open their existing review controls.
+
+Use **↑ / ↓** to browse, **Enter** to select, and **Tab** to complete a project,
+action category, or package. Tab never launches a script or helper operation.
+**Escape** dismisses suggestions without clearing search; **Backspace** in an
+empty scoped search returns to all commands. Ordinary typing continues to filter
+the project library. Local actions show when a helper connection is required and
+open the connection flow; running operations disable further helper actions.
+Script names and displayed commands are checked against the current manifest by
+the helper before launch. Search text itself is never executed.
+
 ## Daily summary
 
 Choose **Daily summary** in the workspace sidebar to review a workday across all connected projects, including projects hidden by library filters. This feature needs a **local helper** connection. It opens on today; choose another date, use the previous/next arrows, or choose **Today** to return. **Refresh** reads new commits without a full workspace rescan.

@@ -62,7 +62,7 @@ async function complete(id: string, body: unknown = { reactDoctor: report }, ok 
 describe('React Doctor actions', () => {
   it('scans every React project despite filters, skips other frameworks, and saves reports sequentially', async () => {
     const user = await renderConnected()
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'Bravo')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo')
     await user.click(scanButton())
     expect(requests().map(([url]) => url)).toEqual(['/api/projects/alpha/react-doctor'])
     expect((screen.getByRole('button', { name: 'Scan vulnerabilities', exact: true }) as HTMLButtonElement).disabled).toBe(true)

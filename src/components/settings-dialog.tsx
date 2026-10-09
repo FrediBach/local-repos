@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useId, useRef, useState, type Ref } from 'react'
 import { RotateCcw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -15,7 +15,7 @@ type SettingsTab = typeof tabs[number]
 const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface', applications: 'Applications', backup: 'Backup' }
 const fieldTabs = (key: SettingsErrorKey): SettingsTab => key === 'pushReminderTime' ? 'interface' : key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
 
-export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
+export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupControls; triggerRef?: Ref<HTMLButtonElement> }) {
   const { settings, saveSettings } = useSettings()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(settings)
@@ -54,7 +54,7 @@ export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
   }
 
   return <Dialog open={open} onOpenChange={changeOpen}>
-    <DialogTrigger asChild><button type="button" className="workspace-info-button settings-trigger" aria-label="Settings" title="Settings"><Settings size={17} /></button></DialogTrigger>
+    <DialogTrigger asChild><button ref={triggerRef} type="button" className="workspace-info-button settings-trigger" aria-label="Settings" title="Settings"><Settings size={17} /></button></DialogTrigger>
     <DialogContent className="settings-dialog">
       <div className="settings-header"><DialogTitle><Settings size={20} />Settings</DialogTitle><DialogDescription>Appearance, badge rules, and workspace preferences.</DialogDescription></div>
       <form noValidate onSubmit={event => { event.preventDefault(); save() }}>

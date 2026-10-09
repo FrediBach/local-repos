@@ -25,6 +25,8 @@ import { ProjectFilters } from '@/components/project-filters'
 import { ProjectTagDialog } from '@/components/project-tags'
 import { normalizeTags, type ProjectTags } from '@/lib/project-tags'
 import { isRunning } from '@/lib/project-filters'
+import { projectCommands, type ProjectCommand } from '@/lib/project-commands'
+import type { WorkspaceCommandId } from '@/lib/project-search'
 import { useProjectFiltering } from '@/hooks/use-project-filtering'
 import { PreviewBatchProgress } from '@/components/preview-batch-progress'
 import { useWorkspaceActions } from '@/hooks/use-workspace-actions'
@@ -75,6 +77,7 @@ function WorkspaceApp() {
   const [installPrompt, setInstallPrompt] = useState<InstallEvent>()
   const [online, setOnline] = useState(navigator.onLine)
   const searchRef = useRef<HTMLInputElement>(null)
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null)
   const projectOpener = useRef<HTMLElement | null>(null)
   const workspaceVersion = useRef(0)
   const favoritesVersion = useRef(0)
@@ -92,7 +95,7 @@ function WorkspaceApp() {
   const favoriteIds = useMemo(() => new Set(favorites), [favorites])
   const favoriteCount = projects.filter(p => favoriteIds.has(p.id)).length
   const stacks = useMemo(() => [...new Set(projects.flatMap(p => p.stack))].sort((a, b) => projects.filter(p => p.stack.includes(b)).length - projects.filter(p => p.stack.includes(a)).length).slice(0, settings.sidebarTechnologyLimit), [projects, settings.sidebarTechnologyLimit])
-  const { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchScope, setSearchScope, sort, setSort, page, setPage,
+  const { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchReset, searchScope, setSearchScope, sort, setSort, page, setPage,
     filterContext, filterGroups, searched, filtered, hasFilters, hasRefinements, clearFilters, toggleTechnology, toggleTag, navigate } = useProjectFiltering(projects, favorites)
   const watcher = useWorkspaceWatcher({ workspace, settings, busy: !!busy, online, run: runAutomaticScan })
   const pushReminder = usePushReminder({ workspace, settings, busy: !!busy })
@@ -121,7 +124,7 @@ function WorkspaceApp() {
     if (!hosted) api<{ ok: boolean }>('/health').then(result => active && setHelper(result.ok)).catch(() => {})
     const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallEvent) }
     const onOnline = () => setOnline(navigator.onLine)
-    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); setPage('projects'); requestAnimationFrame(() => searchRef.current?.focus()) } }
+    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !document.querySelector('[role="dialog"]')) { event.preventDefault(); setPage('projects'); requestAnimationFrame(() => searchRef.current?.focus()) } }
     window.addEventListener('beforeinstallprompt', onInstall)
     window.addEventListener('online', onOnline); window.addEventListener('offline', onOnline)
     window.addEventListener('keydown', onKey)
@@ -191,7 +194,7 @@ function WorkspaceApp() {
   }
   function openProject(project: RepoProject, tab: ProjectTab = 'overview') {
     const active = document.activeElement
-    projectOpener.current = active instanceof HTMLElement && active.closest('.project-card, .project-todos') ? active : document.getElementById(`project-open-${project.id}`)
+    projectOpener.current = active instanceof HTMLElement && active.closest('.project-card, .project-todos, .command-search') ? active : document.getElementById(`project-open-${project.id}`)
     setSelectedId(project.id); setDetailTab(tab); setLogs(undefined)
   }
   function openTodos(project?: RepoProject) {
@@ -203,6 +206,37 @@ function WorkspaceApp() {
     const next = favorites.includes(id) ? favorites.filter(item => item !== id) : [...favorites, id]
     setFavorites(next)
     void saveFavorites(next).catch(() => setNotice({ text: 'Could not save favorites in this browser.', error: true }))
+  }
+  function runCommand(project: RepoProject, selectedCommand: ProjectCommand) {
+    // Resolve from current metadata; the helper also revalidates script commands.
+    const command = projectCommands(project, settings, favoriteIds.has(project.id)).find(item => item.id === selectedCommand.id)
+    if (!command || (command.helper && busy)) return
+    const intent = command.intent
+    if (intent.kind === 'details') openProject(project, intent.tab)
+    else if (intent.kind === 'tags') { if (tagsReady) editTags(project) }
+    else if (intent.kind === 'favorite') toggleFavorite(project.id)
+    else if (intent.kind === 'todos') openTodos(project)
+    else {
+      if (intent.name === 'logs' && workspace?.mode === 'helper') openProject(project)
+      void action(project, intent.name, intent.body)
+    }
+  }
+  function runWorkspaceCommand(command: WorkspaceCommandId) {
+    const commands: Record<WorkspaceCommandId, () => void> = {
+      'all-projects': () => navigate('all'),
+      favorites: () => { setPage('projects'); setFilters({ stars: ['starred'] }) },
+      running: () => { setPage('projects'); setFilters({ server: ['running'] }) },
+      summary: () => setPage('summary'), todos: () => openTodos(),
+      resync: () => { void resync() },
+      connect: () => { if (!busy) { setConnectError(''); setConnectOpen(true) } },
+      help: () => setHelpOpen(true), settings: () => settingsTriggerRef.current?.click(),
+      'clear-filters': clearFilters,
+      'audit-all': () => { void scanAllVulnerabilities() },
+      'outdated-all': () => { void scanAllOutdated() },
+      'react-doctor-all': () => { void scanAllReactDoctor() },
+      'previews-all': () => { void captureAllPreviews() },
+    }
+    commands[command]()
   }
   async function connect(mode: 'browser' | 'helper') {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
@@ -269,7 +303,7 @@ function WorkspaceApp() {
       onInstall={installPrompt ? async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) } : undefined} />
 
     <main className="main-content" id="projects" tabIndex={-1}>
-      <WorkspaceTopbar page={page} stack={stack} filter={filter} hasFilters={hasFilters} hosted={hosted} online={online}
+      <WorkspaceTopbar settingsTriggerRef={settingsTriggerRef} page={page} stack={stack} filter={filter} hasFilters={hasFilters} hosted={hosted} online={online}
         connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
@@ -289,7 +323,9 @@ function WorkspaceApp() {
         {outdatedBatch.progress && <OutdatedBatchProgress progress={outdatedBatch.progress} onStop={outdatedBatch.stop} onDismiss={outdatedBatch.dismiss} />}
         {reactDoctorBatch.progress && <ReactDoctorBatchProgress progress={reactDoctorBatch.progress} onStop={reactDoctorBatch.stop} onDismiss={reactDoctorBatch.dismiss} />}
 
-        <ProjectSearchToolbar searchRef={searchRef} query={query} setQuery={setQuery} searchScope={searchScope} setSearchScope={setSearchScope}
+        <ProjectSearchToolbar key={`${workspace?.mode ?? 'demo'}:${workspace?.rootPath ?? workspace?.rootName ?? ''}:${searchReset}`} searchRef={searchRef} query={query} setQuery={setQuery} searchScope={searchScope} setSearchScope={setSearchScope}
+          projects={projects} favorites={favorites} filterGroups={filterGroups} helper={workspace?.mode === 'helper'} busy={!!busy} tagsReady={tagsReady}
+          onCommand={runCommand} onWorkspaceCommand={runWorkspaceCommand} onFilter={(key, value) => setFilters(current => ({ ...current, [key]: filterGroups.find(group => group.key === key)?.multiple ? [...new Set([...(current[key] ?? []), value])] : [value] }))}
           sort={sort} setSort={setSort} view={view} setView={setView} />
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 

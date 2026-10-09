@@ -236,7 +236,7 @@ describe('workspace preview capture queue', () => {
 
   it('captures the entire workspace even when the visible list is filtered', async () => {
     const { user } = await renderConnected()
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'Bravo site')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo site')
     expect(screen.getAllByRole('article')).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'Capture previews', exact: true }))
     expect(progress().getAttribute('aria-valuemax')).toBe('3')

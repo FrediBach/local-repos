@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react'
+import type { ComponentProps, Ref } from 'react'
 import { CircleHelp, FolderOpen } from 'lucide-react'
 import { Button } from './ui/button'
 import { ThemeControl } from './theme-control'
@@ -6,6 +6,7 @@ import { SettingsDialog } from './settings-dialog'
 import { HostedNotice } from './hosted-notice'
 
 interface Props {
+  settingsTriggerRef?: Ref<HTMLButtonElement>
   page: 'projects' | 'summary' | 'todos'
   stack: string | null
   filter: 'all' | 'favorites' | 'running'
@@ -19,7 +20,7 @@ interface Props {
   backup: ComponentProps<typeof SettingsDialog>['backup']
 }
 
-export function WorkspaceTopbar({ page, stack, filter, hasFilters, hosted, online, connected, busy, onConnect, onHelp, backup }: Props) {
+export function WorkspaceTopbar({ settingsTriggerRef, page, stack, filter, hasFilters, hosted, online, connected, busy, onConnect, onHelp, backup }: Props) {
   const pageName = page === 'todos' ? 'Todos' : page === 'summary' ? 'Daily summary' : stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
   const statusLabel = online ? 'All local. All yours.' : 'Offline · cached workspace'
   return <header className="topbar">
@@ -37,7 +38,7 @@ export function WorkspaceTopbar({ page, stack, filter, hasFilters, hosted, onlin
         <ThemeControl />
         <span className="topbar-utility-divider" aria-hidden="true" />
         <button type="button" className="workspace-info-button" aria-label="Workspace info" title="Workspace info" onClick={onHelp}><CircleHelp size={17} aria-hidden="true" /></button>
-        <SettingsDialog backup={backup} />
+        <SettingsDialog backup={backup} triggerRef={settingsTriggerRef} />
       </div>
     </div>
   </header>

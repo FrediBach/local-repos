@@ -80,6 +80,35 @@ They reject stale results when the selected day or workspace changes. Push
 reminders also use up to three workers, defer while busy or hidden, and use the
 browser's local day and configured reminder time.
 
+## Search and command discovery
+
+[`project-command-search.tsx`](../src/components/project-command-search.tsx)
+extends the project toolbar with an accessible autocomplete list. It keeps the
+project/action selection and keyboard cursor locally; normal query text still
+belongs to `useProjectFiltering`. Project or action selection clears the library
+query and narrows the suggestions. Changing workspace identity remounts the search
+so a selection cannot carry into another directory. Suggestions always use all
+current projects, including those hidden by library filters.
+
+[`project-commands.ts`](../src/lib/project-commands.ts) describes available
+operations, aliases, capabilities, and script payloads without executing them.
+[`project-search.ts`](../src/lib/project-search.ts) combines that catalog with
+project metadata, filter groups, workspace shortcuts, and dependency/version
+completions. A memoized index prepares the catalog and normalized search fields
+when projects, preferences, or filter options change; keystrokes reuse that index.
+Script discovery reuses `discoverProjectScripts`; fuzzy and partial
+matching never generates commands. The list renders suggestions in pages while
+keeping all matches reachable by keyboard or the show-more control.
+
+Selections delegate to `App` callbacks and the existing workspace action hook,
+tag editor, settings trigger, and filter state. `App` resolves the selected
+command against current project metadata before dispatch. Helper operations
+retain connection, busy, batch, version, and watcher coordination; the helper
+continues validating the script name and displayed command against the current
+manifest. Cleanup and package mutation suggestions open existing review controls
+and retain their confirmation behavior. No new API or durable search state is
+introduced. Project and tag dialogs restore focus to the search opener.
+
 ## Persistence and identity
 
 | Storage | Contents | Identity |

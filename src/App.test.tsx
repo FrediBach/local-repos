@@ -101,12 +101,12 @@ describe('project workspace interactions', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: `View ${project.name}` })
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'no match')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'no match')
     await user.click(screen.getByRole('button', { name: 'Daily summary' }))
     expect(await screen.findByRole('region', { name: 'Commit timeline' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Daily summary' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Daily summary' }).getAttribute('aria-current')).toBe('page')
-    expect(screen.queryByRole('textbox', { name: 'Search projects' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Search projects' })).toBeNull()
     await user.click(screen.getByRole('button', { name: /^All projects/ }))
     expect(screen.getByRole('button', { name: `View ${project.name}` })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: `Favorite ${project.name}`, exact: true }))
@@ -217,12 +217,12 @@ describe('project workspace interactions', () => {
     expect(screen.getByText('You’re looking at an example workspace.')).toBeTruthy()
     expect(screen.getAllByRole('article')).toHaveLength(6)
 
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'FEAT/EDITOR')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'FEAT/EDITOR')
     expect(screen.getAllByRole('article')).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'View margin' })).toBeTruthy()
 
-    await user.clear(screen.getByRole('textbox', { name: 'Search projects' }))
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'no-such-project')
+    await user.clear(screen.getByRole('combobox', { name: 'Search projects' }))
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'no-such-project')
     expect(screen.getByRole('heading', { name: 'A little too quiet here.' })).toBeTruthy()
     expect(screen.queryAllByRole('article')).toHaveLength(0)
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
@@ -286,7 +286,7 @@ describe('project workspace interactions', () => {
       headers: expect.objectContaining({ 'X-Local-Repos': '1' }),
     }))
     expect(storage.saveWorkspace).toHaveBeenCalledWith({ ...scan, mode: 'helper' })
-    expect(screen.getByRole('status').textContent).toContain('Found 1 project.')
+    expect(screen.getByText(/Found 1 project\./).closest('[role="status"]')).toBeTruthy()
   })
 
   it('keeps the connect dialog recoverable on a failed scan without replacing the current projects', async () => {
@@ -318,8 +318,8 @@ describe('project workspace interactions', () => {
 
     await screen.findByRole('button', { name: 'View my-notebook' })
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.getByRole('alert').textContent).toContain('Projects loaded, but browser storage could not save this workspace.')
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByText('Projects loaded, but browser storage could not save this workspace.').closest('[role="alert"]')).toBeTruthy()
+    expect(screen.queryByText(/Found 1 project\./)).toBeNull()
     expect(screen.getAllByRole('article')).toHaveLength(1)
   })
 
@@ -338,7 +338,7 @@ describe('project workspace interactions', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1)
 
     await user.click(screen.getByRole('button', { name: /^Synced/ }))
-    expect((await screen.findByRole('alert')).textContent).toContain('Failed to fetch')
+    expect((await screen.findByText('Failed to fetch')).closest('[role="alert"]')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'View my-notebook' })).toBeTruthy()
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
   })

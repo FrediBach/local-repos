@@ -63,7 +63,7 @@ async function complete(id: string, body: unknown = { outdated: report }, ok = t
 describe('outdated-package actions', () => {
   it('scans the entire workspace sequentially, persists each result, and sums scores despite filtering', async () => {
     const user = await renderConnected()
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'Bravo')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo')
     expect(screen.getAllByRole('article')).toHaveLength(1)
     await user.click(scanButton())
     expect(requests().map(([url]) => url)).toEqual(['/api/projects/alpha/outdated'])

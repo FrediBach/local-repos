@@ -118,7 +118,7 @@ describe('workspace package search', () => {
 
   it('includes declared package names in general search and displays the declared version in grid and list results', async () => {
     const user = await renderConnected()
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), '@ACME/WIDGETS')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), '@ACME/WIDGETS')
     expect(screen.getAllByRole('article')).toHaveLength(1)
     const card = screen.getByRole('article')
     expect(within(card).getByRole('button', { name: 'View Notebook' })).toBeTruthy()
@@ -135,7 +135,7 @@ describe('workspace package search', () => {
 
   it('limits package-only search to projects declaring matching dependencies', async () => {
     const user = await renderConnected()
-    await user.type(screen.getByRole('textbox', { name: 'Search projects' }), 'ReAcT')
+    await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'ReAcT')
     expect(screen.getAllByRole('article')).toHaveLength(3)
     expect(screen.getByRole('button', { name: 'View react-handbook' })).toBeTruthy()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Search scope' }), 'packages')
@@ -162,7 +162,7 @@ describe('workspace package search', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: 'View Next project 0' })
-    const search = screen.getByRole('textbox', { name: 'Search projects' })
+    const search = screen.getByRole('combobox', { name: 'Search projects' })
     await user.type(search, 'next@16.*.*')
     expect(screen.getAllByRole('article')).toHaveLength(2)
     expect(screen.getByText('^16.2.1')).toBeTruthy()

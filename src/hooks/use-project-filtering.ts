@@ -13,6 +13,7 @@ export function useProjectFiltering(projects: RepoProject[], favorites: string[]
   const filter: Filter = filters.stars?.includes('starred') ? 'favorites' : filters.server?.includes('running') ? 'running' : 'all'
   const stack = filters.stack?.length === 1 ? filters.stack[0] : null
   const [query, setQuery] = useState('')
+  const [searchReset, setSearchReset] = useState(0)
   const [searchScope, setSearchScope] = useState<'all' | 'packages'>('all')
   const [sort, setSort] = useState<ProjectSort>('updated')
   const [page, setPage] = useState<'projects' | 'summary' | 'todos'>('projects')
@@ -24,7 +25,7 @@ export function useProjectFiltering(projects: RepoProject[], favorites: string[]
   const hasFilters = Object.values(filters).some(values => values.length > 0)
   const hasRefinements = !!query.trim() || Object.entries(filters).some(([key, values]) => values.length > 0 && !(key === 'stars' && values[0] === 'starred') && !(key === 'server' && values[0] === 'running')) || (filter === 'favorites' && !!filters.server?.length)
 
-  function clearFilters() { setFilters({}); setQuery('') }
+  function clearFilters() { setFilters({}); setQuery(''); setSearchReset(value => value + 1) }
   function toggleTechnology(technology: string) {
     setPage('projects')
     setFilters(current => ({ ...current, stack: current.stack?.includes(technology) ? current.stack.filter(value => value !== technology) : [...current.stack ?? [], technology] }))
@@ -41,6 +42,6 @@ export function useProjectFiltering(projects: RepoProject[], favorites: string[]
     setFilters(current => ({ ...current, [key]: page === 'projects' && current[key]?.includes(value) ? [] : [value] }))
   }
 
-  return { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchScope, setSearchScope, sort, setSort, page, setPage,
+  return { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchReset, searchScope, setSearchScope, sort, setSort, page, setPage,
     filterContext, filterGroups, searched, filtered, hasFilters, hasRefinements, clearFilters, toggleTechnology, toggleTag, navigate }
 }
