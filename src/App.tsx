@@ -1,21 +1,20 @@
+import { WorkspaceTopbar } from '@/components/workspace-topbar'
+import { ProjectResults } from '@/components/project-results'
+import { WorkspaceWatcherStatus } from '@/components/workspace-watcher-status'
+import { WorkspaceNotice } from '@/components/workspace-notice'
 import { WorkspaceSidebar } from '@/components/workspace-sidebar'
 import { WorkspaceToolbar } from '@/components/workspace-toolbar'
 import { ProjectSearchToolbar } from '@/components/project-search-toolbar'
 import { ProjectDetailDialog } from '@/components/project-detail-dialog'
-import { ProjectCard } from '@/components/project-card'
 import { ConnectWorkspaceDialog } from '@/components/connect-workspace-dialog'
 import { WorkspaceHelpDialog } from '@/components/workspace-help-dialog'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, CircleHelp, Folder, FolderOpen, RefreshCw, ShieldCheck, Star, Terminal, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ThemeControl } from '@/components/theme-control'
-import { SettingsDialog } from '@/components/settings-dialog'
+import { ArrowRight, Folder, ShieldCheck } from 'lucide-react'
 import { SettingsProvider, useSettings } from '@/hooks/use-settings'
 import { readThemePreference } from '@/hooks/use-theme'
 import { PREFERENCES_CHANGED_EVENT } from '@/lib/settings'
 import { createConfigBackup, mergeConfigProjects, type ConfigBackup } from '@/lib/config-backup'
 import { configureOutdatedReport } from '@/lib/outdated'
-import { HostedNotice } from '@/components/hosted-notice'
 import { DailySummary } from '@/components/daily-summary'
 import { ProjectFilters } from '@/components/project-filters'
 import { ProjectTagDialog } from '@/components/project-tags'
@@ -72,7 +71,7 @@ function WorkspaceApp() {
   const projectOpener = useRef<HTMLElement | null>(null)
   const workspaceVersion = useRef(0)
   const favoritesVersion = useRef(0)
-  const { action, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, scanAllVulnerabilities, scanAllOutdated, captureAllPreviews } = useWorkspaceActions({
+  const { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, scanAllVulnerabilities, scanAllOutdated, captureAllPreviews } = useWorkspaceActions({
     workspace, busy, workspaceVersion, setBusy, setLogs, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
   })
   const rawProjects = workspace?.projects ?? demoProjects
@@ -248,7 +247,6 @@ function WorkspaceApp() {
     await Promise.all(current.projects.filter(project => project.dev?.status === 'running' || project.dev?.status === 'starting').map(project => projectAction(project.id, 'stop')))
   }
 
-  const pageName = page === 'summary' ? 'Daily summary' : stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
   return <div className="app-shell">
     <a className="skip-link" href="#projects">{page === 'summary' ? 'Skip to daily summary' : 'Skip to projects'}</a>
     <WorkspaceSidebar workspace={workspace} projects={projects} stacks={stacks} busy={!!busy} page={page} filter={filter} filters={filters}
@@ -257,7 +255,8 @@ function WorkspaceApp() {
       onInstall={installPrompt ? async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) } : undefined} />
 
     <main className="main-content" id="projects" tabIndex={-1}>
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button><SettingsDialog backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} /></div></div></header>
+      <WorkspaceTopbar page={page} stack={stack} filter={filter} hasFilters={hasFilters} hosted={hosted} online={online}
+        onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
         {page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
         <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
@@ -266,18 +265,18 @@ function WorkspaceApp() {
 
         {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
         {auditBatch.progress && <AuditBatchProgress progress={auditBatch.progress} onStop={auditBatch.stop} onDismiss={auditBatch.dismiss} />}
-        {workspace && <div className={`watcher-status ${watcher.error ? 'watcher-error' : ''}`} role="region" aria-label="Workspace watcher" aria-live="polite" title={watcher.nextRun ? `Next ${settings.watcherMode === 'changes' ? 'change check' : 'scan'}: ${new Date(watcher.nextRun).toLocaleTimeString()}. Configure in Settings → Watcher.` : 'Configure in Settings → Watcher.'}><RefreshCw size={13} className={busy === 'watcher' ? 'spinning' : ''} /><span>{watcher.message}</span>{busy === 'watcher' && <span>Change to manual mode in Settings to stop after the current check.</span>}</div>}
+        {workspace && <WorkspaceWatcherStatus watcher={watcher} mode={settings.watcherMode} scanning={busy === 'watcher'} />}
         {outdatedBatch.progress && <OutdatedBatchProgress progress={outdatedBatch.progress} onStop={outdatedBatch.stop} onDismiss={outdatedBatch.dismiss} />}
 
         <ProjectSearchToolbar searchRef={searchRef} query={query} setQuery={setQuery} searchScope={searchScope} setSearchScope={setSearchScope}
           sort={sort} setSort={setSort} view={view} setView={setView} />
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
-        {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <ProjectCard key={project.id} project={project} index={index} view={view} query={query}
-          activeTags={filters.tags} tagsReady={tagsReady} favorite={favoriteIds.has(project.id)} capturing={previewBatch.progress?.current?.id === project.id} busy={busy}
-          onOpen={openProject} onEditTags={editTags} onToggleFavorite={toggleFavorite} onTagFilter={toggleTag} onTechnologyFilter={toggleTechnology} onAction={action} />)}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{hasRefinements ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{hasRefinements ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
-        <footer className="page-footer"><span>{filtered.length.toString().padStart(2, '0')} {filtered.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span><span><ShieldCheck size={13} /> No cloud. No clutter.</span></footer>
-        {isDemo && <div className="demo-note"><span>You’re looking at an example workspace.</span><button onClick={() => setConnectOpen(true)}>Make it yours <ArrowRight size={13} /></button></div>}
+        <ProjectResults projects={filtered} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
+          filter={filter} hasRefinements={hasRefinements} emptyWorkspace={!projects.length} isDemo={isDemo}
+          onReset={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }} onConnect={() => setConnectOpen(true)}
+          view={view} query={query} activeTags={filters.tags} tagsReady={tagsReady} busy={busy} onOpen={openProject} onEditTags={editTags}
+          onToggleFavorite={toggleFavorite} onTagFilter={toggleTag} onTechnologyFilter={toggleTechnology} onAction={action} />
         </>}
       </div>
     </main>
@@ -286,7 +285,7 @@ function WorkspaceApp() {
       onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }} onPathChange={setPath} onConnect={connect} />
 
     <ProjectDetailDialog selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
-      packageBusy={selected && auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : selected && outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === selected.id ? `${selected.id}:outdated` : busy}
+      packageBusy={packageBusy(selected)}
       detailTab={detailTab} onTabChange={setDetailTab} logs={logs} tagsReady={tagsReady} selectedTags={selectedTags} favorite={!!selected && favoriteIds.has(selected.id)}
       onClose={() => setSelectedId(undefined)} onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}
       onTagFilter={toggleTag} onEditTags={editTags} onAction={action} onToggleFavorite={toggleFavorite} />
@@ -295,6 +294,6 @@ function WorkspaceApp() {
       onForget={() => { void forgetWorkspace(); setHelpOpen(false) }} />
     {tagProject && <ProjectTagDialog key={tagProject.id} project={tagProject} availableTags={availableTags} onSave={tags => updateTags(tagProject.id, tags)} onClose={() => setTagProjectId(undefined)} returnFocus={restoreTagFocus} />}
     <CriticalVulnerabilityDialog alerts={criticalAlerts} onDismiss={() => setCriticalAlerts([])} onReview={id => { const project = projects.find(item => item.id === id); setCriticalAlerts([]); if (project) openProject(project, 'packages') }} />
-    {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <CircleHelp size={18} /> : <Check size={18} />}<span>{notice.text}</span><button aria-label="Dismiss notification" onClick={() => setNotice(undefined)}><X size={15} /></button></div>}
+    <WorkspaceNotice notice={notice} onDismiss={() => setNotice(undefined)} />
   </div>
 }

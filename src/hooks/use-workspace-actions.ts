@@ -186,5 +186,11 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       setBusy('')
     }
   }
-  return { action, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, scanAllVulnerabilities, scanAllOutdated, captureAllPreviews }
+  function packageBusy(project?: RepoProject) {
+    if (project && auditBatch.isActive() && auditBatch.progress?.current?.id === project.id) return `${project.id}:audit`
+    if (project && outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === project.id) return `${project.id}:outdated`
+    return busy
+  }
+
+  return { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, scanAllVulnerabilities, scanAllOutdated, captureAllPreviews }
 }
