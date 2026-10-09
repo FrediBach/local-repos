@@ -1,11 +1,12 @@
+import { WorkspaceSidebar } from '@/components/workspace-sidebar'
+import { WorkspaceToolbar } from '@/components/workspace-toolbar'
+import { ProjectSearchToolbar } from '@/components/project-search-toolbar'
 import { ProjectDetailDialog } from '@/components/project-detail-dialog'
 import { ProjectCard } from '@/components/project-card'
-import { relativeTime } from '@/lib/relative-time'
 import { ConnectWorkspaceDialog } from '@/components/connect-workspace-dialog'
 import { WorkspaceHelpDialog } from '@/components/workspace-help-dialog'
-import { Logo } from '@/components/brand-logo'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp, Download, Folder, FolderOpen, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Terminal, X } from 'lucide-react'
+import { ArrowRight, Check, CircleHelp, Folder, FolderOpen, RefreshCw, ShieldCheck, Star, Terminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeControl } from '@/components/theme-control'
 import { SettingsDialog } from '@/components/settings-dialog'
@@ -19,7 +20,7 @@ import { DailySummary } from '@/components/daily-summary'
 import { ProjectFilters } from '@/components/project-filters'
 import { ProjectTagDialog } from '@/components/project-tags'
 import { normalizeTags, type ProjectTags } from '@/lib/project-tags'
-import { isRunning, projectSortOptions, type ProjectSort } from '@/lib/project-filters'
+import { isRunning } from '@/lib/project-filters'
 import { useProjectFiltering } from '@/hooks/use-project-filtering'
 import { PreviewBatchProgress } from '@/components/preview-batch-progress'
 import { useWorkspaceActions } from '@/hooks/use-workspace-actions'
@@ -248,51 +249,28 @@ function WorkspaceApp() {
   }
 
   const pageName = page === 'summary' ? 'Daily summary' : stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
-  const workspacePath = workspace?.rootPath ?? (workspace ? workspace.rootName : '~/projects / demo workspace')
   return <div className="app-shell">
     <a className="skip-link" href="#projects">{page === 'summary' ? 'Skip to daily summary' : 'Skip to projects'}</a>
-    <aside className="sidebar">
-      <button type="button" className="brand" onClick={() => navigate('all')}><Logo /><span>local repos<span className="brand-period">.</span></span></button>
-      <div className="sidebar-section-label">WORKSPACE</div>
-      <nav className="main-nav" aria-label="Workspace">
-        <button aria-current={page === 'projects' && !hasFilters ? 'page' : undefined} className={page === 'projects' && !hasFilters ? 'active' : ''} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projects.length}</span></button>
-        <button aria-current={page === 'projects' && filter === 'favorites' ? 'page' : undefined} className={page === 'projects' && filter === 'favorites' ? 'active' : ''} onClick={() => navigate('favorites')}><Star size={17} /><span>Favorites</span><span className="nav-count">{favoriteCount.toString().padStart(2, '0')}</span></button>
-        <button aria-current={page === 'projects' && filters.server?.includes('running') ? 'page' : undefined} className={page === 'projects' && filters.server?.includes('running') ? 'active' : ''} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</button>
-        <button aria-current={page === 'summary' ? 'page' : undefined} className={page === 'summary' ? 'active' : ''} onClick={() => setPage('summary')}><CalendarDays size={17} /><span>Daily summary</span></button>
-      </nav>
-      <div className="sidebar-divider" />
-      <div className="sidebar-section-label technology-label">TECHNOLOGIES <span>{stacks.length.toString().padStart(2, '0')}</span></div>
-      <nav className="stack-nav" aria-label="Filter by technology">{stacks.map(tech => <button key={tech} aria-pressed={filters.stack?.includes(tech) ?? false} className={filters.stack?.includes(tech) ? 'active' : ''} onClick={() => toggleTechnology(tech)}><span className={`tech-dot tech-${tech.toLowerCase().replace(/[^a-z]/g, '')}`} /><span>{tech}</span><span className="tech-count">{projects.filter(p => p.stack.includes(tech)).length}</span></button>)}</nav>
-      <div className="sidebar-bottom"><div className="directory-card"><div className="directory-icon"><FolderOpen size={17} /><span className={isDemo ? 'status-dot neutral' : 'status-dot'} /></div><div><strong>{workspace?.rootName ?? 'Demo workspace'}</strong><span>{isDemo ? 'A look at what’s possible' : workspace.mode === 'helper' ? 'Local helper workspace' : 'Browser folder access'}</span></div><button aria-label="Change directory" disabled={!!busy} onClick={() => setConnectOpen(true)}><ChevronDown size={15} /></button></div>
-        <button className="sidebar-help" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /><span>How it works</span><ArrowUpRight size={13} /></button>
-        {installPrompt && <button className="sidebar-help" onClick={async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) }}><Download size={15} /><span>Install Local Repos</span></button>}
-        <div className="sidebar-footnote"><span className="status-dot" /> Yours. Locally. <span>v0.1</span></div>
-      </div>
-    </aside>
+    <WorkspaceSidebar workspace={workspace} projects={projects} stacks={stacks} busy={!!busy} page={page} filter={filter} filters={filters}
+      hasFilters={hasFilters} favoriteCount={favoriteCount} running={running} navigate={navigate} onSummary={() => setPage('summary')}
+      toggleTechnology={toggleTechnology} onConnect={() => setConnectOpen(true)} onHelp={() => setHelpOpen(true)}
+      onInstall={installPrompt ? async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) } : undefined} />
 
     <main className="main-content" id="projects" tabIndex={-1}>
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div><div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>{hosted && <HostedNotice />}<ThemeControl /><div className="local-indicator"><span className={`status-dot ${online ? '' : 'neutral'}`} /><span className="local-label">{online ? 'All local. All yours.' : 'Offline · cached workspace'}</span><button className="workspace-info-button" aria-label="Workspace info" onClick={() => setHelpOpen(true)}><CircleHelp size={15} /></button><SettingsDialog backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} /></div></div></header>
       <div className="page-content">
         {page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
-        <section className="workspace-toolbar" aria-label="Workspace controls">
-          <div className="workspace-details">
-            <div className="workspace-directory"><Folder size={15} /><span className="workspace-path" title={workspacePath}>{workspacePath}</span>{isDemo && <span className="sample-badge">SAMPLE</span>}</div>
-            <div className="workspace-status"><span>{projects.length} {projects.length === 1 ? 'project' : 'projects'}</span>{workspace && <><span aria-hidden="true">·</span><button onClick={resync} disabled={!!busy} className="sync-button" title="Resync directory" aria-busy={busy === 'sync'}><RefreshCw size={13} className={busy === 'sync' ? 'spinning' : ''} /><span>{busy === 'sync' ? 'Syncing…' : `Synced ${relativeTime(workspace.syncedAt).toLowerCase()}`}</span></button></>}</div>
-          </div>
-          <div className="workspace-actions">
-            <Button variant="outline" size="sm" disabled={!!busy || !workspace || !projects.length} onClick={scanAllOutdated} aria-busy={busy === 'batch-outdated'} title={workspace?.mode === 'browser' ? 'Connect the local helper to scan outdated packages' : `Check outdated packages in all ${projects.length} projects, including those hidden by filters. Contacts their configured registries.`}>{busy === 'batch-outdated' ? <LoaderCircle size={16} className="spinning" /> : <Package size={16} />}Scan outdated packages</Button>
-            <Button variant="outline" size="sm" disabled={!!busy || !workspace || !projects.length} onClick={scanAllVulnerabilities} aria-busy={busy === 'batch-audit'} title={workspace?.mode === 'browser' ? 'Connect the local helper to scan vulnerabilities' : `Audit all ${projects.length} projects, including those hidden by filters. Package names and versions are sent to their configured registries.`}>{busy === 'batch-audit' ? <LoaderCircle size={16} className="spinning" /> : <ShieldCheck size={16} />}Scan vulnerabilities</Button>
-            <Button variant="outline" size="sm" disabled={!!busy || !workspace || !projects.length} onClick={captureAllPreviews} aria-busy={busy === 'batch-capture'} title={workspace?.mode === 'browser' ? 'Connect the local helper to capture previews' : `Capture previews for all ${projects.length} projects`}>{busy === 'batch-capture' ? <LoaderCircle size={16} className="spinning" /> : <Monitor size={16} />}Capture previews</Button>
-            <Button variant={workspace ? 'outline' : 'default'} size="sm" disabled={!!busy} onClick={() => { setConnectError(''); setConnectOpen(true) }}><FolderOpen size={16} />{workspace ? 'Change directory' : 'Connect directory'}</Button>
-          </div>
-        </section>
+        <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
+          onConnect={() => { setConnectError(''); setConnectOpen(true) }} scanAllOutdated={scanAllOutdated}
+          scanAllVulnerabilities={scanAllVulnerabilities} captureAllPreviews={captureAllPreviews} />
 
         {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
         {auditBatch.progress && <AuditBatchProgress progress={auditBatch.progress} onStop={auditBatch.stop} onDismiss={auditBatch.dismiss} />}
         {workspace && <div className={`watcher-status ${watcher.error ? 'watcher-error' : ''}`} role="region" aria-label="Workspace watcher" aria-live="polite" title={watcher.nextRun ? `Next ${settings.watcherMode === 'changes' ? 'change check' : 'scan'}: ${new Date(watcher.nextRun).toLocaleTimeString()}. Configure in Settings → Watcher.` : 'Configure in Settings → Watcher.'}><RefreshCw size={13} className={busy === 'watcher' ? 'spinning' : ''} /><span>{watcher.message}</span>{busy === 'watcher' && <span>Change to manual mode in Settings to stop after the current check.</span>}</div>}
         {outdatedBatch.progress && <OutdatedBatchProgress progress={outdatedBatch.progress} onStop={outdatedBatch.stop} onDismiss={outdatedBatch.dismiss} />}
 
-        <div className="toolbar"><div className="search-group"><select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => setSearchScope(event.target.value as 'all' | 'packages')}><option value="all">Projects & packages</option><option value="packages">Package name & version</option></select><div className="search-box"><Search size={17} /><input ref={searchRef} value={query} onChange={event => setQuery(event.target.value)} placeholder={searchScope === 'packages' ? 'e.g. next, next@16.0.0, next@16.*.*…' : 'Find a project or package…'} aria-label="Search projects" />{query ? <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button> : <kbd>⌘ K</kbd>}</div></div><div className="toolbar-right"><label className="sort-control"><ArrowDownWideNarrow size={15} /><select value={sort} onChange={event => setSort(event.target.value as ProjectSort)} aria-label="Sort projects">{projectSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={12} /></label><div className="view-toggle"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={17} /></button></div></div></div>
+        <ProjectSearchToolbar searchRef={searchRef} query={query} setQuery={setQuery} searchScope={searchScope} setSearchScope={setSearchScope}
+          sort={sort} setSort={setSort} view={view} setView={setView} />
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
         {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <ProjectCard key={project.id} project={project} index={index} view={view} query={query}
