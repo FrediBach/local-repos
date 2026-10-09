@@ -299,6 +299,10 @@ The manifest includes a stable app ID, root scope, language, categories, theme c
 
 ## Architecture
 
+See the [architecture documentation](docs/README.md) for the runtime boundaries,
+source map, frontend state and persistence, local helper services, and development
+workflow. Agents working on this repository should read [AGENTS.md](AGENTS.md).
+
 - **Interface:** React, TypeScript, Vite, Tailwind CSS, shadcn-style components built on Radix primitives, and Lucide icons.
 - **Browser scanning:** `src/lib/filesystem.ts` reads a user-granted File System Access API directory handle. `src/lib/metadata.ts` parses package metadata and extracts the first README prose paragraph without evaluating project code.
 - **Local cache:** `src/lib/storage.ts` stores a workspace, captured preview data, and favorites with IndexedDB.
