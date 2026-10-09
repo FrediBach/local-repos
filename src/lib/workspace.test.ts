@@ -20,6 +20,14 @@ function workspace(projects: RepoProject[]): Workspace {
 }
 
 describe('captured preview persistence', () => {
+  it('preserves dated coverage after restarts without replacing a new report or transferring it to another project', () => {
+    const testCoverage: NonNullable<RepoProject['testCoverage']> = { scannedAt: '2026-10-09T10:00:00Z', runner: 'vitest', source: 'run', metrics: { lines: { total: 10, covered: 8, pct: 80 }, statements: null, functions: null, branches: null }, files: [] }
+    const previous = workspace([{ ...project('one'), testCoverage }])
+    expect(preservePreviews(workspace([project('one')]), previous).projects[0].testCoverage).toEqual(testCoverage)
+    const fresh = { ...testCoverage, scannedAt: '2026-10-09T12:00:00Z', warning: 'Tests failed' }
+    expect(preservePreviews(workspace([{ ...project('one'), testCoverage: fresh }]), previous).projects[0].testCoverage).toEqual(fresh)
+    expect(preservePreviews(workspace([project('two')]), previous).projects[0].testCoverage).toBeUndefined()
+  })
   it('keeps dated React Doctor findings after resync, prefers fresh reports and never transfers them to another project', () => {
     const reactDoctor = { scannedAt: '2026-10-09T10:00:00Z', version: '0.9.17', score: 82, label: 'Great', findings: [] }
     const previous = workspace([{ ...project('one'), reactDoctor }])

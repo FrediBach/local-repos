@@ -1,0 +1,89 @@
+.project-test-coverage-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 3px; min-height: 32px; margin-left: auto; padding: 3px 5px; border: 1px solid currentColor; border-radius: 4px; font-size: .8125rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.project-audit-badge + .project-test-coverage-badge, .project-outdated-badge + .project-test-coverage-badge, .project-react-doctor-badge + .project-test-coverage-badge { margin-left: 0; }
+.project-test-coverage-badge:hover { box-shadow: 0 0 0 1px currentColor; }
+.project-title-row:has(> .project-test-coverage-badge) { flex-wrap: wrap; }
+.projects-list .project-test-coverage-badge { min-height: 28px; }
+.coverage-level-good { color: var(--accent); background: var(--accent-soft); }
+.coverage-level-warning { color: var(--warning); background: var(--warning-soft); }
+.coverage-level-poor { color: var(--danger); background: var(--danger-soft); }
+.coverage-level-unknown { color: var(--muted-foreground); background: var(--surface-muted); }
+.coverage-text-good { color: var(--accent); }
+.coverage-text-warning { color: var(--warning); }
+.coverage-text-poor { color: var(--danger); }
+.coverage-text-unknown { color: var(--muted-foreground); }
+.detail-tabs.coverage-tabs { overflow-x: auto; }
+.detail-tabs.coverage-tabs button { flex-shrink: 0; white-space: nowrap; }
+.test-coverage-heading { gap: 12px; flex-wrap: wrap; }
+.test-coverage-heading h3 { display: flex; align-items: center; gap: 8px; }
+.test-coverage-section > .maintenance-hint { margin-top: 10px; }
+.test-coverage-scanning { display: flex; align-items: center; gap: 8px; font-size: .875rem; color: var(--accent); line-height: 1.6; }
+.test-coverage-scanning > svg { flex-shrink: 0; }
+.test-coverage-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 9px; margin: 22px 0; padding: 30px 22px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted-foreground); }
+.test-coverage-empty h4 { margin: 0; color: var(--foreground); font-size: 1rem; font-weight: 600; }
+.test-coverage-empty p { max-width: 460px; font-size: .875rem; line-height: 1.7; margin: 0; }
+.coverage-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 22px; }
+.coverage-metric { min-width: 0; border: 1px solid var(--border); border-radius: 8px; padding: 15px 13px; }
+.coverage-metric h4 { margin: 0 0 10px; color: var(--foreground); font-size: .8125rem; font-weight: 500; }
+.coverage-metric strong { font-size: 1.65rem; line-height: 1.2; font-weight: 650; font-variant-numeric: tabular-nums; }
+.coverage-meter { height: 5px; border-radius: 3px; background: var(--border); margin: 13px 0 10px; overflow: hidden; }
+.coverage-meter > span { display: block; height: 100%; border-radius: inherit; background: currentColor; }
+.coverage-metric p { margin: 0; color: var(--muted-foreground); font-size: .6875rem; line-height: 1.6; }
+.coverage-report-meta { margin: 13px 0 20px; font-size: .75rem; line-height: 1.8; color: var(--muted-foreground); }
+.coverage-report-meta p { margin: 4px 0; overflow-wrap: anywhere; }
+.coverage-report-meta p:first-child { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 5px; }
+.coverage-report-meta strong { color: var(--foreground); font-weight: 500; }
+.coverage-report-meta p > span { margin-left: auto; }
+.coverage-report-meta code { font-size: inherit; }
+.coverage-notice { display: flex; gap: 9px; padding: 13px 15px; margin: 18px 0; border: 1px solid var(--warning); border-radius: 7px; color: var(--warning); background: var(--warning-soft); }
+.coverage-notice > svg { flex-shrink: 0; margin-top: 2px; }
+.coverage-notice strong { font-size: .875rem; font-weight: 600; }
+.coverage-notice p { margin: 5px 0 0; font-size: .8125rem; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.coverage-scope-note { padding: 14px 16px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); }
+.coverage-scope-note strong { font-size: .8125rem; font-weight: 600; color: var(--foreground); }
+.coverage-scope-note p { margin: 5px 0 0; font-size: .8125rem; line-height: 1.8; color: var(--muted-foreground); }
+.coverage-scope-note code { font-size: .75rem; }
+.coverage-files-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 15px; }
+.coverage-files-heading h4 { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--foreground); font-size: .9375rem; font-weight: 600; }
+.coverage-files-heading > span { font-size: .8125rem; color: var(--muted-foreground); }
+.coverage-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.coverage-search { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); border: 1px solid var(--control-border); border-radius: 6px; min-height: 40px; padding: 0 11px; background: var(--surface); }
+.coverage-search > svg { flex-shrink: 0; }
+.coverage-search input { width: 100%; min-width: 0; border: 0; background: transparent; padding: 10px 0; font-size: .875rem; color: var(--foreground); }
+.coverage-search:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.coverage-search input:focus { outline: 0; }
+.coverage-sort { flex: 0 1 auto; min-width: 0; }
+.coverage-sort select { width: 100%; min-height: 40px; border: 1px solid var(--control-border); background: var(--surface); color: var(--foreground); border-radius: 6px; padding: 8px 28px 8px 10px; font-size: .875rem; }
+.coverage-gaps-filter { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; margin-top: 7px; font-size: .8125rem; color: var(--muted-foreground); }
+.coverage-gaps-filter input { accent-color: var(--accent); width: 15px; height: 15px; }
+.coverage-file-count { margin: 8px 0 12px; font-size: .75rem; line-height: 1.6; color: var(--muted-foreground); }
+.coverage-table-scroll { overflow: auto; max-height: 480px; border: 1px solid var(--border); border-radius: 7px; }
+.coverage-table { width: 100%; border-collapse: collapse; text-align: left; font-size: .75rem; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.coverage-table th, .coverage-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); }
+.coverage-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-muted); font-weight: 600; color: var(--muted-foreground); white-space: nowrap; }
+.coverage-table th:first-child { min-width: 170px; }
+.coverage-table tbody th { font-weight: 400; color: var(--foreground); overflow-wrap: anywhere; }
+.coverage-table tbody th code { font-size: inherit; }
+.coverage-table td { text-align: right; white-space: nowrap; }
+.coverage-table th:not(:first-child) { text-align: right; }
+.coverage-table tbody tr:last-child > * { border-bottom: 0; }
+.coverage-table tbody tr:hover { background: var(--surface-muted); }
+.coverage-no-files { padding: 20px; border: 1px dashed var(--border); border-radius: 7px; color: var(--muted-foreground); font-size: .875rem; line-height: 1.7; }
+.coverage-saved-note { margin-bottom: 0; }
+.coverage-show-more { margin-top: 12px; }
+@media (max-width: 650px) {
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) { display: flex; flex-wrap: wrap; }
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) .project-name { flex: 1 1 calc(100% - 40px); order: 0; }
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) > .favorite-button { order: 1; }
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) > .project-audit-badge,
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) > .project-outdated-badge,
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) > .project-react-doctor-badge,
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) > .project-test-coverage-badge { order: 2; margin-left: 0; }
+  .projects-list .project-title-row:has(> .project-test-coverage-badge) .project-tags { order: 3; flex-basis: 100%; }
+  .detail-tabs.coverage-tabs { gap: 12px; }
+  .detail-tabs.coverage-tabs button { font-size: .875rem; }
+  .coverage-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .coverage-metric { padding: 13px; }
+  .coverage-report-meta p > span { flex-basis: 100%; margin-left: 0; }
+  .coverage-sort { flex-basis: 100%; }
+  .coverage-table th, .coverage-table td { padding: 10px; }
+}

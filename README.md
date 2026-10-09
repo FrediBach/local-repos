@@ -1,6 +1,6 @@
 # Local Repos
 
-A local project library with README introductions, package search, vulnerability audits, React Doctor scores and findings, unused-package scans with Knip, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a restrained interface inspired by Dieter Rams, in light and dark themes.
+A local project library with README introductions, package search, vulnerability audits, React Doctor scores and findings, test coverage scans, unused-package scans with Knip, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a restrained interface inspired by Dieter Rams, in light and dark themes.
 
 ## Run locally
 
@@ -193,6 +193,26 @@ Scanned React projects display a score badge on their cards, including healthy s
 The helper runs its installed [React Doctor](https://github.com/millionco/react-doctor) against the selected project's full source, including a single selected workspace member. It does not install tools into the repository or apply fixes. Project configuration and ignore rules apply. Each scan has a two-minute deadline and an 8 MiB output limit. React Doctor's supply-chain check is disabled here; use **Scan vulnerabilities** for package audits.
 
 Source analysis runs locally. React Doctor sends diagnostic details to its scoring service to calculate the official score. When scoring is disabled or unavailable, findings are still shown and the score is labeled unavailable. Incomplete scans and scans with no supported source files also show an unavailable score and explain the limitation; they are never presented as a clean bill of health.
+
+### Test coverage
+
+Use **Scan test coverage** above the project list to scan supported test setups across the connected workspace, including projects hidden by filters. Open a project's **Coverage** tab for an individual scan. The helper processes projects sequentially, saves each result, and supports **Stop after current**. Restart `npm run dev` after updating Local Repos to load the endpoint.
+
+| Test setup | Coverage scan |
+| --- | --- |
+| Vitest | Runs the project's installed Vitest with its configured coverage provider. If startup reports a missing V8 or Istanbul provider, the helper prepares the exact matching version in its own cache and retries. |
+| Jest / Create React App | Runs installed Jest or `react-scripts test` with coverage and watch mode disabled. |
+| Cypress / Playwright / nyc / c8 / other setups | Imports an existing Istanbul `coverage-summary.json` or `lcov.info` from `coverage/` or the project root. Generate the report with the project's own coverage setup first. |
+
+Vitest provider recovery downloads `@vitest/coverage-v8` or `@vitest/coverage-istanbul` together with the exact matching Vitest version into the helper's cache outside the project. Package lifecycle scripts are disabled, and this setup does not change project manifests, lockfiles, or `node_modules`. First-time setup requires npm and network access; prepared versions can be reused offline. The project's test runner and other test dependencies must already be installed. Automatic provider recovery currently supports Node suites; Vitest browser suites need their configured provider and browser installed in the project setup.
+
+Native scans execute project tests and configuration, use an isolated temporary report directory, and leave configured coverage thresholds unchanged. Each scan has a seven-minute total deadline, with individual test commands limited to five minutes and provider preparation to two minutes. Project tests can have their own side effects. Simple test scripts preserve runner arguments such as custom configuration paths, literal environment assignments such as `NODE_OPTIONS=--no-experimental-webstorage`, and `env` or `cross-env` prefixes. Shell pipelines, interpolated variables, and other wrapper scripts require generating a saved report with the project's normal command first. Unsupported or missing tooling returns setup guidance. A native run that fails to produce a report never falls back to an older one.
+
+The badge shows **line coverage** and opens the Coverage tab. The tab includes lines, statements, functions, and branches, plus searchable files sorted by their coverage gaps. Runs using a cached provider show its package name and version in the report details. Empty metrics have no percentage; LCOV does not provide statement coverage. A failing test run or coverage threshold can still produce useful results, which are retained with an explicit warning. Imported reports show their original modification time and are labeled as saved reports, not fresh test runs.
+
+Coverage describes the runner's configured scope, not test quality or every source file by default. Include untested source files using [Vitest `coverage.include`](https://vitest.dev/guide/coverage.html) or [Jest `collectCoverageFrom`](https://jestjs.io/docs/configuration#collectcoveragefrom-array). [Cypress requires application instrumentation](https://docs.cypress.io/app/tooling/code-coverage), and [Playwright's browser coverage API is Chromium-only](https://playwright.dev/docs/api/class-coverage); running those CLIs under a Node coverage tool cannot measure browser application coverage automatically. Reports use the common [Istanbul formats](https://istanbul.js.org/docs/advanced/alternative-reporters/).
+
+Reports stay available across metadata rescans, helper restarts, and browser reloads. Failed scans retain the previous result; dependency update attempts clear affected reports. Scan again after changing source, tests, or configuration. Workspace roots and member packages may overlap, so global progress counts results without presenting a misleading combined coverage percentage. Coverage scans run only when requested, independently of automatic package checks.
 
 ### Unused packages with Knip
 

@@ -5,11 +5,12 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from './app'
 import { devCommand } from './runtime'
-import type { PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, TestCoverageReport, ProjectStorage, RepoProject } from '../src/types'
 import * as packageAudit from './package-audit'
 import * as packageOutdated from './package-outdated'
 import * as packageUnused from './package-unused'
 import * as reactDoctor from './react-doctor'
+import * as testCoverage from './test-coverage'
 import * as packageUpdate from './package-update'
 import * as projectStorage from './project-storage'
 import * as projectScripts from './project-scripts'
@@ -209,6 +210,7 @@ describe('project storage and package actions', () => {
     await expect(helper.runtime.outdated(admin.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.unused(admin.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.reactDoctor(admin.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.testCoverage(admin.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.deleteNodeModules(admin.id, true)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.updatePackages(admin.id, 'minor')).rejects.toMatchObject({ status: 409 })
     finish(updateResult)
@@ -225,12 +227,14 @@ describe('project storage and package actions', () => {
     entry.project.audit = auditResult
     entry.project.unused = unusedResult
     entry.project.reactDoctor = reactDoctorResult
+    entry.project.testCoverage = testCoverageResult
     vi.spyOn(packageUpdate, 'updateProject').mockRejectedValueOnce(new Error('Install failed'))
     await expect(helper.runtime.updatePackages(project.id, 'minor')).rejects.toThrow('Install failed')
     expect(entry.project.outdated).toBeUndefined()
     expect(entry.project.audit).toBeUndefined()
     expect(entry.project.unused).toBeUndefined()
     expect(entry.project.reactDoctor).toBeUndefined()
+    expect(entry.project.testCoverage).toBeUndefined()
     vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
     expect(await helper.runtime.outdated(project.id)).toEqual(outdatedResult)
   })
@@ -248,6 +252,89 @@ describe('project storage and package actions', () => {
   const unusedResult: PackageUnused = { scannedAt: '2026-10-08T12:00:00.000Z', knipVersion: '6.40.0', findings: [{ name: 'fixture-package', version: '^1.0.0', kind: 'devDependencies', line: 5 }] }
 
   const reactDoctorResult: ReactDoctorReport = { scannedAt: '2026-10-09T12:00:00.000Z', version: '0.9.17', score: 94, label: 'Great', findings: [] }
+  const testCoverageResult: TestCoverageReport = {
+    scannedAt: '2026-10-09T12:00:00.000Z', runner: 'vitest', source: 'run', exitCode: 0,
+    metrics: {
+      lines: { covered: 8, total: 10, pct: 80 }, statements: { covered: 8, total: 10, pct: 80 },
+      functions: { covered: 2, total: 3, pct: 66.66 }, branches: { covered: 1, total: 2, pct: 50 },
+    },
+    files: [],
+  }
+
+  it('saves coverage across rescans, preserves the last report after failure, and permits retries', async () => {
+    const project = await createProject()
+    const scan = vi.spyOn(testCoverage, 'testCoverageProject').mockResolvedValueOnce(testCoverageResult)
+    const endpoint = `/api/projects/${project.id}/test-coverage`
+    const response = await post(endpoint)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ testCoverage: testCoverageResult })
+    expect(scan).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect((await (await post('/api/scan', { path: directory })).json()).projects[0].testCoverage).toEqual(testCoverageResult)
+    scan.mockRejectedValueOnce(new Error('Coverage provider missing'))
+    await expect(helper.runtime.testCoverage(project.id)).rejects.toThrow('Coverage provider missing')
+    expect(helper.registry.lookup(project.id).project.testCoverage).toEqual(testCoverageResult)
+    const refreshed: TestCoverageReport = { ...testCoverageResult, scannedAt: '2026-10-09T12:05:00.000Z', exitCode: 1, warning: 'Tests or coverage thresholds failed.' }
+    scan.mockResolvedValueOnce(refreshed)
+    expect(await (await post(endpoint)).json()).toEqual({ testCoverage: refreshed })
+    expect(helper.registry.lookup(project.id).project.testCoverage).toEqual(refreshed)
+  })
+
+  it('restricts coverage runs to registered accessible projects and the local application', async () => {
+    const scan = vi.spyOn(testCoverage, 'testCoverageProject').mockResolvedValue(testCoverageResult)
+    const project = await createProject()
+    const endpoint = `/api/projects/${project.id}/test-coverage`
+    expect((await post('/api/projects/unknown/test-coverage')).status).toBe(404)
+    expect((await post(endpoint, {}, { Origin: 'https://untrusted.example' })).status).toBe(403)
+    expect((await fetch(`${address}${endpoint}`, { method: 'POST' })).status).toBe(403)
+    await rename(path.join(directory, 'project'), path.join(directory, 'moved'))
+    expect((await post(endpoint)).status).toBe(404)
+    expect(scan).not.toHaveBeenCalled()
+  })
+
+  it('deduplicates coverage scans and prevents sibling dependency changes until they finish', async () => {
+    await mkdir(path.join(directory, 'packages/member'), { recursive: true })
+    await writeFile(path.join(directory, 'package.json'), '{"name":"root","workspaces":["packages/*"]}')
+    await writeFile(path.join(directory, 'packages/member/package.json'), '{"name":"member"}')
+    const projects = (await (await post('/api/scan', { path: directory })).json()).projects as RepoProject[]
+    const root = projects.find(project => project.name === 'root')!
+    const member = projects.find(project => project.name === 'member')!
+    let finish!: (result: TestCoverageReport) => void
+    const scan = vi.spyOn(testCoverage, 'testCoverageProject').mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const first = helper.runtime.testCoverage(member.id)
+    const second = helper.runtime.testCoverage(member.id)
+    await vi.waitFor(() => expect(scan).toHaveBeenCalledOnce())
+    try {
+      await expect(helper.runtime.deleteNodeModules(root.id, true)).rejects.toMatchObject({ status: 409 })
+      await expect(helper.runtime.updatePackages(root.id, 'patch')).rejects.toMatchObject({ status: 409 })
+    } finally {
+      finish(testCoverageResult)
+    }
+    expect(await first).toEqual(testCoverageResult)
+    expect(await second).toEqual(testCoverageResult)
+    vi.spyOn(packageUpdate, 'updateProject').mockResolvedValue({ level: 'patch', packages: [], skipped: [], updatedAt: new Date().toISOString() })
+    await helper.runtime.updatePackages(root.id, 'patch')
+    expect(helper.registry.lookup(member.id).project.testCoverage).toBeUndefined()
+  })
+
+  it('waits for an in-flight coverage scan on shutdown and rejects new scans', async () => {
+    const project = await createProject()
+    let finish!: (result: TestCoverageReport) => void
+    const scanProject = vi.spyOn(testCoverage, 'testCoverageProject').mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const scan = helper.runtime.testCoverage(project.id)
+    await vi.waitFor(() => expect(scanProject).toHaveBeenCalledOnce())
+    let stopped = false
+    const shutdown = helper.runtime.shutdown().then(() => { stopped = true })
+    try {
+      await expect(helper.runtime.testCoverage(project.id)).rejects.toMatchObject({ status: 503 })
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(stopped).toBe(false)
+    } finally {
+      finish(testCoverageResult)
+    }
+    expect(await scan).toEqual(testCoverageResult)
+    await shutdown
+    expect(stopped).toBe(true)
+  })
 
   it('saves React Doctor results across rescans, preserves them after failures, and permits retries', async () => {
     const project = await createProject()
@@ -347,7 +434,7 @@ describe('project storage and package actions', () => {
   it('rejects unknown ids for every maintenance action', async () => {
     const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
     const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
-    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated', 'unused', 'react-doctor', 'update-packages']) {
+    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated', 'unused', 'react-doctor', 'test-coverage', 'update-packages']) {
       expect((await post(`/api/projects/unknown/${action}`, { confirm: true })).status).toBe(404)
     }
     expect(audit).not.toHaveBeenCalled()
@@ -435,6 +522,7 @@ describe('project storage and package actions', () => {
     await expect(helper.runtime.screenshot(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.audit(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.outdated(project.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.testCoverage(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.storage(project.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
     await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())

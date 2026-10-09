@@ -137,6 +137,34 @@ export interface ReactDoctorReport {
   warning?: string
 }
 
+export type CoverageRunner = 'vitest' | 'jest' | 'react-scripts' | 'report'
+export interface CoverageMetric {
+  covered: number
+  total: number
+  /** Empty metrics have no percentage, rather than implying full coverage. */
+  pct: number | null
+}
+export interface CoverageMetrics {
+  lines: CoverageMetric | null
+  statements: CoverageMetric | null
+  functions: CoverageMetric | null
+  branches: CoverageMetric | null
+}
+export interface TestCoverageReport {
+  scannedAt: string
+  runner: CoverageRunner
+  source: 'run' | 'existing-report'
+  reportPath?: string
+  reportModifiedAt?: string
+  command?: string
+  exitCode?: number
+  /** Coverage provider prepared in the helper's cache outside the project. */
+  tooling?: { packageName: string; version: string }
+  metrics: CoverageMetrics
+  files: { path: string; metrics: CoverageMetrics }[]
+  warning?: string
+}
+
 export interface RepoProject {
   id: string
   name: string
@@ -165,6 +193,7 @@ export interface RepoProject {
   outdated?: PackageOutdated
   unused?: PackageUnused
   reactDoctor?: ReactDoctorReport
+  testCoverage?: TestCoverageReport
   packageUpdate?: PackageUpdate
   git?: {
     branch?: string

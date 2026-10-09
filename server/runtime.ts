@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Browser } from 'playwright'
-import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, TestCoverageReport, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -21,6 +21,7 @@ import { parsePackageJson } from '../src/lib/metadata'
 import { outdatedProject } from './package-outdated'
 import { unusedProject } from './package-unused'
 import { reactDoctorProject } from './react-doctor'
+import { testCoverageProject } from './test-coverage'
 import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
 import { openScriptTerminal, validateProjectScript } from './project-scripts'
 
@@ -86,6 +87,7 @@ export class ProjectRuntime {
   private readonly outdatedScans = new Map<string, Promise<PackageOutdated>>()
   private readonly unusedScans = new Map<string, Promise<PackageUnused>>()
   private readonly reactDoctorScans = new Map<string, Promise<ReactDoctorReport>>()
+  private readonly testCoverageScans = new Map<string, Promise<TestCoverageReport>>()
   private readonly updates = new Map<string, Promise<PackageUpdate>>()
   private readonly removals = new Map<string, Promise<ProjectStorage>>()
   private readonly maintenance = new Set<string>()
@@ -191,6 +193,21 @@ export class ProjectRuntime {
     finally { this.reactDoctorScans.delete(id) }
   }
 
+  async testCoverage(id: string): Promise<TestCoverageReport> {
+    this.available(id)
+    const pending = this.testCoverageScans.get(id)
+    if (pending) return pending
+    const promise = (async () => {
+      const entry = await this.registry.get(id)
+      const testCoverage = await testCoverageProject(entry)
+      entry.project.testCoverage = testCoverage
+      return testCoverage
+    })()
+    this.testCoverageScans.set(id, promise)
+    try { return await promise }
+    finally { this.testCoverageScans.delete(id) }
+  }
+
   async updatePackages(id: string, level: unknown): Promise<PackageUpdate> {
     this.available(id)
     if (level !== 'minor' && level !== 'patch') throw new HelperError('Choose a minor or patch update.', 400)
@@ -198,7 +215,7 @@ export class ProjectRuntime {
     for (const { project } of related) {
       const key = project.id
       if (this.running.has(key) || this.starts.has(key) || this.captures.has(key)
-        || this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key)
+        || this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.testCoverageScans.has(key)
         || [...this.stoppingChildren.values()].some(child => child.id === key)) {
         throw new HelperError('Stop dev servers and wait for previews and package scans in this repository to finish before updating dependencies.', 409)
       }
@@ -217,6 +234,7 @@ export class ProjectRuntime {
           member.project.outdated = undefined
           member.project.unused = undefined
           member.project.reactDoctor = undefined
+          member.project.testCoverage = undefined
           member.project.storage = undefined
           try {
             const metadata = parsePackageJson(await readFile(path.join(member.directory, 'package.json'), 'utf8'))
@@ -239,7 +257,7 @@ export class ProjectRuntime {
       || [...this.stoppingChildren.values()].some(child => relatedIdSet.has(child.id))) {
       throw new HelperError('Stop the project’s dev server and wait for preview capture and server shutdown to finish before removing dependencies.', 409)
     }
-    if (relatedIds.some(key => this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key))) {
+    if (relatedIds.some(key => this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.testCoverageScans.has(key))) {
       throw new HelperError('Wait for disk usage measurement and package scans to finish before removing dependencies.', 409)
     }
     // Reserve before any filesystem await so a simultaneous start, screenshot,
@@ -591,7 +609,7 @@ export class ProjectRuntime {
     // closed check immediately closes it, and awaiting here prevents orphaning
     // Chromium when the helper's entry point exits the process.
     await Promise.allSettled([...this.captures.values()])
-    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.unusedScans.values(), ...this.reactDoctorScans.values(), ...this.removals.values(), ...this.updates.values()])
+    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.unusedScans.values(), ...this.reactDoctorScans.values(), ...this.testCoverageScans.values(), ...this.removals.values(), ...this.updates.values()])
     if (this.screenshotDirectory) await rm(await this.screenshotDirectory, { recursive: true, force: true }).catch(() => undefined)
   }
 }
