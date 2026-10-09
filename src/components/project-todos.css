@@ -1,0 +1,65 @@
+.project-todos { padding-top: 10px; }
+.todos-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 12px 0 24px; }
+.todos-heading .eyebrow { display: flex; align-items: center; gap: 7px; }
+.todos-heading h2 { margin: 13px 0 9px; font-size: clamp(1.5rem, 2.2vw, 2rem); letter-spacing: -.7px; font-weight: 500; line-height: 1.3; }
+.todos-heading p { margin: 0; color: var(--muted-foreground); font-size: .9375rem; line-height: 1.7; }
+.todos-heading > .button { flex-shrink: 0; }
+.todos-scope { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; border-top: 1px solid var(--border); padding: 18px 0; }
+.todos-scope p { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.7; overflow-wrap: anywhere; }
+.todos-scope p:first-child { color: var(--foreground); }
+.todos-demo { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px dashed var(--border); border-radius: 6px; margin-bottom: 20px; }
+.todos-demo p { margin: 0; color: var(--muted-foreground); font-size: .875rem; line-height: 1.7; }
+.todos-demo .button { flex-shrink: 0; }
+.todos-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+.todos-stats > div { padding: 20px 22px; }
+.todos-stats > div + div { border-left: 1px solid var(--border); }
+.todos-stats dt { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: .8125rem; }
+.todos-stats dt svg { flex-shrink: 0; }
+.todos-stats dd { margin: 12px 0 0; font-size: 1.875rem; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.todos-stats dd > span { color: var(--muted-foreground); font-size: 1rem; font-weight: 400; }
+.todos-stats .todos-critical-count { color: var(--danger); }
+.todos-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+.todos-section-heading h3 { margin: 0; font-size: 1rem; font-weight: 500; }
+.todos-section-heading > span { color: var(--muted-foreground); font-size: .8125rem; }
+.todos-project { border: 1px solid var(--border); background: var(--surface); border-radius: 7px; margin-bottom: 18px; overflow: hidden; }
+.todos-project-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 22px; background: var(--surface-muted); }
+.todos-project-heading > div { min-width: 0; }
+.todos-project-heading h3 { margin: 0; font-size: 1.0625rem; font-weight: 500; overflow-wrap: anywhere; }
+.todos-project-heading p { margin: 5px 0 0; color: var(--muted-foreground); font-size: .8125rem; overflow-wrap: anywhere; }
+.todos-project-heading > span { color: var(--muted-foreground); border: 1px solid var(--border); background: var(--surface); border-radius: 4px; padding: 3px 7px; font-size: .8125rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.todos-project > ul { list-style: none; margin: 0; padding: 0; }
+.todos-task { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 14px; padding: 22px; border-top: 1px solid var(--border); }
+.todos-task-icon { display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 6px; width: 36px; height: 36px; }
+.todos-priority-critical { color: var(--danger); background: var(--danger-soft); }
+.todos-priority-high { color: var(--warning); background: var(--warning-soft); }
+.todos-task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: .75rem; }
+.todos-priority { display: inline-flex; padding: 3px 6px; border-radius: 3px; font-weight: 500; }
+.todos-task h4 { margin: 10px 0 6px; font-size: .9375rem; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.todos-task-content > p { margin: 0; color: var(--muted-foreground); font-size: .875rem; line-height: 1.7; overflow-wrap: anywhere; }
+.todos-task-date { display: block; color: var(--muted-foreground); font-size: .75rem; line-height: 1.6; margin-top: 10px; }
+.todos-task-actions { display: flex; flex-direction: column; align-items: stretch; align-self: center; gap: 4px; }
+.todos-task-actions .button { min-height: 36px; font-size: .8125rem; }
+.todos-task-actions .button-ghost { color: var(--muted-foreground); }
+.todos-empty { padding: 54px 24px; text-align: center; color: var(--muted-foreground); border: 1px dashed var(--border); border-radius: 7px; }
+.todos-empty > svg { margin: 0 auto 13px; color: var(--accent); }
+.todos-empty h3 { margin: 0 0 10px; color: var(--foreground); font-size: 1.125rem; font-weight: 500; }
+.todos-empty p { max-width: 530px; margin: 0 auto; font-size: .9375rem; line-height: 1.7; }
+.todos-empty .button { margin-top: 20px; }
+.todos-coverage { display: flex; align-items: flex-start; gap: 7px; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.7; margin: 18px 0; }
+.todos-coverage svg { flex-shrink: 0; margin-top: 3px; }
+.todos-notes { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 24px; }
+.todos-notes p { margin: 0 0 5px; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.7; }
+@media (max-width: 1100px) { .todos-stats > div { padding: 17px 14px; } }
+@media (max-width: 650px) {
+  .todos-heading { flex-direction: column; gap: 16px; }
+  .todos-heading h2 { font-size: 1.625rem; }
+  .todos-demo { align-items: flex-start; flex-direction: column; }
+  .todos-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .todos-stats > div:nth-child(3) { border-left: 0; }
+  .todos-stats > div:nth-child(n + 3) { border-top: 1px solid var(--border); }
+  .todos-project-heading { padding: 16px; }
+  .todos-task { grid-template-columns: 30px minmax(0, 1fr); gap: 12px; padding: 18px 16px; }
+  .todos-task-icon { width: 30px; height: 32px; }
+  .todos-task-actions { grid-column: 2; flex-direction: row; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  .todos-task-actions .button { min-height: 40px; }
+}

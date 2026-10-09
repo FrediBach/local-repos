@@ -60,6 +60,12 @@ Dates and times use your browser’s local timezone, including daylight-saving c
 
 Monorepo packages are grouped under their outermost workspace root and their repository history is counted once. Shallow clones and repositories that fail to load are identified in both the view and the export; a failed project does not hide successful results. Use **Retry summary** after resolving a failure. Summaries are read on demand and are not saved to the offline cache.
 
+## Automatic todos
+
+Choose **Todos**, directly below **Daily summary**, for important tasks from your latest successful scans. Each project contributes at most three grouped tasks: high or critical vulnerabilities, high package lag under your configured outdated-package thresholds, and React Doctor errors. Lower-priority findings, React Doctor warnings, and unused packages do not create todos. Number badges show active task counts in the sidebar and on project cards in both views; a project badge opens that project's tasks, and **All todos** returns to the full list.
+
+Use **Review scan** to open the relevant project report, or **Dismiss** to hide a task. Dismissals are saved locally for the directory and survive reloads and unchanged rescans. New important findings bring the task back; successful scans remove resolved tasks automatically, and an issue that returns after a clean scan appears again. Failed scans retain the last successful findings. A directory metadata refresh preserves existing reports; run the relevant maintenance scan to check whether an issue is resolved. Automatic maintenance scans also update the list.
+
 ## End-of-day push reminder
 
 At **18:00 in your local timezone**, Local Repos checks connected helper repositories for commits that have not reached origin and for uncommitted changes. Choose **Settings → Interface → End-of-day push reminder** to change the time or turn it off. The app must be open; opening it or returning to it after the chosen time also runs the check. It waits for other workspace actions and rechecks every five minutes afterward.

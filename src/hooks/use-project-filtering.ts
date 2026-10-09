@@ -15,7 +15,7 @@ export function useProjectFiltering(projects: RepoProject[], favorites: string[]
   const [query, setQuery] = useState('')
   const [searchScope, setSearchScope] = useState<'all' | 'packages'>('all')
   const [sort, setSort] = useState<ProjectSort>('updated')
-  const [page, setPage] = useState<'projects' | 'summary'>('projects')
+  const [page, setPage] = useState<'projects' | 'summary' | 'todos'>('projects')
 
   const filterContext = useMemo(() => ({ favorites, now: Date.now() }), [favorites, projects])
   const filterGroups = useMemo(() => projectFilterGroups(projects, filters, settings), [projects, filters, settings])
@@ -38,7 +38,7 @@ export function useProjectFiltering(projects: RepoProject[], favorites: string[]
     if (next === 'all') { clearFilters(); return }
     const key = next === 'favorites' ? 'stars' : 'server'
     const value = next === 'favorites' ? 'starred' : 'running'
-    setFilters(current => ({ ...current, [key]: page !== 'summary' && current[key]?.includes(value) ? [] : [value] }))
+    setFilters(current => ({ ...current, [key]: page === 'projects' && current[key]?.includes(value) ? [] : [value] }))
   }
 
   return { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchScope, setSearchScope, sort, setSort, page, setPage,

@@ -17,6 +17,8 @@ import { PREFERENCES_CHANGED_EVENT } from '@/lib/settings'
 import { createConfigBackup, mergeConfigProjects, type ConfigBackup } from '@/lib/config-backup'
 import { configureOutdatedReport } from '@/lib/outdated'
 import { DailySummary } from '@/components/daily-summary'
+import { ProjectTodos } from '@/components/project-todos'
+import { useProjectTodos } from '@/hooks/use-project-todos'
 import { PushReminder } from '@/components/push-reminder'
 import { usePushReminder } from '@/hooks/use-push-reminder'
 import { ProjectFilters } from '@/components/project-filters'
@@ -60,6 +62,7 @@ function WorkspaceApp() {
   const [connectOpen, setConnectOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string>()
+  const [todoProjectId, setTodoProjectId] = useState<string>()
   const [path, setPath] = useState('')
   const [helper, setHelper] = useState(false)
   const [busy, setBusy] = useState('')
@@ -80,6 +83,7 @@ function WorkspaceApp() {
   })
   const rawProjects = workspace?.projects ?? demoProjects
   const projects = useMemo(() => rawProjects.map(project => ({ ...project, tags: projectTags[project.id] ?? [], ...(project.outdated ? { outdated: configureOutdatedReport(project.outdated, settings) } : {}) })), [rawProjects, projectTags, settings])
+  const projectTodos = useProjectTodos(projects, workspace)
   const tagProject = projects.find(p => p.id === tagProjectId)
   const availableTags = useMemo(() => normalizeTags(projects.flatMap(project => project.tags)), [projects])
   const selected = projects.find(p => p.id === selectedId)
@@ -187,8 +191,12 @@ function WorkspaceApp() {
   }
   function openProject(project: RepoProject, tab: ProjectTab = 'overview') {
     const active = document.activeElement
-    projectOpener.current = active instanceof HTMLElement && active.closest('.project-card') ? active : document.getElementById(`project-open-${project.id}`)
+    projectOpener.current = active instanceof HTMLElement && active.closest('.project-card, .project-todos') ? active : document.getElementById(`project-open-${project.id}`)
     setSelectedId(project.id); setDetailTab(tab); setLogs(undefined)
+  }
+  function openTodos(project?: RepoProject) {
+    setTodoProjectId(project?.id)
+    setPage('todos')
   }
   function toggleFavorite(id: string) {
     favoritesVersion.current += 1
@@ -253,9 +261,10 @@ function WorkspaceApp() {
   }
 
   return <div className="app-shell">
-    <a className="skip-link" href="#projects">{page === 'summary' ? 'Skip to daily summary' : 'Skip to projects'}</a>
+    <a className="skip-link" href="#projects">{page === 'todos' ? 'Skip to todos' : page === 'summary' ? 'Skip to daily summary' : 'Skip to projects'}</a>
     <WorkspaceSidebar workspace={workspace} projects={projects} stacks={stacks} busy={!!busy} page={page} filter={filter} filters={filters}
       hasFilters={hasFilters} favoriteCount={favoriteCount} running={running} navigate={navigate} onSummary={() => setPage('summary')}
+      onTodos={() => openTodos()} todoCount={projectTodos.todos.length}
       toggleTechnology={toggleTechnology} onConnect={() => setConnectOpen(true)} onHelp={() => setHelpOpen(true)}
       onInstall={installPrompt ? async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) } : undefined} />
 
@@ -266,7 +275,10 @@ function WorkspaceApp() {
       <div className="page-content">
         <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
           onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />
-        {page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
+        {page === 'todos' ? <>
+          {projectTodos.storageError && <p role="alert">Todo dismissals could not be saved in this browser. They will stay dismissed for this session.</p>}
+          <ProjectTodos projects={projects} todos={projectTodos.todos} projectId={todoProjectId} onClearProject={() => setTodoProjectId(undefined)} onOpen={openProject} onDismiss={projectTodos.dismiss} isDemo={isDemo} onConnect={() => setConnectOpen(true)} />
+        </> : page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
         <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
           scanAllOutdated={scanAllOutdated}
           scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} captureAllPreviews={captureAllPreviews} />
@@ -282,6 +294,7 @@ function WorkspaceApp() {
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
         <ProjectResults projects={filtered} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
+          todoCounts={projectTodos.counts} onTodos={openTodos}
           filter={filter} hasRefinements={hasRefinements} emptyWorkspace={!projects.length} isDemo={isDemo}
           onReset={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }} onConnect={() => setConnectOpen(true)}
           view={view} query={query} activeTags={filters.tags} tagsReady={tagsReady} busy={busy} onOpen={openProject} onEditTags={editTags}
