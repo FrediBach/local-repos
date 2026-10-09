@@ -24,11 +24,15 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
   const { watcherMode: mode, watcherIntervalMinutes: minutes, watcherPollSeconds: seconds, watcherAudit, watcherOutdated, watcherStorage } = settings
 
   useEffect(() => {
+    // A metadata refresh must not restart the timer or replace its baseline.
+    // Read the committed snapshot only when the workspace identity/settings change.
+    const initialWorkspace = latest.current.workspace
     setError(false); setStatus(''); setNextRun(undefined)
-    if (!workspace || mode === 'manual' || !online || mode === 'changes' && workspace.mode !== 'helper') return
+    if (!initialWorkspace || mode === 'manual' || !online || mode === 'changes' && initialWorkspace.mode !== 'helper') return
     let active = true
     let timer: ReturnType<typeof setTimeout>
-    let baseline = fingerprintsOf(workspace)
+    let baseline = fingerprintsOf(initialWorkspace)
+    const rootPath = initialWorkspace.rootPath
     const delay = mode === 'periodic' ? minutes * 60_000 : seconds * 1000
     const current = () => active
     const publish = (message: string) => { if (active) setStatus(message) }
@@ -46,7 +50,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
       try {
         let changedIds: string[] | undefined
         if (mode === 'changes') {
-          const result = await api<{ fingerprints: Record<string, string> | null }>('/package-changes', { path: workspace!.rootPath })
+          const result = await api<{ fingerprints: Record<string, string> | null }>('/package-changes', { path: rootPath })
           if (!active) return
           if (result.fingerprints) {
             const snapshot = result.fingerprints

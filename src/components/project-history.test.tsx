@@ -25,7 +25,7 @@ describe('project commit history', () => {
     expect(screen.getByRole('status').textContent).toContain('Loading commit history')
     expect(await screen.findByText('Build something useful')).toBeTruthy()
     expect(projectHistory).toHaveBeenLastCalledWith('fixture', { branch: '', author: '', offset: 0 })
-    expect(screen.getByRole('img', { name: /3 commits in the last 365 days/ })).toBeTruthy()
+    expect(screen.getByRole('group', { name: /3 commits in the last 365 days/ })).toBeTruthy()
     expect(screen.getByRole('img', { name: /3 commits on October 7, 2026/ })).toBeTruthy()
     expect(screen.getByText('1234567').getAttribute('title')).toBe('1234567890abcdef')
     await user.selectOptions(screen.getByLabelText('Branch'), 'refs/heads/feature')

@@ -38,7 +38,7 @@ export function CommitFrequencyHeatmap({ activity, from, to }: Pick<GitHistory, 
   return <section className="commit-heatmap" aria-label="Commit frequency">
     <div className="history-card-heading"><h4><CalendarDays size={16} />Commit activity</h4><span>Last 365 days · UTC</span></div>
     <div ref={calendar} className="heatmap-scroll" tabIndex={0} role="region" aria-label="Daily commit activity calendar">
-      <svg viewBox={`0 0 ${weeks * 13 + 31} 115`} className="heatmap-calendar" role="img" aria-labelledby={`${id}-title ${id}-description`}>
+      <svg viewBox={`0 0 ${weeks * 13 + 31} 115`} className="heatmap-calendar" role="group" aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}>
         <title id={`${id}-title`}>{total.toLocaleString()} commits in the last 365 days</title>
         <desc id={`${id}-description`}>Daily commit counts from {formatDay(from)} to {formatDay(to)}. Stronger color indicates more commits. Focus a square for its count.</desc>
         {months.map(day => <text key={day.date} x={31 + day.week * 13} y={10} className="heatmap-label">{new Date(`${day.date}T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' })}</text>)}

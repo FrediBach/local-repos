@@ -77,6 +77,20 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it('returns to all projects when the brand button is activated with the keyboard', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await waitFor(() => expect(storage.loadFavorites).toHaveBeenCalledOnce())
+    const brand = screen.getByRole('button', { name: 'local repos.' })
+    for (const key of [' ', '{Enter}']) {
+      await user.click(screen.getByRole('button', { name: /^Favorites/ }))
+      expect(screen.getByRole('heading', { name: 'Favorites' })).toBeTruthy()
+      brand.focus()
+      await user.keyboard(key)
+      expect(screen.getByRole('heading', { name: 'All projects' })).toBeTruthy()
+    }
+  })
+
   it('opens a workspace-wide daily summary independently of project search and returns to the library', async () => {
     storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper' })
     fetchMock.mockImplementation((url: string) => {

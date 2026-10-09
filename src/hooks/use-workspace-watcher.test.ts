@@ -135,4 +135,25 @@ describe('workspace watcher scheduling', () => {
     await advance(60_000)
     expect(props.run).toHaveBeenCalledOnce()
   })
+
+  it('drops an in-flight change check when switching directories and uses the new baseline', async () => {
+    const props = { ...options(), settings: { ...defaultSettings, watcherMode: 'changes' as const } }
+    let finish!: (value: unknown) => void
+    api.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const { rerender } = renderHook(useWorkspaceWatcher, { initialProps: props })
+    await advance(0)
+    expect(api).toHaveBeenCalledWith('/package-changes', { path: '/projects' })
+    const next = { ...workspace, rootPath: '/other', projects: [{ ...project, packageFingerprint: 'new-baseline' }] }
+    rerender({ ...props, workspace: next })
+    await advance(0)
+    await act(async () => { finish({ fingerprints: { root: 'stale-change' } }) })
+    expect(props.run).not.toHaveBeenCalled()
+    api.mockResolvedValue({ fingerprints: { root: 'new-baseline' } })
+    await advance(5000)
+    expect(api).toHaveBeenLastCalledWith('/package-changes', { path: '/other' })
+    expect(props.run).not.toHaveBeenCalled()
+    api.mockResolvedValue({ fingerprints: { root: 'changed' } })
+    await advance(15_000)
+    expect(props.run).toHaveBeenCalledWith(['root'], expect.any(Function), expect.any(Function))
+  })
 })

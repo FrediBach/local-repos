@@ -51,7 +51,7 @@ export function DailySummary({ projects, helper, onConnect }: Props) {
     return () => clearTimeout(timer)
   }, [copied])
 
-  const results = state.key === key ? state.results : []
+  const results = useMemo(() => state.key === key ? state.results : [], [state, key])
   const loading = helper && !!range && (state.key !== key || results.length < repositories.length)
   const allCommits = useMemo(() => summaryCommits(results), [results])
   const commits = useMemo(() => summaryCommits(results, projectId, author), [results, projectId, author])

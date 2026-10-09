@@ -52,10 +52,11 @@ function projectIdentity(project: RepoProject): Pick<ProjectPreference, 'id' | '
 /** Export preferences only, including orphaned IDs retained from other directories. */
 export function createConfigBackup(settings: AppSettings, theme: ThemePreference, projects: RepoProject[], favorites: string[], tags: ProjectTags): ConfigBackup {
   const identities = new Map(projects.map(project => [project.id, projectIdentity(project)]))
+  const favoriteIds = new Set(favorites)
   const ids = new Set([...identities.keys(), ...favorites, ...Object.keys(tags)])
   return {
     format: 'local-repos-config', version: 1, exportedAt: new Date().toISOString(), settings: normalizeSettings(settings), theme,
-    projects: [...ids].map(id => ({ ...identities.get(id), id, favorite: favorites.includes(id), tags: normalizeTags(tags[id]) })),
+    projects: [...ids].map(id => ({ ...identities.get(id), id, favorite: favoriteIds.has(id), tags: normalizeTags(tags[id]) })),
   }
 }
 
