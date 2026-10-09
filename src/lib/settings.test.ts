@@ -3,12 +3,17 @@ import { defaultSettings, LEGACY_SETTINGS_STORAGE_KEY, normalizeSettings, readSe
 
 describe('workspace settings', () => {
   it('keeps application defaults for older settings and rejects unknown or wrong-category choices', () => {
-    expect(normalizeSettings({})).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+    expect(normalizeSettings({})).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree', terminal: 'auto' })
     expect(normalizeSettings({ editor: 'cursor', gitClient: 'fork' })).toMatchObject({ editor: 'cursor', gitClient: 'fork' })
     for (const value of [undefined, null, '', 'unknown', 'toString', '__proto__', ['cursor'], {}, 42]) {
-      expect(normalizeSettings({ editor: value, gitClient: value })).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+      expect(normalizeSettings({ editor: value, gitClient: value, terminal: value })).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree', terminal: 'auto' })
     }
-    expect(normalizeSettings({ editor: 'fork', gitClient: 'cursor' })).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+    expect(normalizeSettings({ editor: 'fork', gitClient: 'cursor' })).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree', terminal: 'auto' })
+  })
+
+  it('accepts configured terminals', () => {
+    expect(normalizeSettings({ terminal: 'iterm2' }).terminal).toBe('iterm2')
+    expect(normalizeSettings({ terminal: 'cursor' }).terminal).toBe('auto')
   })
 
   it('expands the legacy sidebar default while retaining other preferences and subsequent custom limits', () => {

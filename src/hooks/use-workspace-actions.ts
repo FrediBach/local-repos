@@ -8,7 +8,7 @@ import { canReadDirectory, scanDirectory } from '@/lib/filesystem'
 import { useSettings } from './use-settings'
 import { cachePreview, packageWorkspaceId, preservePreviews } from '@/lib/workspace'
 import { isReactProject } from '@/lib/react-doctor'
-import type { PackageAudit, PackageOutdated, ReactDoctorReport, RepoProject, Workspace } from '@/types'
+import type { PackageAudit, PackageOutdated, ReactDoctorReport, RepoProject, RunProjectScriptRequest, Workspace } from '@/types'
 
 interface Options {
   workspace?: Workspace
@@ -184,6 +184,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   async function action(project: RepoProject, name: string, body: unknown = {}) {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
+    if (name === 'run-script') body = { ...(body as RunProjectScriptRequest), terminal: settings.terminal } satisfies RunProjectScriptRequest
     const updateLevel = name === 'update-minor' ? 'minor' : name === 'update-patches' ? 'patch' : undefined
     const version = ++workspaceVersion.current
     setBusy(`${project.id}:${name}`)

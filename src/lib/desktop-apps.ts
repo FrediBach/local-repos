@@ -50,3 +50,23 @@ export const isEditorId = (value: unknown): value is EditorId => editors.some(ap
 export const isGitClientId = (value: unknown): value is GitClientId => gitClients.some(app => app.id === value)
 export const isDesktopAppId = (value: unknown): value is DesktopAppId => isEditorId(value) || isGitClientId(value)
 export const desktopAppName = (id: DesktopAppId): string => desktopApps.find(app => app.id === id)!.name
+
+// Script launchers currently support the same Unix platforms as script execution.
+export const terminals = [
+  { id: 'auto', name: 'Automatic', platforms: ['darwin', 'linux'] },
+  { id: 'terminal', name: 'Terminal', platforms: ['darwin'] },
+  { id: 'iterm2', name: 'iTerm2', platforms: ['darwin'] },
+  { id: 'ghostty', name: 'Ghostty', platforms: ['darwin', 'linux'] },
+  { id: 'kitty', name: 'kitty', platforms: ['darwin', 'linux'] },
+  { id: 'wezterm', name: 'WezTerm', platforms: ['darwin', 'linux'] },
+  { id: 'alacritty', name: 'Alacritty', platforms: ['darwin', 'linux'] },
+  { id: 'gnome-terminal', name: 'GNOME Terminal', platforms: ['linux'] },
+  { id: 'konsole', name: 'Konsole', platforms: ['linux'] },
+  { id: 'xfce4-terminal', name: 'Xfce Terminal', platforms: ['linux'] },
+  { id: 'tilix', name: 'Tilix', platforms: ['linux'] },
+  { id: 'terminator', name: 'Terminator', platforms: ['linux'] },
+  { id: 'mate-terminal', name: 'MATE Terminal', platforms: ['linux'] },
+  { id: 'xterm', name: 'xterm', platforms: ['linux'] },
+] as const
+export type TerminalId = typeof terminals[number]['id']
+export const isTerminalId = (value: unknown): value is TerminalId => terminals.some(app => app.id === value)

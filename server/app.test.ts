@@ -125,18 +125,20 @@ describe('local helper API security', () => {
     expect((await post('/api/projects/unknown/run-script', { name: 'test', command: 'vitest run' })).status).toBe(404)
     const project = await createProject({ test: 'vitest run', prepare: 'husky' })
     const endpoint = `/api/projects/${project.id}/run-script`
-    for (const body of [{}, { name: 'missing', command: 'echo unsafe' }, { name: 'test', command: 'echo unsafe' }, { name: 'prepare', command: 'husky' }]) {
+    for (const body of [{}, { name: 'missing', command: 'echo unsafe' }, { name: 'test', command: 'echo unsafe' }, { name: 'prepare', command: 'husky' }, { name: 'test', command: 'vitest run', terminal: 'arbitrary-command' }, { name: 'test', command: 'vitest run', terminal: null }]) {
       expect((await post(endpoint, body)).ok).toBe(false)
     }
     expect(launch).not.toHaveBeenCalled()
     const denied = await post(endpoint, { name: 'test', command: 'vitest run' }, { Origin: 'https://untrusted.example' })
     expect(denied.status).toBe(403)
     expect((await post(endpoint, { name: 'test', command: 'vitest run' })).status).toBe(200)
-    expect(launch).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), 'test')
+    expect(launch).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), 'test', 'auto')
+    expect((await post(endpoint, { name: 'test', command: 'vitest run', terminal: 'iterm2' })).status).toBe(200)
+    expect(launch).toHaveBeenLastCalledWith(helper.registry.lookup(project.id), 'test', 'iterm2')
     expect(await helper.runtime.status(project.id)).toEqual({ status: 'stopped' })
     await writeFile(path.join(directory, 'project/package.json'), JSON.stringify({ scripts: { test: 'node changed.js' } }))
     expect((await post(endpoint, { name: 'test', command: 'vitest run' })).status).toBe(409)
-    expect(launch).toHaveBeenCalledOnce()
+    expect(launch).toHaveBeenCalledTimes(2)
   })
 
   it('serves Git history only for registered, still-accessible project paths', async () => {

@@ -150,7 +150,7 @@ describe('project workspace interactions', () => {
     await user.click(screen.getByRole('button', { name: `View ${project.name}` }))
     await user.click(screen.getByRole('button', { name: 'Run test:watch in terminal' }))
     await screen.findByText('Script sent to your terminal. Follow its progress and stop it there.')
-    expect(fetchMock).toHaveBeenCalledWith(`/api/projects/${project.id}/run-script`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'test:watch', command: 'vitest' }) }))
+    expect(fetchMock).toHaveBeenCalledWith(`/api/projects/${project.id}/run-script`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'test:watch', command: 'vitest', terminal: 'auto' }) }))
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
   })
 

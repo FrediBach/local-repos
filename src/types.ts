@@ -1,7 +1,13 @@
-import type { DesktopAppId } from './lib/desktop-apps'
+import type { DesktopAppId, TerminalId } from './lib/desktop-apps'
 
 export interface OpenProjectRequest {
   app: DesktopAppId | 'folder'
+}
+
+export interface RunProjectScriptRequest {
+  name: string
+  command: string
+  terminal?: TerminalId
 }
 
 export type PreviewMode = 'auto' | 'local' | 'website'

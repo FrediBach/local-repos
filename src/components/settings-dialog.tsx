@@ -6,7 +6,7 @@ import { useSettings } from '@/hooks/use-settings'
 import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type SettingsErrorKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
 import { colorSchemes } from '@/lib/color-schemes'
-import { desktopPlatforms, editors, gitClients, type EditorId, type GitClientId } from '@/lib/desktop-apps'
+import { desktopPlatforms, editors, gitClients, terminals, type TerminalId, type EditorId, type GitClientId } from '@/lib/desktop-apps'
 import { ConfigBackupPanel, type ConfigBackupControls } from './config-backup'
 import './settings-dialog.css'
 
@@ -69,7 +69,7 @@ export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupCon
         <div className="settings-body" role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`} tabIndex={0} key={tab}>
           {tab === 'backup' && <ConfigBackupPanel {...backup} onWorkingChange={setTransferring} onImported={value => { setDraft(value.settings); setSubmitted(false); setSaveError('') }} />}
           {tab === 'applications' && <fieldset className="settings-section"><legend>Open projects with</legend>
-            <p>Choose the editor and Git client for project menus and detail buttons. Applications must be installed on the computer running the local helper.</p>
+            <p>Choose the editor and Git client for project menus and detail buttons, and the terminal for running scripts. Applications must be installed on the computer running the local helper.</p>
             <div className="settings-grid">
               <label className="settings-field"><span>Code editor</span><select value={draft.editor} onChange={event => { setDraft(current => ({ ...current, editor: event.target.value as EditorId })); setSaveError('') }}>
                 {editors.map(app => <option key={app.id} value={app.id}>{app.name}{app.platforms.length < 3 ? ` (${app.platforms.map(platform => desktopPlatforms[platform]).join(', ')})` : ''}</option>)}
@@ -77,8 +77,11 @@ export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupCon
               <label className="settings-field"><span>Git client</span><select value={draft.gitClient} onChange={event => { setDraft(current => ({ ...current, gitClient: event.target.value as GitClientId })); setSaveError('') }}>
                 {gitClients.map(app => <option key={app.id} value={app.id}>{app.name}{app.platforms.length < 3 ? ` (${app.platforms.map(platform => desktopPlatforms[platform]).join(', ')})` : ''}</option>)}
               </select></label>
+              <label className="settings-field"><span>Script terminal</span><select value={draft.terminal} onChange={event => { setDraft(current => ({ ...current, terminal: event.target.value as TerminalId })); setSaveError('') }}>
+                {terminals.map(app => <option key={app.id} value={app.id}>{app.name} ({app.platforms.map(platform => desktopPlatforms[platform]).join(', ')})</option>)}
+              </select></label>
             </div>
-            <p className="watcher-hint">Opening applications requires a local helper connection. On Linux, enable the application's command-line launcher. On Windows, add its executable folder to PATH. Restart the helper after changing PATH.</p>
+            <p className="watcher-hint">Automatic uses Terminal on macOS or an available Linux terminal. Script launching requires macOS or Linux. Opening applications requires a local helper connection. On Linux, enable the application's command-line launcher. On Windows, add its executable folder to PATH. Restart the helper after changing PATH.</p>
           </fieldset>}
           {tab === 'badges' && <>
             <fieldset className="settings-section"><legend>Vulnerability colors</legend><p>The project badge uses the highest reported severity. Severity labels and counts stay as reported by the package manager.</p>

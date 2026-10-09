@@ -22,7 +22,7 @@ import { unusedProject } from './package-unused'
 import { reactDoctorProject } from './react-doctor'
 import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
 import { openScriptTerminal, validateProjectScript } from './project-scripts'
-import { isDesktopAppId } from '../src/lib/desktop-apps'
+import { isDesktopAppId, isTerminalId } from '../src/lib/desktop-apps'
 import { openDesktopApp } from './desktop-apps'
 
 export { devCommand } from './dev-server'
@@ -546,12 +546,13 @@ export class ProjectRuntime {
     await openDesktopApp(app, entry.directory)
   }
 
-  async runScript(id: string, name: unknown, command: unknown): Promise<void> {
+  async runScript(id: string, name: unknown, command: unknown, terminal: unknown = 'auto'): Promise<void> {
     this.available(id)
     const entry = await this.registry.get(id)
     const selected = await validateProjectScript(entry, name, command)
     this.available(id)
-    await openScriptTerminal(entry, selected)
+    if (!isTerminalId(terminal)) throw new HelperError('Choose a supported script terminal in Settings → Applications.')
+    await openScriptTerminal(entry, selected, terminal)
   }
 
   async shutdown(): Promise<void> {

@@ -145,14 +145,16 @@ coordinates the IndexedDB preference write with settings/theme writes and rolls
 back localStorage when the transaction fails. A preferences-changed event updates
 same-tab settings/theme consumers; storage events handle cross-tab changes.
 
-Editor and Git-client preferences (`editor` and `gitClient`) are validated against
-the shared allowlist in [`desktop-apps.ts`](../src/lib/desktop-apps.ts). Missing or
-invalid stored values fall back to VS Code and Sourcetree; older configuration
-backups may omit both fields. Settings → Applications saves the choices through
+Editor, Git-client, and script-terminal preferences (`editor`, `gitClient`, and
+`terminal`) are validated against the shared allowlist in [`desktop-apps.ts`](../src/lib/desktop-apps.ts). Missing or
+invalid stored values fall back to VS Code, Sourcetree, and Automatic; older
+configuration backups may omit these fields. Settings → Applications saves the choices through
 the existing settings provider, including cross-tab synchronization and backup
 export/import. Cards and detail buttons read the same preferences and send an
 `OpenProjectRequest` through the existing workspace action hook. Browser/demo
-actions retain the helper connection flow. The catalog labels supported launcher
+actions retain the helper connection flow. Script actions receive the current
+terminal preference in the workspace action hook and send it as the optional
+`RunProjectScriptRequest.terminal` field. The catalog labels supported launcher
 platforms; it does not detect whether applications are installed.
 
 ## Operation and watcher coordination

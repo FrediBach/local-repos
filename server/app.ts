@@ -107,7 +107,7 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
     response.json({ ok: true })
   })
   app.post('/api/projects/:id/run-script', async (request, response) => {
-    await runtime.runScript(request.params.id, request.body?.name, request.body?.command)
+    await runtime.runScript(request.params.id, request.body?.name, request.body?.command, request.body?.terminal)
     response.json({ ok: true })
   })
   app.get('/api/screenshots/:filename', async (request, response) => {

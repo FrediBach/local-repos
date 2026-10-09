@@ -4,10 +4,11 @@ import { createConfigBackup, mergeConfigProjects, parseConfigBackup } from './co
 import { defaultSettings } from './settings'
 
 it('round-trips application preferences and accepts older backups while rejecting invalid choices', () => {
-  const backup = createConfigBackup({ ...defaultSettings, editor: 'zed', gitClient: 'gitkraken' }, 'system', [], [], {})
-  expect(parseConfigBackup(JSON.stringify(backup)).settings).toMatchObject({ editor: 'zed', gitClient: 'gitkraken' })
-  const { editor: _editor, gitClient: _gitClient, ...legacy } = backup.settings
-  expect(parseConfigBackup(JSON.stringify({ ...backup, settings: legacy })).settings).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree' })
+  const backup = createConfigBackup({ ...defaultSettings, editor: 'zed', gitClient: 'gitkraken', terminal: 'ghostty' }, 'system', [], [], {})
+  expect(parseConfigBackup(JSON.stringify(backup)).settings).toMatchObject({ editor: 'zed', gitClient: 'gitkraken', terminal: 'ghostty' })
+  expect(() => parseConfigBackup(JSON.stringify({ ...backup, settings: { ...backup.settings, terminal: 'arbitrary-command' } }))).toThrow('invalid setting: terminal')
+  const { editor: _editor, gitClient: _gitClient, terminal: _terminal, ...legacy } = backup.settings
+  expect(parseConfigBackup(JSON.stringify({ ...backup, settings: legacy })).settings).toMatchObject({ editor: 'vscode', gitClient: 'sourcetree', terminal: 'auto' })
   expect(() => parseConfigBackup(JSON.stringify({ ...backup, settings: { ...backup.settings, editor: 'arbitrary-command' } }))).toThrow('invalid setting: editor')
 })
 

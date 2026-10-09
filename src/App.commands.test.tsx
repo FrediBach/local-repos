@@ -88,6 +88,7 @@ describe('smart project search', () => {
   })
 
   it('autocompletes a project script and sends its displayed name and command', async () => {
+    vi.stubGlobal('localStorage', { getItem: (key: string) => key === 'local-repos:settings:v2' ? JSON.stringify({ terminal: 'iterm2' }) : null, setItem: vi.fn(), removeItem: vi.fn() })
     const { user, search } = await setup()
     await user.click(search)
     await user.click(suggestion('Alpha'))
@@ -96,7 +97,7 @@ describe('smart project search', () => {
     await user.click(suggestion('Run build'))
     await screen.findByText('Script sent to your terminal. Follow its progress and stop it there.')
     expect(fetchMock).toHaveBeenCalledWith('/api/projects/alpha/run-script', expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ name: 'build', command: 'vite build' }),
+      method: 'POST', body: JSON.stringify({ name: 'build', command: 'vite build', terminal: 'iterm2' }),
     }))
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
   })
@@ -108,7 +109,7 @@ describe('smart project search', () => {
     expect(run.textContent).toContain('Alpha')
     await user.click(run)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/projects/alpha/run-script', expect.objectContaining({
-      body: JSON.stringify({ name: 'build', command: 'vite build' }),
+      body: JSON.stringify({ name: 'build', command: 'vite build', terminal: 'auto' }),
     })))
   })
 
@@ -178,7 +179,7 @@ describe('smart project search', () => {
     await user.click(search)
     await user.keyboard('{Enter}')
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/projects/alpha/run-script', expect.objectContaining({
-      body: JSON.stringify({ name: 'build', command: 'vite build' }),
+      body: JSON.stringify({ name: 'build', command: 'vite build', terminal: 'auto' }),
     })))
   })
 

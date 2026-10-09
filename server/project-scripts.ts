@@ -3,6 +3,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { discoverProjectScripts, scriptRunCommand } from '../src/lib/project-scripts'
+import { terminals, type TerminalId } from '../src/lib/desktop-apps'
 import { parsePackageJson } from '../src/lib/metadata'
 import { HelperError, type RegisteredProject } from './scanner'
 
@@ -40,23 +41,55 @@ async function spawnTerminal(command: string, args: string[]): Promise<void> {
   })
 }
 
-export async function openScriptTerminal(entry: RegisteredProject, name: string, platform = process.platform): Promise<void> {
+interface TerminalLaunch { command: string; args: string[]; bounded?: boolean }
+
+/** Fixed launchers only; project-controlled shell text travels in arguments. */
+export function terminalLaunchCommands(entry: RegisteredProject, name: string, terminal: TerminalId, platform: NodeJS.Platform): TerminalLaunch[] {
+  const definition = terminals.find(app => app.id === terminal)
+  if (!definition) throw new HelperError('Choose a supported script terminal in Settings → Applications.')
+  if (!(definition.platforms as readonly string[]).includes(platform)) throw new HelperError(`${definition.name} cannot launch scripts on this platform. Choose a compatible terminal in Settings → Applications, or copy the script command.`, 501)
   const command = terminalScriptCommand(entry, name)
-  if (platform === 'darwin') {
+  const shell = ['/bin/sh', '-c', `${command}\nexec /bin/sh -i`]
+  const selected = terminal === 'auto' && platform === 'darwin' ? 'terminal' : terminal
+  if (selected === 'terminal' || selected === 'iterm2') {
+    const source = selected === 'terminal'
+      ? 'on run argv\n tell application "Terminal"\n activate\n do script (item 1 of argv)\n end tell\nend run'
+      : 'on run argv\n tell application "iTerm2"\n activate\n set newWindow to (create window with default profile)\n tell current session of newWindow to write text (item 1 of argv)\n end tell\nend run'
+    return [{ command: '/usr/bin/osascript', args: ['-e', source, command], bounded: true }]
+  }
+  if (selected === 'auto') return ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm'].map(binary => ({ command: binary, args: [binary === 'gnome-terminal' ? '--' : '-e', ...shell] }))
+  const launchers: Partial<Record<TerminalId, { binary: string; mac?: string; args: string[] }>> = {
+    ghostty: { binary: 'ghostty', mac: 'Ghostty', args: ['-e', ...shell] },
+    kitty: { binary: 'kitty', mac: 'kitty', args: [...shell] },
+    wezterm: { binary: 'wezterm', mac: 'WezTerm', args: ['start', '--always-new-process', '--', ...shell] },
+    alacritty: { binary: 'alacritty', mac: 'Alacritty', args: ['-e', ...shell] },
+    'gnome-terminal': { binary: 'gnome-terminal', args: ['--', ...shell] },
+    konsole: { binary: 'konsole', args: ['--separate', '-e', ...shell] },
+    'xfce4-terminal': { binary: 'xfce4-terminal', args: ['--disable-server', '-x', ...shell] },
+    tilix: { binary: 'tilix', args: ['-e', ...shell] },
+    terminator: { binary: 'terminator', args: ['-x', ...shell] },
+    'mate-terminal': { binary: 'mate-terminal', args: ['-x', ...shell] },
+    xterm: { binary: 'xterm', args: ['-e', ...shell] },
+  }
+  const launcher = launchers[selected]!
+  if (platform === 'darwin') return [{ command: '/usr/bin/open', args: ['-n', '-a', launcher.mac!, '--args', ...launcher.args], bounded: true }]
+  return [{ command: launcher.binary, args: launcher.args }]
+}
+
+export async function openScriptTerminal(entry: RegisteredProject, name: string, terminal: TerminalId = 'auto', platform = process.platform): Promise<void> {
+  const launches = terminalLaunchCommands(entry, name, terminal, platform)
+  for (const launch of launches) {
     try {
-      // Pass shell text as an argument, never as AppleScript source.
-      await execFileAsync('/usr/bin/osascript', ['-e', 'on run argv\n tell application "Terminal"\n activate\n do script (item 1 of argv)\n end tell\nend run', command], { timeout: 10_000 })
+      if (launch.bounded) await execFileAsync(launch.command, launch.args, { timeout: 10_000, maxBuffer: 64 * 1024, shell: false })
+      else await spawnTerminal(launch.command, launch.args)
       return
-    } catch { throw new HelperError('Could not open Terminal. Allow the local helper to control Terminal in macOS Automation settings, then try again.') }
-  }
-  if (platform === 'linux') {
-    // Keep the terminal available after a one-shot script finishes or fails.
-    const shell = ['/bin/sh', '-c', `${command}\nexec /bin/sh -i`]
-    for (const [binary, flag] of [['x-terminal-emulator', '-e'], ['gnome-terminal', '--'], ['konsole', '-e'], ['xterm', '-e']]) {
-      try { await spawnTerminal(binary, [flag, ...shell]); return }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') break }
+    } catch (error) {
+      if (terminal !== 'auto' || (error as NodeJS.ErrnoException).code !== 'ENOENT') break
     }
-    throw new HelperError('Could not open a terminal. Install x-terminal-emulator, GNOME Terminal, Konsole, or xterm, or copy the script command into your terminal.')
   }
-  throw new HelperError('Opening script terminals is supported on macOS and Linux. Copy the script command into your terminal on this platform.', 501)
+  const label = terminals.find(app => app.id === terminal)!.name
+  const setup = platform === 'darwin'
+    ? 'Make sure it is installed. For Terminal and iTerm2, allow the helper to control the app in macOS Automation settings.'
+    : "Make sure its command-line launcher is installed on the helper's PATH, then restart the helper."
+  throw new HelperError(`Could not open ${terminal === 'auto' ? 'a terminal' : label}. ${setup} Choose another terminal in Settings → Applications, or copy the script command.`)
 }

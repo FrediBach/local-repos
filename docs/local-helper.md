@@ -146,7 +146,14 @@ Individual service modules handle command construction, validation, and parsing.
   state. Missing executables and unsupported platforms produce setup guidance.
   [`project-scripts.ts`](../server/project-scripts.ts) checks the requested script
   name and displayed command against both registered metadata and a fresh regular
-  `package.json`, then launches the package-manager script in a system terminal.
+  `package.json`, then launches the package-manager script in the configured terminal.
+  The optional `terminal` request field is validated against the shared terminal
+  catalog; omission preserves Automatic (macOS Terminal or Linux fallback).
+  Explicit choices never fall back to another app. Terminal and iTerm2 use bounded
+  AppleScript with shell text passed only as an argument; other macOS launchers
+  use `open -n -a ... --args`, and Linux launchers use fixed argument arrays.
+  Shells remain open after CLI-launched tasks finish. Unsupported platforms or
+  missing launchers report setup guidance. Windows script launching remains unsupported.
   Paths and names are quoted; browser-supplied script bodies are never interpolated.
   Terminal scripts run independently and are not tracked as runtime dev servers.
 
