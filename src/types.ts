@@ -105,6 +105,28 @@ export interface PackageUnused {
   warning?: string
 }
 
+export interface ReactDoctorFinding {
+  filePath: string
+  line: number
+  column: number
+  rule: string
+  plugin: string
+  severity: 'error' | 'warning'
+  message: string
+  help: string
+  category: string
+  url?: string
+}
+
+export interface ReactDoctorReport {
+  scannedAt: string
+  version: string
+  score: number | null
+  label: string
+  findings: ReactDoctorFinding[]
+  warning?: string
+}
+
 export interface RepoProject {
   id: string
   name: string
@@ -132,6 +154,7 @@ export interface RepoProject {
   audit?: PackageAudit
   outdated?: PackageOutdated
   unused?: PackageUnused
+  reactDoctor?: ReactDoctorReport
   packageUpdate?: PackageUpdate
   git?: {
     branch?: string

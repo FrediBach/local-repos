@@ -4,6 +4,8 @@ import { ProjectTagChips } from './project-tags'
 import { ProjectAiBadge } from './project-ai-badge'
 import { ProjectAuditBadge } from './project-audit-badge'
 import { ProjectOutdatedBadge } from './project-outdated-badge'
+import { ProjectReactDoctorBadge } from './project-react-doctor-badge'
+import type { ProjectTab } from './project-tabs'
 import { ProjectPreview } from './project-preview'
 import { PackageMatches } from './project-packages'
 import { formatBytes } from '@/lib/format-bytes'
@@ -13,7 +15,7 @@ import type { RepoProject } from '@/types'
 
 interface Props {
   project: RepoProject; index: number; view: 'grid' | 'list'; query: string; activeTags?: string[]; tagsReady: boolean; favorite: boolean; capturing: boolean; busy: string
-  onOpen: (project: RepoProject, tab?: 'overview' | 'packages') => void; onEditTags: (project: RepoProject) => void
+  onOpen: (project: RepoProject, tab?: ProjectTab) => void; onEditTags: (project: RepoProject) => void
   onToggleFavorite: (id: string) => void; onTagFilter: (tag: string) => void; onTechnologyFilter: (technology: string) => void
   onAction: (project: RepoProject, action: string, body?: unknown) => void
 }
@@ -23,7 +25,7 @@ export function ProjectCard({ project, index, view, query, activeTags, tagsReady
   const title = <><button id={`project-open-${project.id}`} className="project-title" onClick={() => onOpen(project)}>{project.name}</button><ProjectAiBadge project={project} /></>
   return <article className={`project-card ${capturing ? 'is-capturing' : ''}`} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
     <button className="preview-button" onClick={() => onOpen(project)} aria-label={`View ${project.name}`}><ProjectPreview project={project} />{capturing && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
-    <div className="project-info"><div className="project-title-row">{view === 'list' ? <div className="project-name-tags"><div className="project-name">{title}</div>{tags}</div> : title}<ProjectAuditBadge project={project} onClick={() => onOpen(project, 'packages')} /><ProjectOutdatedBadge project={project} onClick={() => onOpen(project, 'packages')} /><button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} onClick={() => onToggleFavorite(project.id)} aria-label={`${favorite ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorite}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} />{view === 'grid' && tags}{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
+    <div className="project-info"><div className="project-title-row">{view === 'list' ? <div className="project-name-tags"><div className="project-name">{title}</div>{tags}</div> : title}<ProjectAuditBadge project={project} onClick={() => onOpen(project, 'packages')} /><ProjectOutdatedBadge project={project} onClick={() => onOpen(project, 'packages')} /><ProjectReactDoctorBadge project={project} onClick={() => onOpen(project, 'react-doctor')} /><button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} onClick={() => onToggleFavorite(project.id)} aria-label={`${favorite ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favorite}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} />{view === 'grid' && tags}{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
     <CardFooter project={project} tagsReady={tagsReady} favorite={favorite} busy={busy} onOpen={onOpen} onEditTags={onEditTags} onToggleFavorite={onToggleFavorite} onAction={onAction} />
   </article>
 }

@@ -91,6 +91,7 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   app.post('/api/projects/:id/update-packages', async (request, response) => response.json({ packageUpdate: await runtime.updatePackages(request.params.id, request.body?.level) }))
   app.post('/api/projects/:id/outdated', async (request, response) => response.json({ outdated: await runtime.outdated(request.params.id) }))
   app.post('/api/projects/:id/unused', async (request, response) => response.json({ unused: await runtime.unused(request.params.id) }))
+  app.post('/api/projects/:id/react-doctor', async (request, response) => response.json({ reactDoctor: await runtime.reactDoctor(request.params.id) }))
   app.post('/api/projects/:id/screenshot', async (request, response) => {
     const source = request.body?.source ?? 'auto'
     if (source !== 'auto' && source !== 'local' && source !== 'website') throw new HelperError('Choose automatic, local, or website preview capture.')

@@ -1,14 +1,15 @@
 import { useId, useRef, type ReactNode } from 'react'
 
-const tabs = ['overview', 'packages', 'readme'] as const
-type ProjectTab = typeof tabs[number]
-const labels = { overview: 'Overview', packages: 'Packages', readme: 'README' }
+const allTabs = ['overview', 'packages', 'react-doctor', 'readme'] as const
+export type ProjectTab = typeof allTabs[number]
+const labels = { overview: 'Overview', packages: 'Packages', 'react-doctor': 'React Doctor', readme: 'README' }
 
-export function ProjectTabs({ value, onChange, children }: { value: ProjectTab; onChange: (tab: ProjectTab) => void; children: ReactNode }) {
+export function ProjectTabs({ value, onChange, children, react = false }: { value: ProjectTab; onChange: (tab: ProjectTab) => void; children: ReactNode; react?: boolean }) {
   const id = useId()
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
+  const tabs = allTabs.filter(tab => tab !== 'react-doctor' || react)
   return <>
-    <div className="detail-tabs" role="tablist" aria-label="Project details">
+    <div className={`detail-tabs${react ? ' react-doctor-tabs' : ''}`} role="tablist" aria-label="Project details">
       {tabs.map((tab, index) => <button key={tab} ref={node => { buttons.current[index] = node }}
         type="button" role="tab" id={`${id}-${tab}`} aria-controls={`${id}-panel`}
         aria-selected={value === tab} tabIndex={value === tab ? 0 : -1}

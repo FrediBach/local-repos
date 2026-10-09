@@ -20,6 +20,14 @@ function workspace(projects: RepoProject[]): Workspace {
 }
 
 describe('captured preview persistence', () => {
+  it('keeps dated React Doctor findings after resync, prefers fresh reports and never transfers them to another project', () => {
+    const reactDoctor = { scannedAt: '2026-10-09T10:00:00Z', version: '0.9.17', score: 82, label: 'Great', findings: [] }
+    const previous = workspace([{ ...project('one'), reactDoctor }])
+    expect(preservePreviews(workspace([project('one')]), previous).projects[0].reactDoctor).toEqual(reactDoctor)
+    const fresh = { ...reactDoctor, score: null, label: 'Score unavailable', warning: 'Scoring unavailable.' }
+    expect(preservePreviews(workspace([{ ...project('one'), reactDoctor: fresh }]), previous).projects[0].reactDoctor).toEqual(fresh)
+    expect(preservePreviews(workspace([project('two')]), previous).projects[0].reactDoctor).toBeUndefined()
+  })
   it('keeps dated maintenance results across helper restarts and prefers new measurements', () => {
     const storage = { totalBytes: 2048, nodeModulesBytes: 1024, hasNodeModules: true, measuredAt: '2026-10-07T10:00:00Z', partial: false }
     const audit = { manager: 'npm' as const, scannedAt: '2026-10-07T10:00:00Z', counts: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 }, findings: [] }

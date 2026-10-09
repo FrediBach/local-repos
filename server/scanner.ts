@@ -254,7 +254,8 @@ export class ProjectRegistry {
         const audit = entry.project.audit ?? previous.project.audit
         const outdated = entry.project.outdated ?? previous.project.outdated
         const unused = entry.project.unused ?? previous.project.unused
-        Object.assign(previous.project, entry.project, { dev, screenshot, preview, storage, audit, outdated, unused })
+        const reactDoctor = entry.project.reactDoctor ?? previous.project.reactDoctor
+        Object.assign(previous.project, entry.project, { dev, screenshot, preview, storage, audit, outdated, unused, reactDoctor })
         entry.project = previous.project
       }
       this.projects.set(entry.project.id, entry)

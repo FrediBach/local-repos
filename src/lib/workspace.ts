@@ -14,6 +14,7 @@ export function preservePreviews(next: Workspace, previous?: Workspace): Workspa
       ...(project.audit === undefined && cached.audit ? { audit: cached.audit } : {}),
       ...(project.outdated === undefined && cached.outdated ? { outdated: cached.outdated } : {}),
       ...(project.unused === undefined && cached.unused ? { unused: cached.unused } : {}),
+      ...(project.reactDoctor === undefined && cached.reactDoctor ? { reactDoctor: cached.reactDoctor } : {}),
     }
   }) }
 }

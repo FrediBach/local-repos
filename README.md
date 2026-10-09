@@ -1,6 +1,6 @@
 # Local Repos
 
-A local project library with README introductions, package search, vulnerability audits, unused-package scans with Knip, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a restrained interface inspired by Dieter Rams, in light and dark themes.
+A local project library with README introductions, package search, vulnerability audits, React Doctor scores and findings, unused-package scans with Knip, outdated-package scans and bounded updates, monorepo workspaces, disk usage and dependency cleanup, technology filters, Git activity, and development previews. Built as a proof of concept with a restrained interface inspired by Dieter Rams, in light and dark themes.
 
 ## Run locally
 
@@ -173,6 +173,16 @@ Each action refreshes resolved versions and queries published releases, includin
 Updated dependencies are **pinned to exact versions** in package.json. The installed package manager updates its lockfile and dependency tree; a workspace member uses the shared lockfile. Lifecycle scripts are disabled. Other dependencies may be resolved by the package manager as part of installation. An installation failure can leave partial changes, so inspect the files before retrying. Outdated, audit, and storage reports are cleared for the related repository after an update attempt, and project metadata is refreshed. Scan again for fresh reports.
 
 Commands use [npm install](https://docs.npmjs.com/cli/install/), [pnpm add](https://pnpm.io/cli/add), [Yarn add](https://yarnpkg.com/cli/add), or [Bun add](https://bun.sh/docs/pm/cli/add), depending on the project. No major version updates, forced peer-dependency overrides, or automatic updates are performed. Following the initial outdated scan, registry lookups and installs have a combined four-minute deadline, a two-minute per-command timeout, and an 8 MiB output limit.
+
+### React Doctor
+
+Use **Scan React projects** above the project list to scan every React project in the connected workspace, including projects hidden by filters. Other projects are skipped. Open a React project's **React Doctor** tab to scan it individually. Global scans run sequentially, save each result immediately, and support **Stop after current**. These actions require the local helper; restart `npm run dev` after updating Local Repos to load the endpoint.
+
+Scanned React projects display a score badge on their cards, including healthy scores. Click the badge to open the findings tab. The tab shows the score out of 100, errors and warnings, affected files, and the last scan time. Search findings or filter by severity and category; expand a rule to read guidance and file locations. Reports remain available after rescans, helper restarts, and browser reloads. Failed scans retain the previous saved report. Scan again after changing source or configuration; package update attempts clear reports for the affected repository.
+
+The helper runs its installed [React Doctor](https://github.com/millionco/react-doctor) against the selected project's full source, including a single selected workspace member. It does not install tools into the repository or apply fixes. Project configuration and ignore rules apply. Each scan has a two-minute deadline and an 8 MiB output limit. React Doctor's supply-chain check is disabled here; use **Scan vulnerabilities** for package audits.
+
+Source analysis runs locally. React Doctor sends diagnostic details to its scoring service to calculate the official score. When scoring is disabled or unavailable, findings are still shown and the score is labeled unavailable. Incomplete scans and scans with no supported source files also show an unavailable score and explain the limitation; they are never presented as a clean bill of health.
 
 ### Unused packages with Knip
 

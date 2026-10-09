@@ -1,0 +1,103 @@
+.project-react-doctor-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 3px; min-height: 32px; margin-left: auto; padding: 3px 5px; border: 1px solid currentColor; border-radius: 4px; font-size: .8125rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.project-audit-badge + .project-react-doctor-badge, .project-outdated-badge + .project-react-doctor-badge { margin-left: 0; }
+.project-react-doctor-badge:hover { box-shadow: 0 0 0 1px currentColor; }
+.react-doctor-level-good { color: var(--accent); background: var(--accent-soft); }
+.react-doctor-level-warning { color: var(--warning); background: var(--warning-soft); }
+.react-doctor-level-poor { color: var(--danger); background: var(--danger-soft); }
+.react-doctor-level-unknown { color: var(--muted-foreground); background: var(--surface-muted); }
+.projects-list .project-react-doctor-badge { min-height: 28px; }
+.detail-tabs.react-doctor-tabs { overflow-x: auto; }
+.detail-tabs.react-doctor-tabs button { flex-shrink: 0; white-space: nowrap; }
+.react-doctor-heading { gap: 12px; flex-wrap: wrap; }
+.react-doctor-heading h3 { display: flex; align-items: center; gap: 8px; }
+.react-doctor-section > .maintenance-hint { margin-top: 10px; }
+.react-doctor-result { display: flex; align-items: center; gap: 24px; border: 1px solid var(--border); border-radius: 10px; padding: 22px; margin-top: 22px; background: var(--surface-muted); }
+.react-doctor-score { flex: 0 0 112px; position: relative; width: 112px; height: 112px; border-radius: 50%; background: var(--surface); }
+.react-doctor-score > svg { width: 100%; height: 100%; transform: rotate(-90deg); fill: none; stroke-width: 6; }
+.react-doctor-score-track { stroke: var(--border); }
+.react-doctor-score-fill { stroke: currentColor; stroke-linecap: round; }
+.react-doctor-score > div { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; }
+.react-doctor-score strong { font-size: 2rem; font-weight: 650; line-height: 1; font-variant-numeric: tabular-nums; }
+.react-doctor-score span { font-size: .5625rem; font-weight: 600; letter-spacing: .7px; color: var(--muted-foreground); }
+.react-doctor-result-copy { min-width: 0; }
+.react-doctor-kicker { color: var(--muted-foreground); font-size: .6875rem; font-weight: 600; letter-spacing: 1.1px; }
+.react-doctor-result-copy h4 { color: var(--foreground); font-size: 1.25rem; margin: 5px 0; font-weight: 600; }
+.react-doctor-result-copy > p { margin: 0; color: var(--muted-foreground); font-size: .875rem; line-height: 1.6; }
+.react-doctor-stats { display: flex; gap: 8px 16px; flex-wrap: wrap; margin-top: 13px; font-size: .8125rem; color: var(--muted-foreground); }
+.react-doctor-stats > span { display: inline-flex; align-items: center; gap: 5px; }
+.react-doctor-error { color: var(--danger); }
+.react-doctor-warning { color: var(--warning); }
+.react-doctor-scan-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: .75rem; line-height: 1.7; color: var(--muted-foreground); margin: 10px 0 22px; }
+.react-doctor-scan-meta > span { margin-left: auto; }
+.react-doctor-notice { display: flex; gap: 9px; padding: 13px 15px; margin: 18px 0; border: 1px solid var(--warning); border-radius: 7px; color: var(--warning); background: var(--warning-soft); }
+.react-doctor-notice > svg { flex-shrink: 0; margin-top: 2px; }
+.react-doctor-notice strong { font-size: .875rem; font-weight: 600; }
+.react-doctor-notice p { margin: 5px 0 0; font-size: .8125rem; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.react-doctor-scanning { display: flex; align-items: center; gap: 8px; font-size: .875rem; color: var(--accent); line-height: 1.6; }
+.react-doctor-scanning > svg { flex-shrink: 0; }
+.react-doctor-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 9px; margin: 22px 0; padding: 30px 22px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted-foreground); }
+.react-doctor-empty h4 { margin: 0; color: var(--foreground); font-size: 1rem; font-weight: 600; }
+.react-doctor-empty p { max-width: 440px; font-size: .875rem; line-height: 1.7; margin: 0; }
+.react-doctor-empty-result { border-style: solid; background: var(--surface-muted); }
+.react-doctor-findings-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 13px; }
+.react-doctor-findings-heading h4 { margin: 0; color: var(--foreground); font-size: 1rem; font-weight: 600; }
+.react-doctor-findings-heading > span { font-size: .8125rem; color: var(--muted-foreground); }
+.react-doctor-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.react-doctor-search { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); border: 1px solid var(--control-border); border-radius: 6px; min-height: 40px; padding: 0 11px; background: var(--surface); }
+.react-doctor-search > svg { flex-shrink: 0; }
+.react-doctor-search input { width: 100%; min-width: 0; border: 0; background: transparent; padding: 10px 0; font-size: .875rem; color: var(--foreground); }
+.react-doctor-search:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.react-doctor-search input:focus { outline: 0; }
+.react-doctor-category { flex: 0 1 auto; min-width: 0; }
+.react-doctor-category select { width: 100%; max-width: 230px; min-height: 40px; border: 1px solid var(--control-border); background: var(--surface); color: var(--foreground); border-radius: 6px; padding: 8px 28px 8px 10px; font-size: .875rem; }
+.react-doctor-filter-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 11px; }
+.react-doctor-severity-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.react-doctor-severity-filters button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 5px; padding: 6px 9px; min-height: 34px; color: var(--muted-foreground); font-size: .8125rem; }
+.react-doctor-severity-filters button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.react-doctor-severity-filters button > span { font-size: .6875rem; font-variant-numeric: tabular-nums; }
+.react-doctor-clear { font-size: .8125rem; min-height: 34px; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.react-doctor-results-hint { font-size: .8125rem; color: var(--muted-foreground); margin: 13px 0; line-height: 1.6; }
+.react-doctor-finding-list { display: flex; flex-direction: column; gap: 9px; }
+.react-doctor-finding { border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.react-doctor-finding > summary { display: flex; align-items: flex-start; gap: 10px; padding: 15px; cursor: pointer; list-style: none; background: var(--surface); }
+.react-doctor-finding > summary::-webkit-details-marker { display: none; }
+.react-doctor-finding > summary:hover { background: var(--surface-muted); }
+.react-doctor-finding > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.react-doctor-finding-icon { flex-shrink: 0; display: flex; padding-top: 2px; }
+.react-doctor-finding-copy { flex: 1; min-width: 0; }
+.react-doctor-finding-message { display: block; color: var(--foreground); font-size: .875rem; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
+.react-doctor-finding-meta { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; margin-top: 7px; font-size: .6875rem; color: var(--muted-foreground); line-height: 1.5; }
+.react-doctor-finding-meta code { font-size: inherit; overflow-wrap: anywhere; }
+.react-doctor-occurrence-count { flex-shrink: 0; margin-top: 2px; padding: 3px 6px; border-radius: 4px; background: var(--surface-muted); color: var(--muted-foreground); font-size: .6875rem; line-height: 1.5; white-space: nowrap; }
+.react-doctor-chevron { flex-shrink: 0; margin-top: 4px; color: var(--muted-foreground); transition: transform .15s; }
+.react-doctor-finding[open] > summary .react-doctor-chevron { transform: rotate(180deg); }
+.react-doctor-finding-detail { border-top: 1px solid var(--border); padding: 16px 16px 16px 43px; background: var(--surface-muted); }
+.react-doctor-guidance strong { font-size: .75rem; font-weight: 600; color: var(--foreground); }
+.react-doctor-guidance p { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.8; margin: 5px 0 17px; }
+.react-doctor-locations h5 { display: flex; align-items: center; gap: 6px; color: var(--foreground); font-size: .75rem; font-weight: 600; margin: 0 0 8px; }
+.react-doctor-locations ul { margin: 0; padding: 0; list-style: none; max-height: 240px; overflow: auto; }
+.react-doctor-locations li { padding: 5px 0; color: var(--muted-foreground); font-size: .75rem; line-height: 1.6; overflow-wrap: anywhere; }
+.react-doctor-locations code { user-select: text; }
+.react-doctor-rule-source { margin: 13px 0 0; padding-top: 10px; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: .6875rem; line-height: 1.6; overflow-wrap: anywhere; }
+.react-doctor-saved-note { margin-bottom: 0; }
+@media (max-width: 480px) {
+  .projects-list .project-title-row:has(> .project-react-doctor-badge) { grid-template-columns: minmax(0, 1fr) repeat(4, auto); }
+  .projects-list .project-react-doctor-badge { grid-area: 1 / 4; }
+  .projects-list .project-title-row:has(> .project-react-doctor-badge) > .favorite-button { grid-area: 1 / 5; }
+  .detail-tabs.react-doctor-tabs { gap: 12px; }
+  .detail-tabs.react-doctor-tabs button { font-size: .875rem; }
+  .react-doctor-result { padding: 17px 14px; gap: 14px; }
+  .react-doctor-score { flex-basis: 88px; width: 88px; height: 88px; }
+  .react-doctor-score strong { font-size: 1.625rem; }
+  .react-doctor-score span { font-size: .5rem; letter-spacing: .3px; }
+  .react-doctor-result-copy h4 { font-size: 1.0625rem; }
+  .react-doctor-stats { gap: 8px; }
+  .react-doctor-scan-meta > span { margin-left: 0; flex-basis: 100%; }
+  .react-doctor-category { flex-basis: 100%; }
+  .react-doctor-category select { max-width: none; }
+  .react-doctor-finding > summary { gap: 8px; padding: 12px; flex-wrap: wrap; }
+  .react-doctor-finding-copy { flex-basis: calc(100% - 60px); }
+  .react-doctor-occurrence-count { margin-left: 26px; order: 1; }
+  .react-doctor-finding-detail { padding: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .react-doctor-chevron { transition: none; } }

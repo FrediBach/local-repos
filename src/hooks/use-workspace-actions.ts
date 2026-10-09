@@ -2,11 +2,13 @@ import type { RefObject } from 'react'
 import { usePreviewBatch } from './use-preview-batch'
 import { useAuditBatch } from './use-audit-batch'
 import { useOutdatedBatch } from './use-outdated-batch'
+import { useReactDoctorBatch } from './use-react-doctor-batch'
 import { api, projectAction, scanWithHelper } from '@/lib/api'
 import { canReadDirectory, scanDirectory } from '@/lib/filesystem'
 import { useSettings } from './use-settings'
 import { cachePreview, preservePreviews } from '@/lib/workspace'
-import type { PackageAudit, PackageOutdated, RepoProject, Workspace } from '@/types'
+import { isReactProject } from '@/lib/react-doctor'
+import type { PackageAudit, PackageOutdated, ReactDoctorReport, RepoProject, Workspace } from '@/types'
 
 interface Options {
   workspace?: Workspace
@@ -25,9 +27,10 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   const previewBatch = usePreviewBatch()
   const auditBatch = useAuditBatch()
   const outdatedBatch = useOutdatedBatch()
+  const reactDoctorBatch = useReactDoctorBatch()
 
   async function scanAllVulnerabilities() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     if (!workspace.projects.length) return
     const version = ++workspaceVersion.current
@@ -36,6 +39,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     setNotice(undefined)
     previewBatch.dismiss()
     outdatedBatch.dismiss()
+    reactDoctorBatch.dismiss()
     try {
       await auditBatch.run(workspace.projects, async (project, isCurrent) => {
         const result = await projectAction<{ audit?: PackageAudit }>(project.id, 'audit')
@@ -53,7 +57,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   }
 
   async function scanAllOutdated() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     if (!workspace.projects.length) return
     const version = ++workspaceVersion.current
@@ -62,6 +66,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     setNotice(undefined)
     previewBatch.dismiss()
     auditBatch.dismiss()
+    reactDoctorBatch.dismiss()
     try {
       await outdatedBatch.run(workspace.projects, async (project, isCurrent) => {
         const result = await projectAction<{ outdated?: PackageOutdated }>(project.id, 'outdated')
@@ -77,8 +82,35 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     }
   }
 
+  async function scanAllReactDoctor() {
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
+    const projects = workspace.projects.filter(isReactProject)
+    if (!projects.length) return
+    const version = ++workspaceVersion.current
+    let nextWorkspace = workspace
+    setBusy('batch-react-doctor')
+    setNotice(undefined)
+    previewBatch.dismiss()
+    auditBatch.dismiss()
+    outdatedBatch.dismiss()
+    try {
+      await reactDoctorBatch.run(projects, async (project, isCurrent) => {
+        const result = await projectAction<{ reactDoctor?: ReactDoctorReport }>(project.id, 'react-doctor')
+        if (!isCurrent() || version !== workspaceVersion.current) return
+        if (!result.reactDoctor) throw new Error('The helper did not return a React Doctor report.')
+        const reactDoctor = result.reactDoctor
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, reactDoctor } : current) }
+        const cached = await persist(nextWorkspace, false)
+        return { cacheWarning: !cached, report: reactDoctor }
+      })
+    } finally {
+      if (version === workspaceVersion.current) setBusy('')
+    }
+  }
+
   async function captureAllPreviews() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     if (!workspace.projects.length) return
     const version = ++workspaceVersion.current
@@ -87,6 +119,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     setNotice(undefined)
     auditBatch.dismiss()
     outdatedBatch.dismiss()
+    reactDoctorBatch.dismiss()
     try {
       await previewBatch.run(workspace.projects, async (project, isCurrent) => {
         const result = await projectAction<Partial<RepoProject>>(project.id, 'screenshot', { source: 'auto' })
@@ -104,7 +137,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   }
 
   async function runAutomaticScan(changedIds: string[] | undefined, isCurrent: () => boolean, progress: (message: string) => void) {
-    if (!workspace || busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
+    if (!workspace || busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
     const version = ++workspaceVersion.current
     const current = () => isCurrent() && version === workspaceVersion.current
     setBusy('watcher')
@@ -149,7 +182,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   }
 
   async function action(project: RepoProject, name: string, body: unknown = {}) {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     const updateLevel = name === 'update-minor' ? 'minor' : name === 'update-patches' ? 'patch' : undefined
     const version = ++workspaceVersion.current
@@ -159,6 +192,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       const result = await projectAction<Partial<RepoProject>>(project.id, updateLevel ? 'update-packages' : name, updateLevel ? { level: updateLevel } : body)
       if (name === 'screenshot' && result.screenshot) result.screenshot = await cachePreview(result.screenshot)
       if (version !== workspaceVersion.current) return
+      if (name === 'react-doctor' && !result.reactDoctor) throw new Error('The helper did not return a React Doctor report.')
       if (name === 'audit' && result.audit) reportCriticalVulnerabilities(project, result.audit)
       const cached = name === 'open' || name === 'run-script' || await persist({ ...workspace, projects: workspace.projects.map(p => p.id === project.id ? { ...p, ...result } : p) })
       if (name === 'screenshot' && cached) {
@@ -170,6 +204,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       if (name === 'outdated' && cached) setNotice({ text: `Outdated-package scan completed for ${project.name}.` })
       if (name === 'unused' && cached) setNotice({ text: `Unused-package scan completed for ${project.name}.` })
       if (name === 'audit' && cached) setNotice({ text: `Package audit completed for ${project.name}.` })
+      if (name === 'react-doctor' && cached) setNotice({ text: `React Doctor scan completed for ${project.name}${result.reactDoctor?.warning || result.reactDoctor?.score === null ? ' with limited results. Open the React Doctor tab for details.' : '.'}` })
       if (updateLevel && result.packageUpdate) setNotice({ text: result.packageUpdate.packages.length ? `Updated ${result.packageUpdate.packages.length} packages in ${project.name}.` : `No eligible ${updateLevel} updates found for ${project.name}.` })
       if (name === 'open') setNotice({ text: 'Open request sent to your computer.' })
       if (name === 'run-script') setNotice({ text: 'Script sent to your terminal. Follow its progress and stop it there.' })
@@ -177,7 +212,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     finally {
       if (updateLevel && workspace.rootPath) {
         const repositoryId = project.monorepo?.id ?? project.id
-        const cleared = { ...workspace, projects: workspace.projects.map(item => (item.monorepo?.id ?? item.id) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, storage: undefined } : item) }
+        const cleared = { ...workspace, projects: workspace.projects.map(item => (item.monorepo?.id ?? item.id) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, reactDoctor: undefined, storage: undefined } : item) }
         try {
           const refreshed = await scanWithHelper(workspace.rootPath)
           if (version === workspaceVersion.current) await persist(preservePreviews({ ...refreshed, mode: 'helper' }, cleared), false)
@@ -189,8 +224,9 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   function packageBusy(project?: RepoProject) {
     if (project && auditBatch.isActive() && auditBatch.progress?.current?.id === project.id) return `${project.id}:audit`
     if (project && outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === project.id) return `${project.id}:outdated`
+    if (project && reactDoctorBatch.isActive() && reactDoctorBatch.progress?.current?.id === project.id) return `${project.id}:react-doctor`
     return busy
   }
 
-  return { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, scanAllVulnerabilities, scanAllOutdated, captureAllPreviews }
+  return { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, captureAllPreviews }
 }
