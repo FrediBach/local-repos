@@ -293,7 +293,7 @@ function WorkspaceApp() {
           sort={sort} setSort={setSort} view={view} setView={setView} />
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
-        <ProjectResults projects={filtered} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
+        <ProjectResults projects={filtered} allProjects={projects} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
           todoCounts={projectTodos.counts} onTodos={openTodos}
           filter={filter} hasRefinements={hasRefinements} emptyWorkspace={!projects.length} isDemo={isDemo}
           onReset={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }} onConnect={() => setConnectOpen(true)}

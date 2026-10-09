@@ -70,6 +70,25 @@ describe('workspace watcher scheduling', () => {
     expect(result.current.error).toBe(false)
   })
 
+  it.each([
+    ['independent', ['independent']],
+    ['root', ['root', 'member']],
+    ['member', ['root', 'member']],
+  ])('keeps undeclared packages independent when %s changes', async (changedId, expectedIds) => {
+    const monorepo = { id: 'root', name: 'Root', relativePath: 'root', packagePath: 'frontend' }
+    const member = { ...project, id: 'member', monorepo: { ...monorepo, declaredWorkspace: true } }
+    const independent = { ...project, id: 'independent', monorepo: { ...monorepo, packagePath: 'independent', declaredWorkspace: false } }
+    const saved = { ...workspace, projects: [project, member, independent] }
+    const props = { ...options(), workspace: saved, settings: { ...defaultSettings, watcherMode: 'changes' as const } }
+    api.mockResolvedValue({ fingerprints: { root: 'original', member: 'original', independent: 'original', [changedId]: 'changed' } })
+    props.run.mockResolvedValue({ ...saved, projects: saved.projects.map(item => item.id === changedId ? { ...item, packageFingerprint: 'changed' } : item) })
+    renderHook(useWorkspaceWatcher, { initialProps: props })
+    await advance(0)
+    expect(props.run).toHaveBeenCalledExactlyOnceWith(expectedIds, expect.any(Function), expect.any(Function))
+    await advance(15_000)
+    expect(props.run).toHaveBeenCalledOnce()
+  })
+
   it('uses the latest committed callback without restarting the scheduled interval', async () => {
     const props = options()
     const { rerender } = renderHook(useWorkspaceWatcher, { initialProps: props })

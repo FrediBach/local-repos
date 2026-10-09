@@ -170,30 +170,49 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
   let inspectedFolders = 0
   let scheduledFolders = 1
   let truncated = false
-  type WorkspaceContext = { entry: RegisteredProject; patterns: string[]; depth: number }
+  type WorkspaceContext = { entry: RegisteredProject; patterns: string[]; depth: number; automatic: boolean }
   const queue: { directory: string; entries: typeof entries; depth: number; workspace?: WorkspaceContext }[] = [{ directory: root, entries, depth: 0 }]
   while (queue.length && registered.length < MAX_PROJECTS && inspectedFolders < 500) {
     // Process small batches so large collections do not create hundreds of git
-    // subprocesses simultaneously. Descend through declared workspaces only.
+    // subprocesses simultaneously. Automatic discovery stops one level inside
+    // a project; deeper traversal is restricted to declared workspaces.
     const batch = queue.splice(0, Math.min(8, 500 - inspectedFolders))
     inspectedFolders += batch.length
     const inspected = await Promise.all(batch.map(async ({ directory, entries: currentEntries, depth, workspace }) => {
       const names = currentEntries.map((entry) => entry.name)
       let project: RegisteredProject | undefined
       const memberPath = workspace ? path.relative(workspace.entry.directory, directory).split(path.sep).join('/') : ''
-      if (workspace ? names.includes('package.json') && matchesWorkspace(memberPath, workspace.patterns) : looksLikeProject(names)) {
+      const directChild = workspace?.automatic && depth === workspace.depth + 1
+      const declaredWorkspace = !!workspace && matchesWorkspace(memberPath, workspace.patterns)
+      if (workspace ? (names.includes('package.json') && (directChild || declaredWorkspace)) || (directChild && names.includes('.git')) : looksLikeProject(names)) {
         try {
           project = await inspectProject(directory, root, names, warnings)
-          if (workspace) {
-            project.workspaceDirectory = workspace.entry.directory
-            project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath }
-            project.project.packageManager = workspace.entry.project.packageManager
+          if (workspace && !names.includes('.git')) {
+            project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath, declaredWorkspace }
             project.project.git ??= workspace.entry.project.git
-            project.project.packageFingerprint = repositoryFingerprint(project.project.packageFingerprint!, workspace.entry.project.packageFingerprint)
+            if (project.project.git?.committedAt) project.project.updatedAt = project.project.git.committedAt
+            if (declaredWorkspace) {
+              project.workspaceDirectory = workspace.entry.directory
+              project.project.packageManager = workspace.entry.project.packageManager
+              project.project.packageFingerprint = repositoryFingerprint(project.project.packageFingerprint!, workspace.entry.project.packageFingerprint)
+            }
           }
-          const patterns = workspacePatterns(await readBounded(directory, 'package.json'), await readBounded(directory, 'pnpm-workspace.yaml'))
-          if (!patterns.length) return project
-          workspace = { entry: project, patterns, depth }
+          // A nested Git checkout is a separate repository, not a package of its parent.
+          if (workspace && names.includes('.git')) return project
+          if (!workspace || declaredWorkspace) {
+            let patterns: string[] = []
+            try {
+              patterns = workspacePatterns(await readBounded(directory, 'package.json'), await readBounded(directory, 'pnpm-workspace.yaml'))
+            } catch {
+              warnings.push(`${path.relative(root, directory) || path.basename(directory)}: workspace declarations could not be read.`)
+            }
+            // Declared members may declare nested workspaces, but must not restart
+            // automatic discovery at every package boundary.
+            if (workspace && !patterns.length) return project
+            workspace = { entry: project, patterns, depth, automatic: !workspace }
+          }
+          // Undeclared packages do not expand discovery. Keep the outer context
+          // so they cannot hide deeper members declared by the repository root.
         } catch {
           warnings.push(`${path.relative(root, directory)}: this folder could not be read.`)
           return project
@@ -202,7 +221,7 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
       if (workspace ? depth - workspace.depth >= 8 : depth >= 2) return project
       const candidates = currentEntries.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name))
       for (const child of candidates) {
-        if (workspace && !matchesWorkspace(path.relative(workspace.entry.directory, path.join(directory, child.name)).split(path.sep).join('/'), workspace.patterns, true)) continue
+        if (workspace && !(workspace.automatic && depth === workspace.depth) && !matchesWorkspace(path.relative(workspace.entry.directory, path.join(directory, child.name)).split(path.sep).join('/'), workspace.patterns, true)) continue
         // Reserve before awaiting filesystem access so concurrent groups cannot
         // all claim the same remaining budget or silently drop overflow.
         if (scheduledFolders >= 500) {
@@ -255,7 +274,7 @@ export class ProjectRegistry {
         const outdated = entry.project.outdated ?? previous.project.outdated
         const unused = entry.project.unused ?? previous.project.unused
         const reactDoctor = entry.project.reactDoctor ?? previous.project.reactDoctor
-        Object.assign(previous.project, entry.project, { dev, screenshot, preview, storage, audit, outdated, unused, reactDoctor })
+        Object.assign(previous.project, entry.project, { monorepo: entry.project.monorepo, workspacePackageCount: entry.project.workspacePackageCount, dev, screenshot, preview, storage, audit, outdated, unused, reactDoctor })
         entry.project = previous.project
       }
       this.projects.set(entry.project.id, entry)

@@ -101,7 +101,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
   let limitWarning = false
   const warn = (message: string) => { if (warnings.length < 20 && !warnings.includes(message)) warnings.push(message) }
 
-  type WorkspaceContext = { project: RepoProject; patterns: string[]; depth: number }
+  type WorkspaceContext = { project: RepoProject; patterns: string[]; depth: number; automatic: boolean }
   async function visit(directory: FileSystemDirectoryHandle, relativePath: string, depth: number, workspace?: WorkspaceContext): Promise<void> {
     if (inspected >= 500 || projects.length >= 250) {
       if (!limitWarning) warn('Scan limited to 500 folders and 250 projects. Choose a smaller parent folder to see the rest.')
@@ -120,7 +120,10 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
     }
     const isProject = entries.has('.git') || entries.has('package.json') || Object.keys(markerStack).some((name) => entries.has(name))
     const memberPath = workspace ? relativePath.slice(workspace.project.relativePath === '.' ? 0 : workspace.project.relativePath.length + 1) : ''
-    if (workspace ? entries.has('package.json') && matchesWorkspace(memberPath, workspace.patterns) : isProject) {
+    const directChild = workspace?.automatic && depth === workspace.depth + 1
+    const declaredWorkspace = !!workspace && matchesWorkspace(memberPath, workspace.patterns)
+    const ownsGit = entries.has('.git')
+    if (workspace ? (entries.has('package.json') && (directChild || declaredWorkspace)) || (directChild && ownsGit) : isProject) {
       let pkg: ReturnType<typeof parsePackageJson> | undefined
       let modifiedAt = 0
       try {
@@ -160,25 +163,31 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
         scripts: pkg?.scripts ?? {},
         dependencies: pkg?.dependencies ?? [],
         hasPackageJson: entries.has('package.json'),
-        packageManager: workspace?.project.packageManager ?? packageManager,
-        git: git ?? workspace?.project.git,
-        ...(workspace ? { monorepo: { id: workspace.project.id, name: workspace.project.name, relativePath: workspace.project.relativePath, packagePath: memberPath } } : {}),
-        updatedAt: git?.committedAt ?? (modifiedAt ? new Date(modifiedAt).toISOString() : undefined),
+        packageManager: workspace && declaredWorkspace && !ownsGit ? workspace.project.packageManager : packageManager,
+        git: ownsGit ? git : git ?? workspace?.project.git,
+        ...(workspace && !ownsGit ? { monorepo: { id: workspace.project.id, name: workspace.project.name, relativePath: workspace.project.relativePath, packagePath: memberPath, declaredWorkspace } } : {}),
+        updatedAt: (ownsGit ? git : git ?? workspace?.project.git)?.committedAt ?? (modifiedAt ? new Date(modifiedAt).toISOString() : undefined),
         scannedAt: syncedAt,
       }
       projects.push(project)
-      try {
-        const patterns = workspacePatterns((await readFile(directory, 'package.json'))?.text, (await readFile(directory, 'pnpm-workspace.yaml'))?.text)
-        if (!patterns.length) return
-        workspace = { project, patterns, depth }
-      } catch { warn(`${relativePath}: workspace declarations could not be read.`); return }
+      if (workspace && ownsGit) return
+      if (!workspace || declaredWorkspace) {
+        let patterns: string[] = []
+        try {
+          patterns = workspacePatterns((await readFile(directory, 'package.json'))?.text, (await readFile(directory, 'pnpm-workspace.yaml'))?.text)
+        } catch { warn(`${relativePath}: workspace declarations could not be read.`) }
+        if (workspace && !patterns.length) return
+        workspace = { project, patterns, depth, automatic: !workspace }
+      }
+      // An implicit child must not expand automatic discovery or hide deeper
+      // members declared by the original root. Retain that root's context.
     }
     if (workspace ? depth - workspace.depth >= 8 : depth >= 2) return
     const children = [...entries.values()].filter((entry) => entry.kind === 'directory' && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name)).sort((a, b) => a.name.localeCompare(b.name))
     for (const child of children) {
       const childPath = relativePath === '.' ? child.name : `${relativePath}/${child.name}`
       const workspacePath = workspace ? childPath.slice(workspace.project.relativePath === '.' ? 0 : workspace.project.relativePath.length + 1) : ''
-      if (workspace && !matchesWorkspace(workspacePath, workspace.patterns, true)) continue
+      if (workspace && !(workspace.automatic && depth === workspace.depth) && !matchesWorkspace(workspacePath, workspace.patterns, true)) continue
       await visit(child as FileSystemDirectoryHandle, childPath, depth + 1, workspace)
     }
   }

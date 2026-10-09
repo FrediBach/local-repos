@@ -81,6 +81,21 @@ describe('outdated scanning', () => {
     expect(report.skipped).toBeUndefined()
   })
 
+  it('uses an undeclared monorepo package’s own lockfile without workspace selectors', async () => {
+    const project = await entry()
+    project.project.monorepo = { id: 'studio', name: 'Studio', relativePath: 'studio', packagePath: 'frontend', declaredWorkspace: false }
+    await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3, packages: {
+      'node_modules/alpha': { version: '1.0.0' },
+      'node_modules/beta': { version: '2.0.0' },
+      'frontend/node_modules/alpha': { version: '0.1.0' },
+    } }))
+    const runner = vi.fn<OutdatedRunner>().mockImplementation(async (_command, args) => args[0] === 'outdated' ? output({}) : output('3.0.0'))
+    const report = await outdatedProject(project, runner)
+    expect(report.findings.map(finding => [finding.name, finding.current])).toEqual([['alpha', '1.0.0'], ['beta', '2.0.0']])
+    expect(runner.mock.calls[0][1]).not.toContain('--workspace')
+    expect(runner.mock.calls[0][2].cwd).toBe(directory)
+  })
+
   it('uses npm shrinkwrap before package-lock and supports v1 resolved versions', async () => {
     const project = await entry()
     await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({ packages: { 'node_modules/alpha': { version: '1.0.0' } } }))

@@ -1,6 +1,7 @@
 import { ExternalLink, LoaderCircle, Scissors } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { dependencyKindLabel } from '@/lib/packages'
+import { isDeclaredWorkspaceMember } from '@/lib/workspace'
 import type { PackageUnused, RepoProject } from '@/types'
 
 export function ProjectUnused({ project, helper, demo, busy, onAction }: {
@@ -14,7 +15,7 @@ export function ProjectUnused({ project, helper, demo, busy, onAction }: {
       {scanning ? <LoaderCircle size={14} className="spinning" /> : <Scissors size={14} />}{scanning ? 'Scanning unused packages…' : report ? 'Scan unused again' : 'Scan for unused packages'}
     </Button></div>
     <p className="maintenance-hint">{demo ? 'Connect a directory to find unused packages.' : project.hasPackageJson === false ? 'This project has no package.json to scan.' : helper ? 'Knip analyzes source files and tooling to find unused runtime and development dependencies. Uses your project’s Knip configuration. No packages are removed.' : 'Connect with the local helper to scan for unused packages.'} <a href="https://knip.dev/" target="_blank" rel="noreferrer">About Knip <ExternalLink size={11} /></a></p>
-    {helper && !demo && project.hasPackageJson !== false && <p className="maintenance-hint">{project.monorepo || project.workspacePackageCount ? 'Analyzes the workspace and shows findings from this project’s package.json. ' : ''}Knip may load project configuration code. Scan projects you trust, with their dependencies installed.</p>}
+    {helper && !demo && project.hasPackageJson !== false && <p className="maintenance-hint">{isDeclaredWorkspaceMember(project) ? 'Analyzes the workspace and shows findings from this project’s package.json. ' : ''}Knip may load project configuration code. Scan projects you trust, with their dependencies installed.</p>}
     {report ? <UnusedPackageReport report={report} /> : <p className="maintenance-empty">Unused packages not scanned yet.</p>}
   </section>
 }

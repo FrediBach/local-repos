@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ProjectOutdated } from '@/components/project-outdated'
 import { ProjectUnused } from '@/components/project-unused'
 import { dependencyKindLabel, packageMatches } from '@/lib/packages'
+import { isDeclaredWorkspaceMember } from '@/lib/workspace'
 import type { AuditSeverity, PackageAudit, RepoProject } from '@/types'
 import { useSettings } from '@/hooks/use-settings'
 
@@ -34,7 +35,7 @@ export function ProjectPackages({ project, helper, demo, busy, onAction }: {
       <div className="maintenance-heading"><h3><ShieldCheck size={16} /> Vulnerabilities</h3><Button variant="outline" size="sm" disabled={!!busy || demo} onClick={() => onAction('audit')}>
         {scanning ? <LoaderCircle size={14} className="spinning" /> : <ShieldCheck size={14} />}{scanning ? 'Scanning…' : report ? 'Scan again' : 'Scan for vulnerabilities'}
       </Button></div>
-      <p className="maintenance-hint">{demo ? 'Connect a directory to audit your packages.' : helper ? `Runs ${project.packageManager} audit against ${project.monorepo ? 'the shared workspace lockfile (all workspace packages)' : 'the lockfile'}, including development dependencies. Package names and versions are sent to the configured registry. No fixes are applied.` : 'Connect with the local helper to run package audits.'}</p>
+      <p className="maintenance-hint">{demo ? 'Connect a directory to audit your packages.' : helper ? `Runs ${project.packageManager} audit against ${isDeclaredWorkspaceMember(project) ? 'the shared workspace lockfile (all workspace packages)' : 'the lockfile'}, including development dependencies. Package names and versions are sent to the configured registry. No fixes are applied.` : 'Connect with the local helper to run package audits.'}</p>
       {report ? <AuditReport report={report} /> : <p className="maintenance-empty">Not scanned yet.</p>}
     </section>
     <ProjectOutdated project={project} helper={helper} demo={demo} busy={busy} onAction={onAction} />

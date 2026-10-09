@@ -6,7 +6,7 @@ import { useReactDoctorBatch } from './use-react-doctor-batch'
 import { api, projectAction, scanWithHelper } from '@/lib/api'
 import { canReadDirectory, scanDirectory } from '@/lib/filesystem'
 import { useSettings } from './use-settings'
-import { cachePreview, preservePreviews } from '@/lib/workspace'
+import { cachePreview, packageWorkspaceId, preservePreviews } from '@/lib/workspace'
 import { isReactProject } from '@/lib/react-doctor'
 import type { PackageAudit, PackageOutdated, ReactDoctorReport, RepoProject, Workspace } from '@/types'
 
@@ -211,8 +211,8 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     } catch (error) { setNotice({ text: error instanceof Error ? error.message : 'The action could not be completed.', error: true }) }
     finally {
       if (updateLevel && workspace.rootPath) {
-        const repositoryId = project.monorepo?.id ?? project.id
-        const cleared = { ...workspace, projects: workspace.projects.map(item => (item.monorepo?.id ?? item.id) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, reactDoctor: undefined, storage: undefined } : item) }
+        const repositoryId = packageWorkspaceId(project)
+        const cleared = { ...workspace, projects: workspace.projects.map(item => packageWorkspaceId(item) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, reactDoctor: undefined, storage: undefined } : item) }
         try {
           const refreshed = await scanWithHelper(workspace.rootPath)
           if (version === workspaceVersion.current) await persist(preservePreviews({ ...refreshed, mode: 'helper' }, cleared), false)

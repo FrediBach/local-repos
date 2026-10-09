@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api } from '@/lib/api'
+import { packageWorkspaceId } from '@/lib/workspace'
 import type { AppSettings } from '@/lib/settings'
 import type { Workspace } from '@/types'
 
@@ -56,11 +57,11 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
             const snapshot = result.fingerprints
             changedIds = [...new Set([...Object.keys(snapshot), ...Object.keys(baseline)])].filter(id => snapshot[id] !== baseline[id])
             if (!changedIds.length) { setError(false); publish('Watching for package changes'); return }
-            // Expand to the whole repository when any workspace member changes.
+            // Shared workspaces need sibling checks; other grouped packages are independent.
             const projects = latest.current.workspace!.projects
             const changed = new Set(changedIds)
-            const repositories = new Set(projects.filter(project => changed.has(project.id)).map(project => project.monorepo?.id ?? project.id))
-            changedIds = projects.filter(project => changed.has(project.id) || repositories.has(project.monorepo?.id ?? project.id)).map(project => project.id)
+            const repositories = new Set(projects.filter(project => changed.has(project.id)).map(packageWorkspaceId))
+            changedIds = projects.filter(project => changed.has(project.id) || repositories.has(packageWorkspaceId(project))).map(project => project.id)
           }
         }
         // A manual action may have started while the lightweight change check

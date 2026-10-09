@@ -90,6 +90,88 @@ describe('local directory scanning', () => {
     expect((await scanDirectory(monorepo)).result.projects.map(project => project.name).sort()).toEqual(['studio', 'web'])
   })
 
+  it.each([false, true])('discovers immediate frontend projects without workspace declarations (selected repository: %s)', async selected => {
+    const monorepo = path.join(root, 'studio')
+    await mkdir(monorepo)
+    await execFileAsync('git', ['init', '-b', 'main'], { cwd: monorepo })
+    await fixture('studio/frontend', { name: 'frontend', packageManager: 'pnpm@10.0.0', scripts: { dev: 'vite' } })
+    await fixture('studio/admin', { name: 'admin', scripts: { start: 'next dev' } })
+    await fixture('studio/frontend/nested', { name: 'too-deep' })
+    await fixture('studio/apps/unlisted', { name: 'also-too-deep' })
+    await fixture('studio/node_modules/dependency')
+    await fixture('studio/.hidden')
+    const { registered } = await scanDirectory(selected ? monorepo : root)
+    expect(registered.map(entry => entry.project.name)).toEqual(['admin', 'frontend', 'studio'])
+    const parent = registered.find(entry => entry.project.name === 'studio')!
+    const frontend = registered.find(entry => entry.project.name === 'frontend')!
+    expect(parent.project.workspacePackageCount).toBe(2)
+    expect(frontend.project).toMatchObject({
+      packageManager: 'pnpm', scripts: { dev: 'vite' }, git: { branch: 'main' },
+      monorepo: { id: parent.project.id, name: 'studio', packagePath: 'frontend', declaredWorkspace: false },
+    })
+    expect(frontend.workspaceDirectory).toBeUndefined()
+    expect(frontend.project.packageFingerprint).not.toContain(':')
+    const registry = new ProjectRegistry()
+    registry.register(registered)
+    expect(registry.related(frontend.project.id).map(entry => entry.project.id)).toEqual([frontend.project.id])
+  })
+
+  it('includes every immediate package while retaining declared workspace behavior', async () => {
+    const monorepo = await fixture('studio', { name: 'studio', packageManager: 'pnpm@10.0.0', workspaces: ['apps/*', 'member', '!excluded'] })
+    await fixture('studio/apps/web', { name: 'web' })
+    await fixture('studio/member', { name: 'member' })
+    await fixture('studio/excluded', { name: 'excluded', packageManager: 'yarn@4.0.0' })
+    await fixture('studio/frontend', { name: 'frontend', workspaces: ['nested/*'] })
+    await fixture('studio/frontend/nested/deep', { name: 'too-deep' })
+    const { registered } = await scanDirectory(root)
+    expect(registered.map(entry => entry.project.name)).toEqual(['excluded', 'frontend', 'member', 'studio', 'web'])
+    for (const name of ['member', 'web']) {
+      expect(registered.find(entry => entry.project.name === name)).toMatchObject({ workspaceDirectory: await realpath(monorepo), project: { packageManager: 'pnpm', monorepo: { declaredWorkspace: true } } })
+    }
+    const excluded = registered.find(entry => entry.project.name === 'excluded')!
+    expect(excluded.project).toMatchObject({ packageManager: 'yarn', monorepo: { declaredWorkspace: false } })
+    expect(excluded.workspaceDirectory).toBeUndefined()
+  })
+
+  it('keeps automatic discovery shallow in grouped non-JavaScript repositories and ignores nested Git checkouts for grouping', async () => {
+    const python = path.join(root, 'clients/python')
+    await mkdir(python, { recursive: true })
+    await writeFile(path.join(python, 'pyproject.toml'), '[project]')
+    await fixture('clients/python/frontend', { name: 'frontend' })
+    await fixture('clients/python/frontend/nested', { name: 'too-deep' })
+    const nested = await fixture('clients/python/checkout', { name: 'checkout' })
+    await execFileAsync('git', ['init', '-b', 'nested'], { cwd: nested })
+    const { result } = await scanDirectory(root)
+    expect(result.projects.map(project => project.name)).toEqual(['checkout', 'frontend', 'python'])
+    expect(result.projects[0].monorepo).toBeUndefined()
+    expect(result.projects[0].git?.branch).toBe('nested')
+    expect(result.projects[1].monorepo?.packagePath).toBe('frontend')
+    expect(result.projects[2].workspacePackageCount).toBe(1)
+  })
+
+  it('still discovers immediate packages when workspace declarations are malformed', async () => {
+    const monorepo = await fixture('studio')
+    await writeFile(path.join(monorepo, 'pnpm-workspace.yaml'), 'packages: [invalid')
+    await fixture('studio/frontend', { name: 'frontend' })
+    const { result } = await scanDirectory(root)
+    expect(result.projects.map(project => project.name)).toEqual(['frontend', 'studio'])
+    expect(result.warnings).toContain('studio: workspace declarations could not be read.')
+  })
+
+  it('keeps declared members reachable through an automatically discovered package', async () => {
+    const monorepo = await fixture('studio', { name: 'studio', packageManager: 'pnpm@10.0.0', workspaces: ['apps/*'] })
+    await fixture('studio/apps', { name: 'tooling', packageManager: 'yarn@4.0.0', workspaces: ['other/*'] })
+    await fixture('studio/apps/web', { name: 'web' })
+    await fixture('studio/apps/other/deep', { name: 'too-deep' })
+    const { registered } = await scanDirectory(root)
+    expect(registered.map(entry => entry.project.name)).toEqual(['studio', 'tooling', 'web'])
+    const parent = registered.find(entry => entry.project.name === 'studio')!
+    const tooling = registered.find(entry => entry.project.name === 'tooling')!
+    expect(tooling.workspaceDirectory).toBeUndefined()
+    expect(tooling.project).toMatchObject({ packageManager: 'yarn', monorepo: { id: parent.project.id, declaredWorkspace: false } })
+    expect(registered.find(entry => entry.project.name === 'web')).toMatchObject({ workspaceDirectory: await realpath(monorepo), project: { packageManager: 'pnpm', monorepo: { id: parent.project.id, packagePath: 'apps/web', declaredWorkspace: true } } })
+  })
+
   it('reads metadata and real git history without executing project scripts', async () => {
     const directory = await fixture('hello', {
       name: '@studio/hello', version: '1.2.3', author: { name: 'Ada' },
@@ -185,6 +267,22 @@ describe('local directory scanning', () => {
 })
 
 describe('registered project paths', () => {
+  it('clears obsolete monorepo relationships and package counts on rescan', async () => {
+    await fixture('studio')
+    const frontend = await fixture('studio/frontend', { name: 'frontend' })
+    const registry = new ProjectRegistry()
+    const { registered } = await scanDirectory(root)
+    registry.register(registered)
+    const parent = registered.find(entry => entry.project.name === 'studio')!
+    const child = registered.find(entry => entry.project.name === 'frontend')!
+    expect(child.project.monorepo).toBeDefined()
+    expect(parent.project.workspacePackageCount).toBe(1)
+    await execFileAsync('git', ['init', '-b', 'main'], { cwd: frontend })
+    registry.register((await scanDirectory(root)).registered)
+    expect(registry.lookup(child.project.id).project.monorepo).toBeUndefined()
+    expect(registry.lookup(parent.project.id).project.workspacePackageCount).toBeUndefined()
+  })
+
   it('rejects unknown ids and a registered directory replaced by an outside symlink', async () => {
     const directory = await fixture('safe')
     const { registered } = await scanDirectory(root)

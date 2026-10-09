@@ -142,7 +142,11 @@ export interface RepoProject {
   name: string
   dirName: string
   relativePath: string
-  monorepo?: { id: string; name: string; relativePath: string; packagePath: string }
+  monorepo?: {
+    id: string; name: string; relativePath: string; packagePath: string
+    /** False for discovered subprojects that do not share a declared package workspace. */
+    declaredWorkspace?: boolean
+  }
   workspacePackageCount?: number
   description: string
   readme?: string

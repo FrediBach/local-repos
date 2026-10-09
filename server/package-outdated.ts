@@ -170,7 +170,7 @@ async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: 
       const lock: unknown = JSON.parse(await readFile(lockPath, 'utf8'))
       if (!object(lock)) unsupportedReport()
       for (const name of names) {
-        const packagePath = entry.project.monorepo?.packagePath
+        const packagePath = entry.workspaceDirectory ? entry.project.monorepo?.packagePath : undefined
         const metadata = object(lock.packages) ? (packagePath ? lock.packages[`${packagePath}/node_modules/${name}`] : undefined) ?? lock.packages[`node_modules/${name}`] : object(lock.dependencies) ? lock.dependencies[name] : undefined
         if (object(metadata) && !metadata.link && text(metadata.version)) locked.set(name, text(metadata.version)!)
       }

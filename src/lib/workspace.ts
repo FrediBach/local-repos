@@ -1,4 +1,14 @@
-import type { Workspace } from '@/types'
+import type { RepoProject, Workspace } from '@/types'
+
+/** Older scans only grouped declared workspaces, so an omitted flag retains that meaning. */
+export function isDeclaredWorkspaceMember(project: RepoProject): boolean {
+  return !!project.monorepo && project.monorepo.declaredWorkspace !== false
+}
+
+/** Packages grouped by location may still install and maintain dependencies independently. */
+export function packageWorkspaceId(project: RepoProject): string {
+  return isDeclaredWorkspaceMember(project) ? project.monorepo!.id : project.id
+}
 
 /** Keep durable previews and dated maintenance results across helper restarts. */
 export function preservePreviews(next: Workspace, previous?: Workspace): Workspace {

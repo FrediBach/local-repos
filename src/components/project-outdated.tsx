@@ -4,6 +4,7 @@ import { formatOutdatedScore, outdatedScoreExplanation } from '@/lib/outdated'
 import { useSettings } from '@/hooks/use-settings'
 import type { PackageOutdated, PackageUpdate, RepoProject } from '@/types'
 import { DependencyUpdates } from '@/components/dependency-updates'
+import { isDeclaredWorkspaceMember } from '@/lib/workspace'
 
 export function ProjectOutdated({ project, helper, demo, busy, onAction }: {
   project: RepoProject; helper: boolean; demo: boolean; busy: string; onAction: (name: string) => void
@@ -34,7 +35,7 @@ function UpdateActions({ project, busy, onAction }: { project: RepoProject; busy
         {updating && busy.endsWith('update-minor') ? <LoaderCircle size={14} className="spinning" /> : <ArrowUpCircle size={14} />}Update minor versions
       </Button>
     </div>
-    <p className="maintenance-hint">Patches stay within the installed minor version. Minor updates include patches and stay within the installed major version. Updates install stable releases and pin updated packages to exact versions in package.json, updating the lockfile. Lifecycle scripts are skipped.{project.monorepo ? ' This workspace shares its lockfile with sibling packages.' : ''}</p>
+    <p className="maintenance-hint">Patches stay within the installed minor version. Minor updates include patches and stay within the installed major version. Updates install stable releases and pin updated packages to exact versions in package.json, updating the lockfile. Lifecycle scripts are skipped.{isDeclaredWorkspaceMember(project) ? ' This workspace shares its lockfile with sibling packages.' : ''}</p>
     {updating && <p className="maintenance-hint" role="status">Checking compatible releases and updating packages…</p>}
   </div>
 }

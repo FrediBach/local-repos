@@ -22,6 +22,21 @@ const cleanReport: PackageAudit = {
 const props = { project, helper: true, demo: false, busy: '', onAction: vi.fn() }
 
 describe('declared package details', () => {
+  it.each([true, false, undefined])('describes shared dependency operations only for declared workspace members (%s)', declaredWorkspace => {
+    const monorepo = { id: 'studio', name: 'Studio', relativePath: 'studio', packagePath: 'frontend', declaredWorkspace }
+    render(<ProjectPackages {...props} project={{ ...project, monorepo }} />)
+    if (declaredWorkspace === false) {
+      expect(screen.getByText(/Runs pnpm audit against the lockfile/)).toBeTruthy()
+      expect(screen.queryByText(/shared workspace lockfile/)).toBeNull()
+      expect(screen.queryByText(/shares its lockfile with sibling packages/)).toBeNull()
+      expect(screen.queryByText(/Analyzes the workspace/)).toBeNull()
+    } else {
+      expect(screen.getByText(/shared workspace lockfile/)).toBeTruthy()
+      expect(screen.getByText(/shares its lockfile with sibling packages/)).toBeTruthy()
+      expect(screen.getByText(/Analyzes the workspace/)).toBeTruthy()
+    }
+  })
+
   it('shows declared version specs and all dependency types and filters by package name', async () => {
     const user = userEvent.setup()
     render(<ProjectPackages {...props} />)

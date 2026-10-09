@@ -91,8 +91,8 @@ const fixedGroups = (settings: AppSettings): FilterGroup[] => [
     option('unknown', 'Activity date unknown', p => !Number.isFinite(activityTime(p))),
   ] },
   { key: 'structure', label: 'Project structure', section: 'Metadata', options: [
-    option('root', 'Workspace root', p => !!p.workspacePackageCount),
-    option('member', 'Workspace member', p => !!p.monorepo),
+    option('root', 'Monorepo root', p => !!p.workspacePackageCount),
+    option('member', 'Monorepo subproject', p => !!p.monorepo),
     option('standalone', 'Standalone project', p => !p.monorepo && !p.workspacePackageCount),
   ] },
   { key: 'preview', label: 'Preview', section: 'Metadata', options: [
