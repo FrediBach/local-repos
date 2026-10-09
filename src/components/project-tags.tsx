@@ -25,7 +25,8 @@ export function ProjectTagDialog({ project, availableTags, onSave, onClose, retu
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const name = normalizeTag(input)
-  const choices = normalizeTags([...suggestedTags, ...availableTags]).filter(tag => !draft.includes(tag) && (!name || tag.includes(name)))
+  const assignedTags = new Set(draft)
+  const choices = normalizeTags([...suggestedTags, ...availableTags]).filter(tag => !assignedTags.has(tag) && (!name || tag.includes(name)))
 
   function add(tag: string) {
     if (!normalizeTags([tag]).length) { setError(`Use a tag of 1–${tagNameLimit} characters, without control characters.`); return }

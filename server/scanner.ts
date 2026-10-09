@@ -87,8 +87,9 @@ async function readGit(directory: string): Promise<RepoProject['git']> {
 }
 
 async function inspectProject(directory: string, root: string, names: string[], warnings: string[]): Promise<RegisteredProject> {
+  const filenames = new Set(names)
   const fingerprint = await packageFingerprint(directory)
-  const packageText = names.includes('package.json') ? await readBounded(directory, 'package.json') : undefined
+  const packageText = filenames.has('package.json') ? await readBounded(directory, 'package.json') : undefined
   let metadata: ReturnType<typeof parsePackageJson> | undefined
   if (packageText) {
     try {
@@ -99,10 +100,10 @@ async function inspectProject(directory: string, root: string, names: string[], 
   }
   const readmeName = names.find((name) => /^readme(?:\.(?:md|mdx|markdown|txt))?$/i.test(name))
   const readme = readmeName ? await readBounded(directory, readmeName) : undefined
-  const gitInfo = names.includes('.git') ? await readGit(directory) : undefined
+  const gitInfo = filenames.has('.git') ? await readGit(directory) : undefined
   const aiInstructionFiles: string[] = []
   for (const name of aiInstructionFileNames) {
-    if (!names.includes(name)) continue
+    if (!filenames.has(name)) continue
     try {
       const resolved = await realpath(path.join(directory, name))
       if (isWithin(directory, resolved) && (await stat(resolved)).isFile()) aiInstructionFiles.push(name)
@@ -122,10 +123,10 @@ async function inspectProject(directory: string, root: string, names: string[], 
     homepage: metadata?.homepage,
     previewUrl: metadata?.previewUrl,
     aiInstructionFiles,
-    stack: [...new Set([...(metadata?.stack ?? []), ...Object.entries(markerStack).filter(([name]) => names.includes(name)).map(([, tech]) => tech), ...(names.includes('components.json') ? ['shadcn/ui'] : []), ...(names.includes('tsconfig.json') ? ['TypeScript'] : [])])],
+    stack: [...new Set([...(metadata?.stack ?? []), ...Object.entries(markerStack).filter(([name]) => filenames.has(name)).map(([, tech]) => tech), ...(filenames.has('components.json') ? ['shadcn/ui'] : []), ...(filenames.has('tsconfig.json') ? ['TypeScript'] : [])])],
     scripts: metadata?.scripts ?? {},
     dependencies: metadata?.dependencies ?? [],
-    hasPackageJson: names.includes('package.json'),
+    hasPackageJson: filenames.has('package.json'),
     packageFingerprint: fingerprint,
     packageManager: metadata?.packageManager ?? 'npm',
     git: gitInfo,
@@ -134,15 +135,16 @@ async function inspectProject(directory: string, root: string, names: string[], 
     dev: { status: 'stopped' },
   }
   if (!metadata?.packageManager || metadata.packageManager === 'npm') {
-    if (names.includes('pnpm-lock.yaml')) project.packageManager = 'pnpm'
-    else if (names.includes('yarn.lock')) project.packageManager = 'yarn'
-    else if (names.includes('bun.lock') || names.includes('bun.lockb')) project.packageManager = 'bun'
+    if (filenames.has('pnpm-lock.yaml')) project.packageManager = 'pnpm'
+    else if (filenames.has('yarn.lock')) project.packageManager = 'yarn'
+    else if (filenames.has('bun.lock') || filenames.has('bun.lockb')) project.packageManager = 'bun'
   }
   return { project, directory, root }
 }
 
 function looksLikeProject(names: string[]): boolean {
-  return names.includes('.git') || names.includes('package.json') || Object.keys(markerStack).some((name) => names.includes(name))
+  const filenames = new Set(names)
+  return filenames.has('.git') || filenames.has('package.json') || Object.keys(markerStack).some((name) => filenames.has(name))
 }
 
 export async function scanDirectory(input: unknown): Promise<{ result: ScanResult; registered: RegisteredProject[] }> {

@@ -216,8 +216,9 @@ export class ProjectRuntime {
     this.available(id)
     if (confirm !== true) throw new HelperError('Confirm removal of this project’s node_modules folder before continuing.', 400)
     const relatedIds = this.registry.related(id).map(entry => entry.project.id)
+    const relatedIdSet = new Set(relatedIds)
     if (relatedIds.some(key => this.running.has(key) || this.starts.has(key) || this.captures.has(key))
-      || [...this.stoppingChildren.values()].some(child => relatedIds.includes(child.id))) {
+      || [...this.stoppingChildren.values()].some(child => relatedIdSet.has(child.id))) {
       throw new HelperError('Stop the project’s dev server and wait for preview capture and server shutdown to finish before removing dependencies.', 409)
     }
     if (relatedIds.some(key => this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key))) {
