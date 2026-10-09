@@ -18,7 +18,7 @@ interface Options {
   setLogs: (logs: string) => void
   setNotice: (notice: { text: string; error?: boolean } | undefined) => void
   setConnectOpen: (open: boolean) => void
-  persist: (workspace: Workspace, reportError?: boolean) => Promise<boolean>
+  persist: (workspace: Workspace, reportError?: boolean, refreshActivity?: boolean) => Promise<boolean>
   reportCriticalVulnerabilities: (project: RepoProject, audit: PackageAudit) => void
 }
 
@@ -150,7 +150,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       } else throw new Error('Reconnect the directory to enable automatic scans.')
       if (!current()) return
       next = preservePreviews(next, workspace)
-      let cacheFailed = !await persist(next, false)
+      let cacheFailed = !await persist(next, false, true)
       const failures: string[] = []
       if (next.mode === 'helper') {
         const previousProjects = new Map(workspace.projects.map(project => [project.id, project]))

@@ -1,3 +1,4 @@
+import type { CommitActivityCache } from './commit-activity'
 import type { Workspace } from '../types'
 import { readProjectTags, type ProjectTags } from './project-tags'
 import { SETTINGS_STORAGE_KEY } from './settings'
@@ -52,7 +53,10 @@ async function write(key: string, value: unknown, remove = false): Promise<void>
 
 export const loadWorkspace = (): Promise<Workspace | undefined> => read<Workspace>('workspace')
 export const saveWorkspace = (workspace: Workspace): Promise<void> => write('workspace', workspace)
-export const clearWorkspace = (): Promise<void> => write('workspace', undefined, true)
+export async function clearWorkspace(): Promise<void> {
+  await write('workspace', undefined, true)
+  await write('commit-activity', undefined, true)
+}
 export async function loadFavorites(): Promise<string[]> {
   const values = await read<unknown>('favorites')
   return Array.isArray(values) ? values.filter((value): value is string => typeof value === 'string') : []
@@ -96,3 +100,6 @@ export async function saveConfigPreferences(backup: ConfigBackup, favorites: str
     }
   })
 }
+
+export const loadCommitActivity = (): Promise<CommitActivityCache | undefined> => read<CommitActivityCache>('commit-activity')
+export const saveCommitActivity = (cache: CommitActivityCache): Promise<void> => write('commit-activity', cache)

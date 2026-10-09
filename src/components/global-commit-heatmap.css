@@ -1,0 +1,10 @@
+.global-commit-heatmap { width: 77px; height: 41px; flex: 0 0 77px; border-radius: 3px; }
+.global-commit-heatmap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.global-commit-heatmap:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.global-commit-day { fill: var(--surface-muted); }
+.global-commit-day.level-1 { fill: color-mix(in srgb, var(--accent) 25%, var(--surface)); }
+.global-commit-day.level-2 { fill: color-mix(in srgb, var(--accent) 50%, var(--surface)); }
+.global-commit-day.level-3 { fill: color-mix(in srgb, var(--accent) 75%, var(--surface)); }
+.global-commit-day.level-4 { fill: var(--accent); }
+.global-commit-day.is-partial { opacity: .65; }
+.global-commit-day.is-unknown { fill: none; stroke: var(--border); stroke-width: .6; }

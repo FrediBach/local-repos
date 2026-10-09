@@ -14,7 +14,7 @@ const storage = vi.hoisted(() => ({
 }))
 const previews = vi.hoisted(() => ({ cachePreview: vi.fn() }))
 
-vi.mock('./lib/storage', () => storage)
+vi.mock('./lib/storage', () => ({ ...storage, loadCommitActivity: async () => undefined, saveCommitActivity: async () => {} }))
 vi.mock('./lib/filesystem', () => ({
   chooseDirectory: vi.fn(),
   scanDirectory: vi.fn(),

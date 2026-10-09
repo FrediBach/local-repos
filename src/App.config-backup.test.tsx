@@ -8,7 +8,7 @@ import { createConfigBackup, type ConfigBackup } from './lib/config-backup'
 import { defaultSettings, SETTINGS_STORAGE_KEY } from './lib/settings'
 
 const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), loadProjectTags: vi.fn(), saveProjectTags: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), saveConfigPreferences: vi.fn(), clearWorkspace: vi.fn() }))
-vi.mock('./lib/storage', () => storage)
+vi.mock('./lib/storage', () => ({ ...storage, loadCommitActivity: async () => undefined, saveCommitActivity: async () => {} }))
 const project = (id: string, origin?: string): RepoProject => ({ id, name: id, dirName: id, relativePath: id, description: '', stack: [], scripts: {}, packageManager: 'npm', scannedAt: '', git: { origin } })
 const projects = [project('alpha', 'https://github.com/team/app'), project('extra')]
 const workspace = { rootName: 'Projects', mode: 'browser', projects, syncedAt: '' }

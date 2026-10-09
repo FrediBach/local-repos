@@ -1,3 +1,5 @@
+import { GlobalCommitHeatmap } from './global-commit-heatmap'
+import type { GlobalCommitActivity } from '@/lib/commit-activity'
 import type { ComponentProps, Ref } from 'react'
 import { CircleHelp, FolderOpen } from 'lucide-react'
 import { Button } from './ui/button'
@@ -6,6 +8,7 @@ import { SettingsDialog } from './settings-dialog'
 import { HostedNotice } from './hosted-notice'
 
 interface Props {
+  activity?: GlobalCommitActivity
   settingsTriggerRef?: Ref<HTMLButtonElement>
   page: 'projects' | 'summary' | 'todos'
   stack: string | null
@@ -20,7 +23,7 @@ interface Props {
   backup: ComponentProps<typeof SettingsDialog>['backup']
 }
 
-export function WorkspaceTopbar({ settingsTriggerRef, page, stack, filter, hasFilters, hosted, online, connected, busy, onConnect, onHelp, backup }: Props) {
+export function WorkspaceTopbar({ activity, settingsTriggerRef, page, stack, filter, hasFilters, hosted, online, connected, busy, onConnect, onHelp, backup }: Props) {
   const pageName = page === 'todos' ? 'Todos' : page === 'summary' ? 'Daily summary' : stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
   const statusLabel = online ? 'All local. All yours.' : 'Offline · cached workspace'
   return <header className="topbar">
@@ -32,6 +35,7 @@ export function WorkspaceTopbar({ settingsTriggerRef, page, stack, filter, hasFi
         <span className="local-label" aria-hidden="true">{statusLabel}</span>
         <span className="local-label-compact" aria-hidden="true">{online ? 'Local' : 'Offline'}</span>
       </div>
+      {activity && <GlobalCommitHeatmap activity={activity} />}
       <Button className="topbar-directory-button" variant={connected ? 'outline' : 'default'} size="sm" disabled={busy} onClick={onConnect}><FolderOpen size={16} aria-hidden="true" />{connected ? 'Change directory' : 'Connect directory'}</Button>
       {hosted && <HostedNotice />}
       <div className="topbar-utilities" role="group" aria-label="Workspace controls">

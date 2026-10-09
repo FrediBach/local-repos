@@ -6,7 +6,7 @@ import App from './App'
 import type { RepoProject } from './types'
 
 const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
-vi.mock('./lib/storage', () => storage)
+vi.mock('./lib/storage', () => ({ ...storage, loadCommitActivity: async () => undefined, saveCommitActivity: async () => {} }))
 const base: RepoProject = { id: 'alpha', name: 'Alpha', dirName: 'alpha', relativePath: 'alpha', description: 'Workspace app', stack: ['React'], scripts: {}, packageManager: 'npm', scannedAt: '2026-10-08T10:00:00Z' }
 const projects: RepoProject[] = [
   { ...base, audit: { manager: 'npm', scannedAt: base.scannedAt, counts: { critical: 1, high: 0, moderate: 0, low: 0, info: 0 }, findings: [] }, outdated: { manager: 'npm', scannedAt: base.scannedAt, findings: [{ name: 'react', current: '18.0.0', latest: '19.0.0', majorGap: 1, score: 10, change: 'major' }], level: 'moderate', score: 10 }, dependencies: [{ name: 'react', version: '^18.0.0', kind: 'dependencies' }], dev: { status: 'running' } },

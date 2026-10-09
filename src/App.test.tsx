@@ -7,6 +7,7 @@ import type { RepoProject, ScanResult, Workspace } from './types'
 
 const storage = vi.hoisted(() => ({
   loadWorkspace: vi.fn(),
+  loadCommitActivity: vi.fn(), saveCommitActivity: vi.fn(),
   saveWorkspace: vi.fn(),
   clearWorkspace: vi.fn(),
   loadFavorites: vi.fn(),
@@ -51,6 +52,8 @@ let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.resetAllMocks()
+  storage.loadCommitActivity.mockResolvedValue(undefined)
+  storage.saveCommitActivity.mockResolvedValue(undefined)
   storage.loadWorkspace.mockResolvedValue(undefined)
   storage.loadFavorites.mockResolvedValue([])
   storage.saveWorkspace.mockResolvedValue(undefined)
@@ -77,6 +80,43 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it('caches commit activity after connecting with the helper', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/health') return response({ ok: true })
+      if (url === '/api/scan') return response(scan)
+      if (url === `/api/projects/${project.id}/history`) return response({ available: true, activity: [{ date: today, count: 5 }], from: today, to: today, shallow: false, commits: [], branches: [], authors: [], total: 5, offset: 0, hasMore: false })
+      throw new Error('Unexpected API request: ' + url)
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    const dialog = await openConnection(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Connect directory', exact: true }))
+    expect(await screen.findByRole('img', { name: /Global commit activity: 5 cached commits/ })).toBeTruthy()
+    expect(storage.saveCommitActivity).toHaveBeenCalledWith(expect.objectContaining({ repositories: { [project.id]: expect.objectContaining({ activity: [{ date: today, count: 5 }] }) } }))
+    await user.click(screen.getByRole('button', { name: /^Synced/ }))
+    await waitFor(() => expect(storage.saveCommitActivity).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows cached global activity in the header without fetching history', async () => {
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper' })
+    storage.loadCommitActivity.mockResolvedValue({ scope: JSON.stringify(['helper', scan.rootPath]), repositories: {
+      [project.id]: { activity: [{ date: new Date().toISOString().slice(0, 10), count: 7 }], from: '2020-01-01', to: '2099-12-31', shallow: false, cachedAt: new Date().toISOString() },
+    } })
+    render(<App />)
+    const heatmap = await screen.findByRole('img', { name: /Global commit activity: 7 cached commits/ })
+    expect(heatmap.previousElementSibling?.textContent).toContain('All local. All yours.')
+    expect(heatmap.nextElementSibling?.textContent).toContain('Change directory')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/history'))).toBe(false)
+  })
+
+  it('does not show a global heatmap without cached activity', async () => {
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper' })
+    render(<App />)
+    await screen.findByRole('button', { name: `View ${project.name}` })
+    expect(screen.queryByRole('img', { name: /Global commit activity/ })).toBeNull()
+  })
+
   it('returns to all projects when the brand button is activated with the keyboard', async () => {
     const user = userEvent.setup()
     render(<App />)

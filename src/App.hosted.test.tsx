@@ -6,7 +6,7 @@ import App from './App'
 
 const { chooseDirectory, scanDirectory, saveWorkspace } = vi.hoisted(() => ({ chooseDirectory: vi.fn(), scanDirectory: vi.fn(), saveWorkspace: vi.fn() }))
 vi.mock('./lib/deployment', async importOriginal => ({ ...await importOriginal<typeof import('./lib/deployment')>(), isVercelHosted: () => true }))
-vi.mock('./lib/storage', () => ({ loadWorkspace: async () => undefined, loadFavorites: async () => [], saveWorkspace, saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
+vi.mock('./lib/storage', () => ({ loadCommitActivity: async () => undefined, saveCommitActivity: async () => {}, loadWorkspace: async () => undefined, loadFavorites: async () => [], saveWorkspace, saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
 vi.mock('./lib/filesystem', () => ({ chooseDirectory, scanDirectory, canReadDirectory: vi.fn() }))
 
 beforeEach(() => {

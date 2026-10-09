@@ -7,7 +7,7 @@ import type { RepoProject } from './types'
 import type { ProjectTags } from './lib/project-tags'
 
 const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), loadProjectTags: vi.fn(), saveProjectTags: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), clearWorkspace: vi.fn() }))
-vi.mock('./lib/storage', () => storage)
+vi.mock('./lib/storage', () => ({ ...storage, loadCommitActivity: async () => undefined, saveCommitActivity: async () => {} }))
 const base: RepoProject = { id: 'alpha', name: 'Alpha', dirName: 'alpha', relativePath: 'alpha', description: 'Workspace app', stack: ['React'], scripts: {}, packageManager: 'npm', scannedAt: '2026-10-08T10:00:00Z' }
 const projects = [base, { ...base, id: 'beta', name: 'Beta', stack: ['Vue'] }, { ...base, id: 'gamma', name: 'Gamma' }]
 const workspace = { rootName: 'Projects', rootPath: '/projects', mode: 'helper', projects, syncedAt: base.scannedAt }

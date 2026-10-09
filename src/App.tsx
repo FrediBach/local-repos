@@ -1,3 +1,4 @@
+import { useCommitActivity } from '@/hooks/use-commit-activity'
 import { WorkspaceTopbar } from '@/components/workspace-topbar'
 import { ProjectResults } from '@/components/project-results'
 import { WorkspaceWatcherStatus } from '@/components/workspace-watcher-status'
@@ -54,6 +55,8 @@ function WorkspaceApp() {
   const { settings } = useSettings()
   const hosted = isVercelHosted()
   const [workspace, setWorkspace] = useState<Workspace>()
+  const [activitySync, setActivitySync] = useState<Workspace>()
+  const commitActivity = useCommitActivity(workspace, activitySync)
   const [favorites, setFavorites] = useState<string[]>([])
   const [projectTags, setProjectTags] = useState<ProjectTags>({})
   const [tagsReady, setTagsReady] = useState(false)
@@ -149,9 +152,10 @@ function WorkspaceApp() {
     return () => { active = false; clearInterval(timer) }
   }, [workspace?.mode, workspace?.projects, running, busy, settings.statusPollSeconds])
 
-  async function persist(next: Workspace, reportError = true) {
+  async function persist(next: Workspace, reportError = true, refreshActivity = false) {
     setHelperWorkspacePath(next.mode === 'helper' ? next.rootPath : undefined)
     setWorkspace(next)
+    if (refreshActivity) setActivitySync(next)
     try { await saveWorkspace(next); return true } catch { if (reportError) setNotice({ text: 'Projects loaded, but browser storage could not save this workspace.', error: true }); return false }
   }
 
@@ -256,7 +260,7 @@ function WorkspaceApp() {
       if (workspace?.mode === 'helper' && (next.mode !== 'helper' || next.rootPath !== workspace.rootPath)) await stopWorkspaceServers(workspace)
       auditHistory.current.clear(); setCriticalAlerts([])
       next = preservePreviews(next, workspace)
-      const cached = await persist(next); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); navigate('all'); setConnectOpen(false)
+      const cached = await persist(next, true, true); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); navigate('all'); setConnectOpen(false)
       if (cached) setNotice({ text: `Connected ${next.rootName}. Found ${next.projects.length} project${next.projects.length === 1 ? '' : 's'}.${next.warnings?.length ? ` ${next.warnings.length} scan note(s) — see workspace info.` : ''}` })
     } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setConnectError(error instanceof Error ? error.message : 'Unable to connect to this directory.') }
     finally { setBusy('') }
@@ -275,7 +279,7 @@ function WorkspaceApp() {
       } else throw new Error('Reconnect the directory to restore folder access.')
       if (version !== workspaceVersion.current) return
       next = preservePreviews(next, workspace)
-      const cached = await persist(next)
+      const cached = await persist(next, true, true)
       if (cached) setNotice({ text: `Up to date. ${next.projects.length} projects synced.${next.warnings?.length ? ' Some folders could not be read; see workspace info.' : ''}` })
     } catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Sync failed. Your cached projects are still available.', error: true }) }
     finally { setBusy('') }
@@ -303,7 +307,7 @@ function WorkspaceApp() {
       onInstall={installPrompt ? async () => { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(undefined) } : undefined} />
 
     <main className="main-content" id="projects" tabIndex={-1}>
-      <WorkspaceTopbar settingsTriggerRef={settingsTriggerRef} page={page} stack={stack} filter={filter} hasFilters={hasFilters} hosted={hosted} online={online}
+      <WorkspaceTopbar activity={commitActivity.activity} settingsTriggerRef={settingsTriggerRef} page={page} stack={stack} filter={filter} hasFilters={hasFilters} hosted={hosted} online={online}
         connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
@@ -342,7 +346,7 @@ function WorkspaceApp() {
     <ConnectWorkspaceDialog open={connectOpen} busy={busy} hosted={hosted} helper={helper} path={path} error={connectError}
       onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }} onPathChange={setPath} onConnect={connect} />
 
-    <ProjectDetailDialog selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
+    <ProjectDetailDialog onActivity={commitActivity.remember} selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
       packageBusy={packageBusy(selected)}
       detailTab={detailTab} onTabChange={setDetailTab} logs={logs} tagsReady={tagsReady} selectedTags={selectedTags} favorite={!!selected && favoriteIds.has(selected.id)}
       onClose={() => setSelectedId(undefined)} onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}

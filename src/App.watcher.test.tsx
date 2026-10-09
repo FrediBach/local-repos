@@ -7,7 +7,7 @@ import type { Workspace } from './types'
 
 const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
 const filesystem = vi.hoisted(() => ({ canReadDirectory: vi.fn(), scanDirectory: vi.fn(), chooseDirectory: vi.fn() }))
-vi.mock('./lib/storage', () => storage)
+vi.mock('./lib/storage', () => ({ ...storage, loadCommitActivity: async () => undefined, saveCommitActivity: async () => {} }))
 vi.mock('./lib/filesystem', () => filesystem)
 const workspace: Workspace = {
   mode: 'helper', rootName: 'Projects', rootPath: '/projects', syncedAt: '2026-10-08T12:00:00Z',

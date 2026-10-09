@@ -23,6 +23,8 @@ The initial screen contains labeled sample projects and illustrative previews. C
 
 ## Appearance and keyboard navigation
 
+After syncing projects with the local helper or loading commit history, a small **global commit activity heatmap** appears in the header between the local-status badge and **Change directory**. It shows the last 13 weeks of cached daily counts (UTC), summed across the current workspace’s cached repositories, with monorepo history counted once. Connecting, manually syncing, and watcher syncs refresh this cache automatically, reading local history for up to three repositories at a time. Failed reads preserve previous cached counts. You can also open a project’s unfiltered commit history to refresh its counts. Reopening the app only restores the cache; browser-only syncing does not run Git commands. Hover a square for its date and cached count; focus or hover the heatmap for cache coverage and age. Missing days are outlined, and partial or shallow coverage is muted. The cache survives reloads and offline use; forgetting the workspace clears it.
+
 The sidebar footer links to the project's GitHub repository and displays the current version, v0.5.
 
 Use the **System / Light / Dark** selector in the top bar to choose a theme. System follows your operating system and updates when it changes. The preference is saved locally and applied before the first paint; if browser storage is blocked, changes still work for the current session.

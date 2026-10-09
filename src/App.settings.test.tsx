@@ -7,7 +7,7 @@ import { defaultSettings, LEGACY_SETTINGS_STORAGE_KEY, SETTINGS_STORAGE_KEY } fr
 import type { RepoProject } from './types'
 
 const storage = vi.hoisted(() => ({ loadWorkspace: vi.fn(), loadFavorites: vi.fn(), saveWorkspace: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: async () => ({}), saveProjectTags: vi.fn(), clearWorkspace: vi.fn() }))
-vi.mock('./lib/storage', () => storage)
+vi.mock('./lib/storage', () => ({ ...storage, loadCommitActivity: async () => undefined, saveCommitActivity: async () => {} }))
 const project: RepoProject = {
   id: 'alpha', name: 'Alpha', dirName: 'alpha', relativePath: '.', description: '', stack: ['React', 'TypeScript', 'Vite'], scripts: {}, packageManager: 'npm', scannedAt: '2026-10-08T12:00:00Z',
   audit: { manager: 'npm', scannedAt: '2026-10-08T12:00:00Z', counts: { critical: 0, high: 1, moderate: 0, low: 0, info: 0 }, findings: [{ name: 'example', severity: 'high', title: 'Example finding' }] },

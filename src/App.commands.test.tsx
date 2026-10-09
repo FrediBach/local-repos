@@ -9,7 +9,7 @@ const storage = vi.hoisted(() => ({
   loadWorkspace: vi.fn(), saveWorkspace: vi.fn(), clearWorkspace: vi.fn(),
   loadFavorites: vi.fn(), saveFavorites: vi.fn(), loadProjectTags: vi.fn(), saveProjectTags: vi.fn(),
 }))
-vi.mock('./lib/storage', () => storage)
+vi.mock('./lib/storage', () => ({ ...storage, loadCommitActivity: async () => undefined, saveCommitActivity: async () => {} }))
 
 const alpha: RepoProject = {
   id: 'alpha', name: 'Alpha', dirName: 'alpha', relativePath: 'apps/alpha',
