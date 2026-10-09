@@ -50,6 +50,17 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
 }
 
 describe('local helper API security', () => {
+  it('restricts push checks to registered, accessible projects and the local app', async () => {
+    expect((await post('/api/projects/unknown/push-status')).status).toBe(404)
+    const project = await createProject()
+    const endpoint = `/api/projects/${project.id}/push-status`
+    expect(await (await post(endpoint)).json()).toMatchObject({ available: false, hasOrigin: false })
+    expect((await post(endpoint, {}, { Origin: 'https://untrusted.example' })).status).toBe(403)
+    expect((await fetch(`${address}${endpoint}`, { method: 'POST' })).status).toBe(403)
+    await rename(path.join(directory, 'project'), path.join(directory, 'moved'))
+    expect((await post(endpoint)).status).toBe(404)
+  })
+
   it.each([undefined, null, 'arbitrary-command', 42, {}])('rejects unsupported open targets before project lookup: %j', async app => {
     const lookup = vi.spyOn(helper.registry, 'get')
     const response = await post('/api/projects/unknown/open', { app })

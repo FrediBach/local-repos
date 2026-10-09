@@ -41,6 +41,16 @@ export interface GitDay {
   commits: GitDayCommit[]
 }
 
+export interface GitPushStatus {
+  available: boolean
+  hasOrigin: boolean
+  originRefsKnown: boolean
+  unpushedCommits: number
+  dirty: boolean
+  shallow: boolean
+  checkedAt: string
+}
+
 export interface ProjectDependency {
   name: string
   version: string

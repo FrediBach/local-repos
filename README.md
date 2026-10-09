@@ -60,6 +60,14 @@ Dates and times use your browser’s local timezone, including daylight-saving c
 
 Monorepo packages are grouped under their outermost workspace root and their repository history is counted once. Shallow clones and repositories that fail to load are identified in both the view and the export; a failed project does not hide successful results. Use **Retry summary** after resolving a failure. Summaries are read on demand and are not saved to the offline cache.
 
+## End-of-day push reminder
+
+At **18:00 in your local timezone**, Local Repos checks connected helper repositories for commits that have not reached origin and for uncommitted changes. Choose **Settings → Interface → End-of-day push reminder** to change the time or turn it off. The app must be open; opening it or returning to it after the chosen time also runs the check. It waits for other workspace actions and rechecks every five minutes afterward.
+
+A persistent warning lists affected projects, including those hidden by filters. Open a project from the warning, choose **Recheck** after committing or pushing, or **Dismiss for today**. Dismissal is saved per directory and local day and shared across tabs. A later day can show a new reminder. Browser-only connections and the demo do not run Git checks.
+
+The check reads current local branches and detached HEAD, counting shared commits once and grouping monorepo packages under their repository. It compares against **locally known origin branches**, without fetching or pushing. Fetch origin yourself if its state may be stale. Repositories without origin are skipped; missing origin history and failed checks are shown as unknown, never as fully pushed. Shallow clones may have incomplete history. No files are committed or pushed automatically.
+
 ## Filter and prioritize projects
 
 Use the quick filters below search, or open **All filters**, to combine:
@@ -81,7 +89,7 @@ The cog beside the top-right help icon opens **Settings**:
 - **Badges & scores:** assign red, orange, blue, or neutral to each vulnerability severity; set orange/red package-lag thresholds, the major-version requirement for red, and whether any major update is orange. Expand **Score weights** to adjust major, minor, patch, and prerelease points and per-package caps. A preview shows the resulting colors and scores.
 - **Filter thresholds:** set recent/active/inactive windows in days and large-project/node_modules size thresholds.
 - **Watcher:** choose manual-only, periodic, or package-change scans; set the interval and select vulnerability, outdated-package, and optional disk-usage checks.
-- **Interface:** choose a color scheme, sidebar technology, project tag, and package-match limits; adjust running-server polling and success-notification duration. A notification duration of 0 keeps it visible until dismissed; errors always remain visible.
+- **Interface:** choose a color scheme, sidebar technology, project tag, and package-match limits; configure the end-of-day push reminder, running-server polling, and success-notification duration. A notification duration of 0 keeps it visible until dismissed; errors always remain visible.
 
 **Save settings** applies changes immediately to cached project badges, package details, package-lag sorting, filter labels/counts, and batch lag totals. No rescan or helper restart is required. **Cancel** discards the draft; **Reset defaults** fills in the original values and takes effect when saved. Invalid values are highlighted and cannot be saved.
 
@@ -99,7 +107,9 @@ Missing repositories do not prevent import. Add them and import the same file ag
 
 ## Automatic scans
 
-Configure **Settings → Watcher**:
+Configure **Settings → Watcher**. End-of-day push reminders have separate controls under **Interface** and also run in manual watcher mode. After a helper restart, a due reminder may scan metadata to register the saved workspace again; it does not run package checks.
+
+Watcher modes:
 
 | Mode | Behavior |
 | --- | --- |

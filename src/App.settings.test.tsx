@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { defaultSettings, SETTINGS_STORAGE_KEY } from './lib/settings'
@@ -36,6 +36,28 @@ const auditBadge = () => screen.getByRole('button', { name: /Alpha: 1 vulnerabil
 const outdatedBadge = () => screen.getByRole('button', { name: /Alpha: 1 outdated package/ })
 
 describe('workspace settings dialog', () => {
+  it('validates, saves and restores a custom push-reminder time and disabled preference', async () => {
+    const { user, unmount } = await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    expect((screen.getByLabelText('Reminder time') as HTMLInputElement).value).toBe('18:00')
+    fireEvent.change(screen.getByLabelText('Reminder time'), { target: { value: '' } })
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(screen.getByText('Choose a valid reminder time.')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Reminder time'), { target: { value: '17:30' } })
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ pushReminderTime: '17:30', pushReminderEnabled: true })
+    unmount()
+    await setup()
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Interface' }))
+    expect((screen.getByLabelText('Reminder time') as HTMLInputElement).value).toBe('17:30')
+    await user.click(screen.getByRole('checkbox', { name: 'Remind me to push changes to origin' }))
+    expect((screen.getByLabelText('Reminder time') as HTMLInputElement).disabled).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ pushReminderTime: '17:30', pushReminderEnabled: false })
+  })
+
   it('saves a scheme with other settings, restores it on reload, and keeps it when switching modes', async () => {
     const { user, unmount } = await setup()
     await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))

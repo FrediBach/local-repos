@@ -17,6 +17,8 @@ import { PREFERENCES_CHANGED_EVENT } from '@/lib/settings'
 import { createConfigBackup, mergeConfigProjects, type ConfigBackup } from '@/lib/config-backup'
 import { configureOutdatedReport } from '@/lib/outdated'
 import { DailySummary } from '@/components/daily-summary'
+import { PushReminder } from '@/components/push-reminder'
+import { usePushReminder } from '@/hooks/use-push-reminder'
 import { ProjectFilters } from '@/components/project-filters'
 import { ProjectTagDialog } from '@/components/project-tags'
 import { normalizeTags, type ProjectTags } from '@/lib/project-tags'
@@ -89,6 +91,7 @@ function WorkspaceApp() {
   const { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchScope, setSearchScope, sort, setSort, page, setPage,
     filterContext, filterGroups, searched, filtered, hasFilters, hasRefinements, clearFilters, toggleTechnology, toggleTag, navigate } = useProjectFiltering(projects, favorites)
   const watcher = useWorkspaceWatcher({ workspace, settings, busy: !!busy, online, run: runAutomaticScan })
+  const pushReminder = usePushReminder({ workspace, settings, busy: !!busy })
   const configContext = useRef({ workspace, favorites, projectTags, busy, ready: tagsReady && cacheReady })
   useLayoutEffect(() => {
     configContext.current = { workspace, favorites, projectTags, busy, ready: tagsReady && cacheReady }
@@ -261,6 +264,8 @@ function WorkspaceApp() {
         connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
+        <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
+          onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />
         {page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
         <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
           scanAllOutdated={scanAllOutdated}

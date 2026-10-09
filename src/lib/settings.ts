@@ -34,7 +34,11 @@ export const numericSettings = {
 } as const
 
 export type NumericSettingKey = keyof typeof numericSettings
+export type SettingsErrorKey = NumericSettingKey | 'pushReminderTime'
+export const validReminderTime = (value: unknown): value is string => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 export type AppSettings = Record<NumericSettingKey, number> & {
+  pushReminderEnabled: boolean
+  pushReminderTime: string
   colorScheme: ColorScheme
   auditColors: Record<AuditSeverity, BadgeColor>
   majorUpdatesAreOrange: boolean
@@ -44,6 +48,8 @@ export type AppSettings = Record<NumericSettingKey, number> & {
   watcherStorage: boolean
 }
 export const defaultSettings: AppSettings = {
+  pushReminderEnabled: true,
+  pushReminderTime: '18:00',
   colorScheme: 'forest',
   ...Object.fromEntries(Object.entries(numericSettings).map(([key, field]) => [key, field.default])) as Record<NumericSettingKey, number>,
   auditColors: { critical: 'red', high: 'red', moderate: 'orange', low: 'blue', info: 'neutral' },
@@ -65,12 +71,13 @@ export function normalizeSettings(value: unknown): AppSettings {
   const result = { ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }
   if (!isRecord(value)) return result
   result.colorScheme = normalizeColorScheme(value.colorScheme)
+  if (validReminderTime(value.pushReminderTime)) result.pushReminderTime = value.pushReminderTime
   for (const key of Object.keys(numericSettings) as NumericSettingKey[]) {
     if (validNumber(key, value[key])) result[key] = value[key]
   }
   if (typeof value.majorUpdatesAreOrange === 'boolean') result.majorUpdatesAreOrange = value.majorUpdatesAreOrange
   if (['manual', 'periodic', 'changes'].includes(value.watcherMode as string)) result.watcherMode = value.watcherMode as WatcherMode
-  for (const key of ['watcherAudit', 'watcherOutdated', 'watcherStorage'] as const) {
+  for (const key of ['watcherAudit', 'watcherOutdated', 'watcherStorage', 'pushReminderEnabled'] as const) {
     if (typeof value[key] === 'boolean') result[key] = value[key]
   }
   if (isRecord(value.auditColors)) for (const severity of auditSeverities) {
@@ -97,8 +104,9 @@ const orderedSettings: [NumericSettingKey, NumericSettingKey][] = [
   ['recentActivityDays', 'activeActivityDays'], ['activeActivityDays', 'inactiveActivityDays'], ['inactiveActivityDays', 'dormantActivityDays'],
 ]
 
-export function validateSettings(settings: AppSettings): Partial<Record<NumericSettingKey, string>> {
-  const errors: Partial<Record<NumericSettingKey, string>> = {}
+export function validateSettings(settings: AppSettings): Partial<Record<SettingsErrorKey, string>> {
+  const errors: Partial<Record<SettingsErrorKey, string>> = {}
+  if (settings.pushReminderEnabled && !validReminderTime(settings.pushReminderTime)) errors.pushReminderTime = 'Choose a valid reminder time.'
   for (const key of Object.keys(numericSettings) as NumericSettingKey[]) {
     if (key === 'watcherIntervalMinutes' && settings.watcherMode !== 'periodic' || key === 'watcherPollSeconds' && settings.watcherMode !== 'changes') continue
     const { min, max, step } = numericSettings[key]

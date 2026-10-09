@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { defaultSettings, normalizeSettings, validateSettings } from './settings'
 
 describe('workspace settings', () => {
+  it('defaults push reminders to 18:00 and validates configurable local times', () => {
+    expect(normalizeSettings({})).toMatchObject({ pushReminderEnabled: true, pushReminderTime: '18:00' })
+    expect(normalizeSettings({ pushReminderEnabled: false, pushReminderTime: '17:30' })).toMatchObject({ pushReminderEnabled: false, pushReminderTime: '17:30' })
+    for (const pushReminderTime of ['', '24:00', '18:60', '9:00', null, 1800]) {
+      expect(normalizeSettings({ pushReminderTime }).pushReminderTime).toBe('18:00')
+    }
+    expect(validateSettings({ ...defaultSettings, pushReminderTime: '' })).toHaveProperty('pushReminderTime')
+    expect(validateSettings({ ...defaultSettings, pushReminderTime: '', pushReminderEnabled: false })).toEqual({})
+    for (const pushReminderTime of ['00:00', '17:30', '23:59']) expect(validateSettings({ ...defaultSettings, pushReminderTime })).toEqual({})
+  })
+
   it('keeps older settings compatible and falls back safely for invalid color schemes', () => {
     for (const colorScheme of [undefined, null, '', 'unknown', 'toString', ['ocean'], {}]) {
       expect(normalizeSettings({ colorScheme, projectTagLimit: 2 })).toMatchObject({ colorScheme: 'forest', projectTagLimit: 2 })

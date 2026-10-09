@@ -3,7 +3,7 @@ import { RotateCcw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useSettings } from '@/hooks/use-settings'
-import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type WatcherMode } from '@/lib/settings'
+import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type SettingsErrorKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
 import { colorSchemes } from '@/lib/color-schemes'
 import { ConfigBackupPanel, type ConfigBackupControls } from './config-backup'
@@ -12,7 +12,7 @@ import './settings-dialog.css'
 const tabs = ['badges', 'filters', 'watcher', 'interface', 'backup'] as const
 type SettingsTab = typeof tabs[number]
 const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface', backup: 'Backup' }
-const fieldTabs = (key: NumericSettingKey): SettingsTab => key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
+const fieldTabs = (key: SettingsErrorKey): SettingsTab => key === 'pushReminderTime' ? 'interface' : key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
 
 export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
   const { settings, saveSettings } = useSettings()
@@ -46,7 +46,7 @@ export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
 
   function save() {
     setSubmitted(true)
-    const firstError = Object.keys(errors)[0] as NumericSettingKey | undefined
+    const firstError = Object.keys(errors)[0] as SettingsErrorKey | undefined
     if (firstError) { setTab(fieldTabs(firstError)); return }
     try { saveSettings(draft); setOpen(false) }
     catch (error) { setSaveError(error instanceof Error ? error.message : 'Could not save settings.') }
@@ -112,6 +112,17 @@ export function SettingsDialog({ backup }: { backup: ConfigBackupControls }) {
               </label>)}</div>
             </fieldset>
             <fieldset className="settings-section"><legend>Project display</legend><div className="settings-grid">{field('sidebarTechnologyLimit')}{field('projectTagLimit', '0 = hide technology tags.')}{field('packageMatchLimit')}</div></fieldset>
+            <fieldset className="settings-section"><legend>End-of-day push reminder</legend>
+              <label className="settings-checkbox"><input type="checkbox" checked={draft.pushReminderEnabled} onChange={event => setDraft(current => ({ ...current, pushReminderEnabled: event.target.checked }))} />Remind me to push changes to origin</label>
+              <div className="settings-field"><label htmlFor={`${id}-pushReminderTime`}>Reminder time</label>
+                <input id={`${id}-pushReminderTime`} type="time" value={draft.pushReminderTime} disabled={!draft.pushReminderEnabled}
+                  aria-invalid={!!(submitted && errors.pushReminderTime)} aria-describedby={`${id}-pushReminderTime-hint`}
+                  onChange={event => { setDraft(current => ({ ...current, pushReminderTime: event.target.value })); setSaveError('') }} />
+                <small id={`${id}-pushReminderTime-hint`} className={submitted && errors.pushReminderTime ? 'settings-field-error' : ''}>{submitted && errors.pushReminderTime || `Your local time (${Intl.DateTimeFormat().resolvedOptions().timeZone}).`}</small>
+              </div>
+              <p>While the app is open, the local helper checks for unpushed commits and uncommitted changes at this time and every five minutes afterward. Returning to the app later that day also triggers the check. Dismiss the reminder to silence it for today.</p>
+              <p>Uses locally known origin branches. Fetch origin if needed for an up-to-date comparison. Browser folder connections cannot check push status.</p>
+            </fieldset>
             <fieldset className="settings-section"><legend>Refresh & notifications</legend><div className="settings-grid">{field('statusPollSeconds', 'While development servers are running.')}{field('notificationSeconds', '0 = keep notifications until dismissed. Errors always stay visible.')}</div></fieldset>
           </>}
           {tab === 'watcher' && <>

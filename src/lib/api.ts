@@ -1,4 +1,4 @@
-import type { GitDay, GitDayQuery, GitHistory, GitHistoryQuery, RepoProject, ScanResult } from '@/types'
+import type { GitDay, GitDayQuery, GitHistory, GitHistoryQuery, GitPushStatus, RepoProject, ScanResult } from '@/types'
 
 let helperWorkspacePath: string | undefined
 let registration: { path: string; promise: Promise<ScanResult> } | undefined
@@ -31,6 +31,7 @@ export const scanWithHelper = (path: string) => api<ScanResult>('/scan', { path 
 export const projectAction = <T = Partial<RepoProject>>(id: string, action: string, body: unknown = {}) => api<T>(`/projects/${encodeURIComponent(id)}/${action}`, body)
 export const projectHistory = (id: string, query: GitHistoryQuery = {}) => projectAction<GitHistory>(id, 'history', query)
 export const projectDay = (id: string, query: GitDayQuery) => projectAction<GitDay>(id, 'daily-summary', query)
+export const projectPushStatus = (id: string) => projectAction<GitPushStatus>(id, 'push-status')
 
 export function originUrl(origin?: string): string | undefined {
   if (!origin) return
