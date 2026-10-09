@@ -31,13 +31,16 @@ function json(value: string): unknown {
   try { return JSON.parse(value) } catch { unsupportedReport() }
 }
 
-export async function projectDependencies(entry: RegisteredProject): Promise<Map<string, ProjectDependency>> {
+/** Keep dependency validation and the change-detection baseline on one read. */
+export async function readProjectManifest(entry: RegisteredProject) {
+  let original: string
   let manifest: unknown
   try {
     const filename = path.join(entry.directory, 'package.json')
     const info = await lstat(filename)
     if (!info.isFile() || info.size > 256 * 1024) throw new Error('Invalid manifest')
-    manifest = JSON.parse(await readFile(filename, 'utf8'))
+    original = await readFile(filename, 'utf8')
+    manifest = JSON.parse(original)
   } catch { throw new HelperError('Outdated scanning requires a regular, valid package.json file smaller than 256 KB.') }
   if (!object(manifest)) throw new HelperError('Outdated scanning requires a valid package.json object.')
   const dependencies = new Map<string, ProjectDependency>()
@@ -49,7 +52,7 @@ export async function projectDependencies(entry: RegisteredProject): Promise<Map
       dependencies.set(name, { name, version: version.trim(), kind })
     }
   }
-  return dependencies
+  return { original, dependencies, manifest: manifest as Partial<Record<ProjectDependency['kind'], Record<string, string>>> }
 }
 
 async function requireLockfile(entry: RegisteredProject): Promise<void> {
@@ -205,7 +208,7 @@ async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: 
 
 /** Explicit, bounded registry lookups only. Never installs or updates packages. */
 export async function outdatedProject(entry: RegisteredProject, runner: OutdatedRunner = runOutdatedCommand): Promise<PackageOutdated> {
-  const dependencies = await projectDependencies(entry)
+  const { dependencies } = await readProjectManifest(entry)
   const manager = entry.project.packageManager
   const skipped: NonNullable<PackageOutdated['skipped']> = []
   const names: string[] = []

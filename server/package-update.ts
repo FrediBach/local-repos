@@ -4,7 +4,7 @@ import type { ExecFileOptionsWithStringEncoding } from 'node:child_process'
 import type { PackageUpdate, ProjectDependency } from '../src/types'
 import { scoreVersionGap } from '../src/lib/outdated'
 import { HelperError, type RegisteredProject } from './scanner'
-import { outdatedProject, projectDependencies, runOutdatedCommand, type OutdatedRunner } from './package-outdated'
+import { outdatedProject, readProjectManifest, runOutdatedCommand, type OutdatedRunner } from './package-outdated'
 
 const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 
@@ -24,9 +24,7 @@ export function updateTarget(current: string, versions: string[], level: 'minor'
 /** Explicit install action. Resolve every target before changing any packages. */
 export async function updateProject(entry: RegisteredProject, level: 'minor' | 'patch', runner: OutdatedRunner = runOutdatedCommand): Promise<PackageUpdate> {
   const manifestPath = path.join(entry.directory, 'package.json')
-  const dependencies = await projectDependencies(entry)
-  const original = await readFile(manifestPath, 'utf8')
-  const manifest = JSON.parse(original)
+  const { dependencies, original, manifest } = await readProjectManifest(entry)
   const report = await outdatedProject(entry, runner)
   const manager = entry.project.packageManager
   const result: PackageUpdate = { level, updatedAt: new Date().toISOString(), packages: [], skipped: [] }
@@ -57,7 +55,7 @@ export async function updateProject(entry: RegisteredProject, level: 'minor' | '
   const targets: { name: string; from: string; to: string; kind: ProjectDependency['kind'] }[] = []
   for (const finding of report.findings) {
     const dependency = dependencies.get(finding.name)
-    const declarations = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].filter(kind => manifest[kind]?.[finding.name] !== undefined)
+    const declarations = (['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const).filter(kind => manifest[kind]?.[finding.name] !== undefined)
     if (!dependency || dependency.kind === 'peerDependencies' || declarations.length !== 1 || !/^[~^]?\d+(?:\.\d+){0,2}$/.test(dependency.version) || !stable.test(finding.current)) {
       result.skipped.push({ name: finding.name, reason: 'Only stable registry dependencies with a simple version range in one dependency section are updated.' })
       continue

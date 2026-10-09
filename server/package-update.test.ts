@@ -51,6 +51,19 @@ it('does not install anything if a registry lookup fails', async () => {
   expect(run.mock.calls.some(([, args]) => args[0] === 'install')).toBe(false)
 })
 
+it.each([
+  ['invalid JSON', '{'],
+  ['non-object manifest', 'null'],
+  ['invalid dependency section', '{"dependencies":[]}'],
+  ['invalid dependency version', '{"dependencies":{"alpha":false}}'],
+])('rejects %s before invoking package commands', async (_label, manifest) => {
+  const entry = await fixture(), run = runner()
+  await writeFile(path.join(directory, 'package.json'), manifest)
+  await expect(updateProject(entry, 'patch', run)).rejects.toThrow()
+  expect(run).not.toHaveBeenCalled()
+  expect(await readFile(path.join(directory, 'package.json'), 'utf8')).toBe(manifest)
+})
+
 it('does not overwrite a manifest changed during lookup', async () => {
   const entry = await fixture(), run = runner()
   const implementation = run.getMockImplementation()!
