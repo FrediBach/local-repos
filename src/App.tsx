@@ -1,11 +1,12 @@
+import { ProjectDetailDialog } from '@/components/project-detail-dialog'
+import { ProjectCard } from '@/components/project-card'
+import { relativeTime } from '@/lib/relative-time'
 import { ConnectWorkspaceDialog } from '@/components/connect-workspace-dialog'
 import { WorkspaceHelpDialog } from '@/components/workspace-help-dialog'
 import { Logo } from '@/components/brand-logo'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp, Code2, Download, Ellipsis, ExternalLink, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitHorizontal, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Tag, Terminal, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp, Download, Folder, FolderOpen, LayoutGrid, List, LoaderCircle, Monitor, Package, Play, RefreshCw, Search, ShieldCheck, Star, Terminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ThemeControl } from '@/components/theme-control'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { SettingsProvider, useSettings } from '@/hooks/use-settings'
@@ -14,32 +15,21 @@ import { PREFERENCES_CHANGED_EVENT } from '@/lib/settings'
 import { createConfigBackup, mergeConfigProjects, type ConfigBackup } from '@/lib/config-backup'
 import { configureOutdatedReport } from '@/lib/outdated'
 import { HostedNotice } from '@/components/hosted-notice'
-import { ProjectTabs } from '@/components/project-tabs'
-import { ProjectReadme } from '@/components/project-readme'
-import { ProjectHistory } from '@/components/project-history'
 import { DailySummary } from '@/components/daily-summary'
-import { ProjectPreview } from '@/components/project-preview'
-import { ProjectControls } from '@/components/project-controls'
-import { PackageMatches, ProjectPackages } from '@/components/project-packages'
-import { ProjectStoragePanel } from '@/components/project-storage'
-import { formatBytes } from '@/lib/format-bytes'
 import { ProjectFilters } from '@/components/project-filters'
-import { ProjectTagChips, ProjectTagDialog } from '@/components/project-tags'
+import { ProjectTagDialog } from '@/components/project-tags'
 import { normalizeTags, tagFilterValue, type ProjectTags } from '@/lib/project-tags'
 import { isRunning, matchesProjectFilters, matchesProjectSearch, projectFilterGroups, projectSortOptions, sortProjects, type ProjectFilters as FilterState, type ProjectSort } from '@/lib/project-filters'
 import { PreviewBatchProgress } from '@/components/preview-batch-progress'
 import { usePreviewBatch } from '@/hooks/use-preview-batch'
 import { AuditBatchProgress } from '@/components/audit-batch-progress'
-import { ProjectAuditBadge } from '@/components/project-audit-badge'
-import { ProjectAiBadge } from '@/components/project-ai-badge'
 import { useAuditBatch } from '@/hooks/use-audit-batch'
 import { useOutdatedBatch } from '@/hooks/use-outdated-batch'
 import { useWorkspaceWatcher } from '@/hooks/use-workspace-watcher'
 import { CriticalVulnerabilityDialog } from '@/components/critical-vulnerability-dialog'
 import { mergeCriticalAlerts, newCriticalVulnerabilities, type CriticalVulnerabilityAlert } from '@/lib/critical-vulnerabilities'
 import { OutdatedBatchProgress } from '@/components/outdated-batch-progress'
-import { ProjectOutdatedBadge } from '@/components/project-outdated-badge'
-import { api, originUrl, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
+import { api, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveConfigPreferences, saveFavorites, saveProjectTags, saveWorkspace } from '@/lib/storage'
@@ -50,15 +40,7 @@ import type { PackageAudit, PackageOutdated, RepoProject, Workspace } from '@/ty
 type Filter = 'all' | 'favorites' | 'running'
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
 
-function relativeTime(value?: string) {
-  if (!value) return 'Just scanned'
-  const minutes = Math.max(0, (Date.now() - Date.parse(value)) / 60_000)
-  if (minutes < 1) return 'Just now'
-  if (minutes < 60) return `${Math.floor(minutes)}m ago`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`
-  if (minutes < 43200) return `${Math.floor(minutes / 1440)}d ago`
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
+
 
 
 
@@ -507,14 +489,9 @@ function WorkspaceApp() {
         <div className="toolbar"><div className="search-group"><select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => setSearchScope(event.target.value as 'all' | 'packages')}><option value="all">Projects & packages</option><option value="packages">Package name & version</option></select><div className="search-box"><Search size={17} /><input ref={searchRef} value={query} onChange={event => setQuery(event.target.value)} placeholder={searchScope === 'packages' ? 'e.g. next, next@16.0.0, next@16.*.*…' : 'Find a project or package…'} aria-label="Search projects" />{query ? <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button> : <kbd>⌘ K</kbd>}</div></div><div className="toolbar-right"><label className="sort-control"><ArrowDownWideNarrow size={15} /><select value={sort} onChange={event => setSort(event.target.value as ProjectSort)} aria-label="Sort projects">{projectSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={12} /></label><div className="view-toggle"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={17} /></button></div></div></div>
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
-        {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => {
-          const tags = <div className="project-tags"><ProjectTagChips project={project} active={filters.tags} ready={tagsReady} onFilter={toggleTag} onEdit={() => editTags(project)} />{project.monorepo && <span title={project.monorepo.packagePath}>{project.monorepo.name} workspace</span>}{!!project.workspacePackageCount && <span>{project.workspacePackageCount} workspace packages</span>}{project.stack.slice(0, settings.projectTagLimit).map(tech => <button className="technology-tag" key={tech} onClick={() => toggleTechnology(tech)}>{tech}</button>)}{!project.stack.length && <span>Repository</span>}{project.dev?.status === 'running' && <span className="running-tag"><span className="status-dot" /> Running</span>}</div>
-          const title = <><button id={`project-open-${project.id}`} className="project-title" onClick={() => openProject(project)}>{project.name}</button><ProjectAiBadge project={project} /></>
-          return <article className={`project-card ${previewBatch.progress?.current?.id === project.id ? 'is-capturing' : ''}`} key={project.id} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
-          <button className="preview-button" onClick={() => openProject(project)} aria-label={`View ${project.name}`}><ProjectPreview project={project} />{previewBatch.progress?.current?.id === project.id && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
-          <div className="project-info"><div className="project-title-row">{view === 'list' ? <div className="project-name-tags"><div className="project-name">{title}</div>{tags}</div> : title}<ProjectAuditBadge project={project} onClick={() => openProject(project, 'packages')} /><ProjectOutdatedBadge project={project} onClick={() => openProject(project, 'packages')} /><button className={`favorite-button ${favoriteIds.has(project.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(project.id)} aria-label={`${favoriteIds.has(project.id) ? 'Unfavorite' : 'Favorite'} ${project.name}`} aria-pressed={favoriteIds.has(project.id)}><Star size={16} /></button></div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} />{view === 'grid' && tags}{project.storage && <div className="project-storage-summary" title={`Measured ${new Date(project.storage.measuredAt).toLocaleString()}`}>{project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.totalBytes)} on disk · {project.storage.partial ? '≥ ' : ''}{formatBytes(project.storage.nodeModulesBytes)} node_modules</div>}</div>
-          <div className="project-footer"><span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><DropdownMenu modal={false}><DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => openProject(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem><DropdownMenuItem disabled={!tagsReady} onSelect={() => editTags(project)}><Tag size={14} />Edit tags</DropdownMenuItem><DropdownMenuItem onSelect={() => toggleFavorite(project.id)}><Star size={14} />{favoriteIds.has(project.id) ? 'Remove favorite' : 'Add to favorites'}</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'vscode' })}><Code2 size={14} />Open in VS Code</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'sourcetree' })}><GitBranch size={14} />Open in Sourcetree</DropdownMenuItem><DropdownMenuItem disabled={!!busy} onSelect={() => action(project, 'open', { app: 'folder' })}><FolderOpen size={14} />Show in folder</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
-        </article>})}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{hasRefinements ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{hasRefinements ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
+        {filtered.length ? <div className={`projects-${view}`}>{filtered.map((project, index) => <ProjectCard key={project.id} project={project} index={index} view={view} query={query}
+          activeTags={filters.tags} tagsReady={tagsReady} favorite={favoriteIds.has(project.id)} capturing={previewBatch.progress?.current?.id === project.id} busy={busy}
+          onOpen={openProject} onEditTags={editTags} onToggleFavorite={toggleFavorite} onTagFilter={toggleTag} onTechnologyFilter={toggleTechnology} onAction={action} />)}</div> : <div className="empty-state">{filter === 'favorites' ? <Star size={31} /> : filter === 'running' ? <Terminal size={31} /> : <FolderOpen size={31} />}<h2>{hasRefinements ? 'A little too quiet here.' : filter === 'favorites' ? 'Make room for your favorites.' : filter === 'running' ? 'Nothing running. Room to begin.' : 'Your next project starts here.'}</h2><p>{hasRefinements ? 'Try another search or clear your filters.' : filter === 'favorites' ? 'Star a project to keep it within easy reach.' : filter === 'running' ? 'Open a project and start its development server.' : 'No repositories or package.json files were found in this directory.'}</p><Button variant="outline" onClick={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }}>{!projects.length ? 'Choose another directory' : 'Back to all projects'}<ArrowRight size={14} /></Button></div>}
         <footer className="page-footer"><span>{filtered.length.toString().padStart(2, '0')} {filtered.length === 1 ? 'PROJECT' : 'PROJECTS'}<span className="footer-mid-dot">·</span>{isDemo ? 'A FEW POSSIBILITIES' : 'A LITTLE POSSIBILITY IN EVERY FOLDER'}</span><span><ShieldCheck size={13} /> No cloud. No clutter.</span></footer>
         {isDemo && <div className="demo-note"><span>You’re looking at an example workspace.</span><button onClick={() => setConnectOpen(true)}>Make it yours <ArrowRight size={13} /></button></div>}
         </>}
@@ -524,7 +501,11 @@ function WorkspaceApp() {
     <ConnectWorkspaceDialog open={connectOpen} busy={busy} hosted={hosted} helper={helper} path={path} error={connectError}
       onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }} onPathChange={setPath} onConnect={connect} />
 
-    <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelectedId(undefined) }}><DialogContent className="project-dialog" onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}>{selected && <><div className="detail-header" role="region" aria-label="Project summary" tabIndex={0}><span className="eyebrow"><FolderGit2 size={14} /> PROJECT OVERVIEW</span><DialogTitle>{selected.name}</DialogTitle><DialogDescription>{selected.description || 'Your local project, at a glance.'}</DialogDescription><div className="detail-tags"><ProjectAiBadge project={selected} />{selected.monorepo && <span>{selected.monorepo.name} / {selected.monorepo.packagePath}</span>}{!!selected.workspacePackageCount && <span>{selected.workspacePackageCount} workspace packages</span>}{selected.stack.map(tech => <span key={tech}>{tech}</span>)}{isDemo && <span className="sample-badge">SAMPLE PROJECT</span>}</div><div className="detail-user-tags">{selected.tags?.map(tag => <button type="button" className="user-project-tag" key={tag} onClick={() => { toggleTag(tag); setSelectedId(undefined) }} aria-label={`Filter by tag: ${tag}`} aria-pressed={selectedTags.has(tagFilterValue(tag))}><Tag size={12} /><span>{tag}</span></button>)}<button id="edit-detail-tags" type="button" className="edit-project-tags" disabled={!tagsReady} onClick={() => editTags(selected)}><Tag size={13} />{selected.tags?.length ? 'Edit tags' : 'Add tags'}</button></div></div><ProjectTabs value={detailTab} onChange={setDetailTab}>{detailTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === selected.id ? `${selected.id}:outdated` : busy} onAction={name => { void action(selected, name) }} /> : detailTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <><ProjectPreview project={selected} large /><div className="metadata-grid"><div><span>VERSION</span><strong>{selected.version ? `v${selected.version}` : 'Not specified'}</strong></div><div><span>AUTHOR</span><strong>{selected.author || 'Not specified'}</strong></div><div><span>BRANCH</span><strong><GitBranch size={14} />{selected.git?.branch || 'Not available'}</strong></div><div><span>LICENSE</span><strong>{selected.license || 'Not specified'}</strong></div></div><div className="commit-row"><GitCommitHorizontal size={18} /><div><strong>{selected.git?.message || 'No commit information available'}</strong><span>{selected.git?.commit?.slice(0, 7)} {selected.git?.committedAt && `· ${relativeTime(selected.git.committedAt)}`}{selected.git?.dirty && ' · Uncommitted changes'}</span></div>{originUrl(selected.git?.origin) && <a href={originUrl(selected.git?.origin)} target="_blank" rel="noreferrer" title="Open Git remote"><ExternalLink size={16} /></a>}</div><ProjectHistory key={`history:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} /><ProjectControls key={selected.id} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} logs={logs} onAction={(name, body) => { void action(selected, name, body) }} /><ProjectStoragePanel key={`storage:${selected.id}`} project={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy} onAction={(name, body) => { void action(selected, name, body) }} /></>}</ProjectTabs><div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'vscode' })}><Code2 size={15} />VS Code</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => action(selected, 'open', { app: 'sourcetree' })}><GitBranch size={15} />Sourcetree</Button><Button variant="ghost" size="sm" aria-pressed={favoriteIds.has(selected.id)} onClick={() => toggleFavorite(selected.id)}><Star size={15} fill={favoriteIds.has(selected.id) ? 'currentColor' : 'none'} />{favoriteIds.has(selected.id) ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
+    <ProjectDetailDialog selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
+      packageBusy={selected && auditBatch.isActive() && auditBatch.progress?.current?.id === selected.id ? `${selected.id}:audit` : selected && outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === selected.id ? `${selected.id}:outdated` : busy}
+      detailTab={detailTab} onTabChange={setDetailTab} logs={logs} tagsReady={tagsReady} selectedTags={selectedTags} favorite={!!selected && favoriteIds.has(selected.id)}
+      onClose={() => setSelectedId(undefined)} onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}
+      onTagFilter={toggleTag} onEditTags={editTags} onAction={action} onToggleFavorite={toggleFavorite} />
 
     <WorkspaceHelpDialog open={helpOpen} onOpenChange={setHelpOpen} workspace={workspace} busy={!!busy}
       onForget={() => { void forgetWorkspace(); setHelpOpen(false) }} />
