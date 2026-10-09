@@ -258,11 +258,12 @@ function WorkspaceApp() {
 
     <main className="main-content" id="projects" tabIndex={-1}>
       <WorkspaceTopbar page={page} stack={stack} filter={filter} hasFilters={hasFilters} hosted={hosted} online={online}
+        connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
         {page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
         <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
-          onConnect={() => { setConnectError(''); setConnectOpen(true) }} scanAllOutdated={scanAllOutdated}
+          scanAllOutdated={scanAllOutdated}
           scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} captureAllPreviews={captureAllPreviews} />
 
         {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
