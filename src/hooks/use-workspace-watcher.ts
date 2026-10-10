@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api } from '@/lib/api'
-import { packageWorkspaceId } from '@/lib/workspace'
+import { activeProjects, packageWorkspaceId } from '@/lib/workspace'
 import type { AppSettings } from '@/lib/settings'
 import type { Workspace } from '@/types'
 
@@ -12,7 +12,7 @@ interface WatcherOptions {
   run: (changedIds: string[] | undefined, isCurrent: () => boolean, progress: (message: string) => void) => Promise<Workspace | undefined>
 }
 
-const fingerprintsOf = (workspace: Workspace) => Object.fromEntries(workspace.projects.map(project => [project.id, project.packageFingerprint]))
+const fingerprintsOf = (workspace: Workspace) => Object.fromEntries(activeProjects(workspace).map(project => [project.id, project.packageFingerprint]))
 
 export function useWorkspaceWatcher(options: WatcherOptions) {
   const latest = useRef(options)
@@ -56,10 +56,11 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
           if (!active) return
           if (result.fingerprints) {
             const snapshot = result.fingerprints
-            changedIds = [...new Set([...Object.keys(snapshot), ...Object.keys(baseline)])].filter(id => snapshot[id] !== baseline[id])
+            const ignored = new Set(latest.current.workspace?.ignoredProjectIds ?? [])
+            changedIds = [...new Set([...Object.keys(snapshot), ...Object.keys(baseline)])].filter(id => !ignored.has(id) && snapshot[id] !== baseline[id])
             if (!changedIds.length && (!watcherRemoteActivity || Date.now() < nextRemoteCheck)) { setError(false); publish('Watching for package changes'); return }
             // Shared workspaces need sibling checks; other grouped packages are independent.
-            const projects = latest.current.workspace!.projects
+            const projects = activeProjects(latest.current.workspace!)
             const changed = new Set(changedIds)
             const repositories = new Set(projects.filter(project => changed.has(project.id)).map(packageWorkspaceId))
             changedIds = projects.filter(project => changed.has(project.id) || repositories.has(packageWorkspaceId(project))).map(project => project.id)

@@ -132,3 +132,9 @@ describe('helper report reconciliation', () => {
     expect(preservePreviews(next, old).projects[0].screenshot).toBe('/api/screenshots/new.png')
   })
 })
+
+it('retains ignored IDs across scans of the same workspace, including temporarily missing projects', () => {
+  const previous = { ...workspace([project('one')]), ignoredProjectIds: ['one'] }
+  expect(preservePreviews(workspace([]), previous).ignoredProjectIds).toEqual(['one'])
+  expect(preservePreviews({ ...workspace([]), rootPath: '/another-root' }, previous).ignoredProjectIds).toBeUndefined()
+})

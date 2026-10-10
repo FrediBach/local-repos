@@ -1,3 +1,4 @@
+import { activeProjects } from '@/lib/workspace'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { projectPushStatus } from '@/lib/api'
 import { localDate, summaryRepositories, type SummaryRepository } from '@/lib/daily-summary'
@@ -12,7 +13,7 @@ export function usePushReminder({ workspace, settings, busy }: Props) {
   const root = workspace?.mode === 'helper' ? workspace.rootPath ?? workspace.rootName : ''
   const enabled = !!root && settings.pushReminderEnabled
   const time = settings.pushReminderTime
-  const repositories = JSON.stringify(summaryRepositories(workspace?.projects ?? []))
+  const repositories = JSON.stringify(summaryRepositories(workspace ? activeProjects(workspace) : []))
   const key = JSON.stringify([root, repositories, time, enabled])
   const [revision, setRevision] = useState(0)
   const [state, setState] = useState<State>({ key: '', day: '', results: [], checking: false })

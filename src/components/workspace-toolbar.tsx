@@ -1,3 +1,4 @@
+import { activeProjects } from '@/lib/workspace'
 import { useRef, type ReactNode } from 'react'
 import { remoteActivityProjects } from '@/lib/remote-activity'
 import { ChevronDown, Folder, Gauge, GitPullRequest, ListChecks, LoaderCircle, Monitor, Package, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react'
@@ -42,8 +43,8 @@ export function WorkspaceToolbar({ workspace, projectCount, busy, watcherStatus,
 function WorkspaceActions({ workspace, projectCount, busy, scanAllRemoteActivity, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews }: Omit<Props, 'onResync' | 'watcherStatus'>) {
   const actionsRef = useRef<HTMLDivElement>(null)
   const batchDisabled = !!busy || !workspace || !projectCount
-  const reactCount = workspace?.projects.filter(isReactProject).length ?? 0
-  const frontendCount = workspace?.projects.filter(isLighthouseProject).length ?? 0
+  const reactCount = workspace ? activeProjects(workspace).filter(isReactProject).length : 0
+  const frontendCount = workspace ? activeProjects(workspace).filter(isLighthouseProject).length : 0
   const checks = [
     { label: 'Check issues & PRs', description: 'Public GitHub & GitLab repositories', icon: GitPullRequest, action: scanAllRemoteActivity, key: 'batch-remote-activity', unavailable: !remoteActivityProjects(workspace?.projects ?? []).length,
       title: 'Check public GitHub and GitLab issues and pull requests for all repositories. Requires the local helper.' },
@@ -65,7 +66,7 @@ function WorkspaceActions({ workspace, projectCount, busy, scanAllRemoteActivity
       <DropdownMenuContent className="workspace-checks-menu" align="end" aria-label="Workspace checks" aria-describedby="workspace-checks-scope" onCloseAutoFocus={event => {
         if (busy) { event.preventDefault(); actionsRef.current?.focus({ preventScroll: true }) }
       }}>
-        <p id="workspace-checks-scope" className="workspace-checks-scope">All {projectCount} projects, including those hidden by filters.{workspace?.mode === 'browser' && ' Connect the local helper to run checks.'}</p>
+        <p id="workspace-checks-scope" className="workspace-checks-scope">All {projectCount} projects, including those hidden by filters. Ignored projects are excluded.{workspace?.mode === 'browser' && ' Connect the local helper to run checks.'}</p>
         <DropdownMenuSeparator />
         {checks.map(({ label, description, icon: Icon, action, key, unavailable, title }) => <DropdownMenuItem key={key} onSelect={action} disabled={batchDisabled || unavailable} aria-label={label} aria-busy={busy === key} title={title}>
           <Icon size={16} aria-hidden="true" /><span className="workspace-check-copy"><span>{label}</span><small>{description}</small></span>

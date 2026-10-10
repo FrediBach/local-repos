@@ -316,6 +316,7 @@ export interface ScanResult {
 }
 
 export interface Workspace extends ScanResult {
+  ignoredProjectIds?: string[]
   mode: 'browser' | 'helper'
   handle?: FileSystemDirectoryHandle
 }

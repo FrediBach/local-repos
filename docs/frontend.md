@@ -436,3 +436,25 @@ item IDs, so replacing an issue while keeping the same total still produces an
 in-app notice. Reopened items count as newly open. Results are compared per
 repository, with one notice per checked repository, and saved to the existing
 workspace cache. Items opened and closed between checks are not observed.
+
+## Ignored projects
+
+Choose **Ignore project** in a project's action menu to move it to the compact
+**Ignored projects** list below the active results. A subtle dashed divider
+separates this section; grid view uses compact bordered cards aligned with the
+responsive project columns. Its menu offers **Unignore
+project**. The choice is saved in the browser workspace cache and survives
+rescans and reloads; reports, favorites, and tags are retained.
+
+Ignored projects are excluded from global checks and preview batches, automatic
+checks, package-change triggers, push reminders, and daily summaries. Directory
+discovery still refreshes metadata so projects remain available to unignore.
+Ignoring an individual package does not ignore its siblings or prevent a shared
+workspace check from inspecting shared dependencies. It does not stop running
+servers or change the independently configured MCP service.
+
+The optional `Workspace.ignoredProjectIds` uses durable project IDs; older caches
+default to no exclusions. `activeProjects()` selects batch and background check
+queues without removing entries from the persisted workspace. Ignore changes
+respect the busy guard and advance the workspace generation to reject in-flight
+helper reconciliation responses.

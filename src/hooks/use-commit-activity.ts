@@ -1,3 +1,4 @@
+import { activeProjects } from '@/lib/workspace'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { projectHistory } from '@/lib/api'
 import { summaryRepositories } from '@/lib/daily-summary'
@@ -52,7 +53,7 @@ export function useCommitActivity(workspace?: Workspace, syncedWorkspace?: Works
     const syncedScope = JSON.stringify([source.mode, source.rootPath ?? source.rootName, ...(author ? [author] : [])])
     if (syncedScope !== scope) return
     let active = true
-    const repositories = summaryRepositories(source.projects)
+    const repositories = summaryRepositories(activeProjects(source))
       .filter(repository => source.projects.some(project => project.id === repository.id && project.git))
     let index = 0
     // Like daily summaries, read only local history with at most three requests
@@ -60,6 +61,7 @@ export function useCommitActivity(workspace?: Workspace, syncedWorkspace?: Works
     void Promise.all(Array.from({ length: Math.min(3, repositories.length) }, async () => {
       while (active && index < repositories.length) {
         const repository = repositories[index++]
+        if (current.current.workspace?.ignoredProjectIds?.includes(repository.id)) continue
         try {
           const data = await (author ? projectHistory(repository.id, { author }) : projectHistory(repository.id))
           if (active) remember(repository.id, data, author)

@@ -1,4 +1,4 @@
-import { Code2, Ellipsis, FolderGit2, FolderOpen, Gauge, GitBranch, GitPullRequest, HardDrive, Monitor, PackageSearch, Play, ShieldCheck, Square, Star, Stethoscope, Tag, Trash2 } from 'lucide-react'
+import { Code2, Ellipsis, EyeOff, FolderGit2, FolderOpen, Gauge, GitBranch, GitPullRequest, HardDrive, Monitor, PackageSearch, Play, ShieldCheck, Square, Star, Stethoscope, Tag, Trash2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { useSettings } from '@/hooks/use-settings'
 import { desktopAppName } from '@/lib/desktop-apps'
@@ -12,6 +12,7 @@ interface Props {
   busy: string
   onOpen: (project: RepoProject) => void
   onEditTags: (project: RepoProject) => void
+  onIgnore?: (id: string) => void
   onToggleFavorite: (id: string) => void
   onAction: (project: RepoProject, action: string, body?: unknown) => void
 }
@@ -23,7 +24,7 @@ const previewSources: { source: PreviewMode; label: string }[] = [
   { source: 'website', label: 'Project URL' },
 ]
 
-export function ProjectActionMenu({ project, tagsReady, favorite, busy, onOpen, onEditTags, onToggleFavorite, onAction }: Props) {
+export function ProjectActionMenu({ project, tagsReady, favorite, busy, onOpen, onEditTags, onToggleFavorite, onIgnore, onAction }: Props) {
   const { settings } = useSettings()
   const commands = projectCommands(project, settings, favorite)
   return <DropdownMenu modal={false}>
@@ -32,6 +33,7 @@ export function ProjectActionMenu({ project, tagsReady, favorite, busy, onOpen, 
       <DropdownMenuItem onSelect={() => onOpen(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem>
       <DropdownMenuItem disabled={!tagsReady} onSelect={() => onEditTags(project)}><Tag size={14} />Edit tags</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => onToggleFavorite(project.id)}><Star size={14} />{favorite ? 'Remove favorite' : 'Add to favorites'}</DropdownMenuItem>
+      {onIgnore && <DropdownMenuItem disabled={!!busy} onSelect={() => onIgnore(project.id)}><EyeOff size={14} aria-hidden="true" />Ignore project</DropdownMenuItem>}
       <DropdownMenuSeparator />
       <DropdownMenuItem disabled={!!busy} onSelect={() => onAction(project, 'open', { app: settings.editor } satisfies OpenProjectRequest)}><Code2 size={14} />Open in {desktopAppName(settings.editor)}</DropdownMenuItem>
       <DropdownMenuItem disabled={!!busy} onSelect={() => onAction(project, 'open', { app: settings.gitClient } satisfies OpenProjectRequest)}><GitBranch size={14} />Open in {desktopAppName(settings.gitClient)}</DropdownMenuItem>

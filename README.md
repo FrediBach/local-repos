@@ -686,3 +686,17 @@ hashing is bounded to 8 MiB per file and 32 MiB per preparation/revalidation pas
 Oversized plans fail explicitly rather than omitting review details. Plans and
 operations disappear on helper restart: reconcile repository state before
 preparing another mutation, rather than automatically replaying a lost response.
+
+## Ignored projects
+
+Choose **Ignore project** in a project's action menu to move it to the compact
+**Ignored projects** list below the active results. Its menu offers **Unignore
+project**. The choice is saved in the browser workspace cache and survives
+rescans and reloads; reports, favorites, and tags are retained.
+
+Ignored projects are excluded from global checks and preview batches, automatic
+checks, package-change triggers, push reminders, and daily summaries. Directory
+discovery still refreshes metadata so projects remain available to unignore.
+Ignoring an individual package does not ignore its siblings or prevent a shared
+workspace check from inspecting shared dependencies. It does not stop running
+servers or change the independently configured MCP service.

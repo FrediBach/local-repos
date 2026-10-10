@@ -141,3 +141,22 @@ describe('automatic quality scans', () => {
     expect(props.setBusy.mock.calls).toEqual(reason === 'disabled' ? [['watcher'], ['']] : [['watcher']])
   })
 })
+
+it('excludes ignored projects from automatic and global checks while retaining them in saved scans', async () => {
+  const props = options({ ...workspace, ignoredProjectIds: ['react-library', 'react-app'] })
+  const { result } = renderHook(() => useWorkspaceActions(props))
+  await act(async () => { await result.current.runAutomaticScan(undefined, () => true, vi.fn()) })
+  expect(api.projectAction.mock.calls.map(([id, action]) => [id, action])).toEqual([['vue-app', 'lighthouse']])
+  expect(props.persist.mock.calls[0][0].ignoredProjectIds).toEqual(['react-library', 'react-app'])
+  expect(props.persist.mock.calls[0][0].projects).toHaveLength(4)
+  api.projectAction.mockClear()
+  await act(async () => { await result.current.scanAllReactDoctor() })
+  expect(api.projectAction).not.toHaveBeenCalled()
+})
+
+it.each(['scanAllVulnerabilities', 'scanAllOutdated', 'scanAllReactDoctor', 'scanAllLighthouse', 'scanAllRemoteActivity', 'captureAllPreviews'] as const)('%s skips a fully ignored workspace', async method => {
+  const props = options({ ...workspace, ignoredProjectIds: projects.map(project => project.id) })
+  const { result } = renderHook(() => useWorkspaceActions(props))
+  await act(async () => { await result.current[method]() })
+  expect(api.projectAction).not.toHaveBeenCalled()
+})

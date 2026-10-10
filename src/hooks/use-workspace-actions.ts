@@ -10,7 +10,7 @@ import { useLighthouseBatch } from './use-lighthouse-batch'
 import { api, projectAction, scanWithHelper } from '@/lib/api'
 import { canReadDirectory, scanDirectory } from '@/lib/filesystem'
 import { useSettings } from './use-settings'
-import { cachePreview, packageWorkspaceId, preservePreviews } from '@/lib/workspace'
+import { activeProjects, cachePreview, packageWorkspaceId, preservePreviews } from '@/lib/workspace'
 import { isReactProject } from '@/lib/react-doctor'
 import { isLighthouseProject } from '@/lib/lighthouse'
 import type { LighthouseReport, PackageAudit, PackageOutdated, PackageUpdate, ReactDoctorReport, RepoProject, RunProjectScriptRequest, ScanProgressReporter, Workspace } from '@/types'
@@ -40,7 +40,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   async function scanAllRemoteActivity() {
     if (busy || remoteActivityBatch.isActive() || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
-    const queue = remoteActivityProjects(workspace.projects)
+    const queue = remoteActivityProjects(activeProjects(workspace))
     if (!queue.length) return
     const version = ++workspaceVersion.current
     let next = workspace
@@ -75,7 +75,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     reactDoctorBatch.dismiss()
     lighthouseBatch.dismiss()
     try {
-      await auditBatch.run(workspace.projects, async (project, isCurrent, reportProgress) => {
+      await auditBatch.run(activeProjects(workspace), async (project, isCurrent, reportProgress) => {
         const result = await projectAction<{ audit?: PackageAudit; reportState?: RepoProject['reportState'] }>(project.id, 'audit', {}, reportProgress)
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.audit) throw new Error('The helper did not return an audit report.')
@@ -104,7 +104,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     reactDoctorBatch.dismiss()
     lighthouseBatch.dismiss()
     try {
-      await outdatedBatch.run(workspace.projects, async (project, isCurrent, reportProgress) => {
+      await outdatedBatch.run(activeProjects(workspace), async (project, isCurrent, reportProgress) => {
         const result = await projectAction<{ outdated?: PackageOutdated; reportState?: RepoProject['reportState'] }>(project.id, 'outdated', {}, reportProgress)
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.outdated) throw new Error('The helper did not return an outdated-package report.')
@@ -122,7 +122,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   async function scanAllReactDoctor() {
     if (busy || remoteActivityBatch.isActive() || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
-    const projects = workspace.projects.filter(isReactProject)
+    const projects = activeProjects(workspace).filter(isReactProject)
     if (!projects.length) return
     const version = ++workspaceVersion.current
     let nextWorkspace = workspace
@@ -151,7 +151,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   async function scanAllLighthouse() {
     if (busy || remoteActivityBatch.isActive() || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
-    const projects = workspace.projects.filter(isLighthouseProject)
+    const projects = activeProjects(workspace).filter(isLighthouseProject)
     if (!projects.length) return
     const version = ++workspaceVersion.current
     let nextWorkspace = workspace
@@ -190,7 +190,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     reactDoctorBatch.dismiss()
     lighthouseBatch.dismiss()
     try {
-      await previewBatch.run(workspace.projects, async (project, isCurrent, reportProgress) => {
+      await previewBatch.run(activeProjects(workspace), async (project, isCurrent, reportProgress) => {
         const result = await projectAction<Partial<RepoProject>>(project.id, 'screenshot', { source: 'auto' }, reportProgress)
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.screenshot) throw new Error('The helper did not return a preview image.')
@@ -229,7 +229,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       if (next.mode === 'helper') {
         const previousProjects = new Map(workspace.projects.map(project => [project.id, project]))
         const changed = changedIds && new Set(changedIds)
-        const queue = next.projects.filter(project => !changed || changed.has(project.id) || !previousProjects.has(project.id))
+        const queue = activeProjects(next).filter(project => !changed || changed.has(project.id) || !previousProjects.has(project.id))
         for (const project of queue) {
           const hasPackages = project.hasPackageJson ?? !!project.dependencies?.length
           const checks = [
@@ -260,7 +260,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
         }
       }
       if (next.mode === 'helper' && settings.watcherRemoteActivity) {
-        for (const project of remoteActivityProjects(next.projects)) {
+        for (const project of remoteActivityProjects(activeProjects(next))) {
           if (!current()) return
           if (changedIds && project.remoteActivity && Date.now() - Date.parse(project.remoteActivity.scannedAt) < Math.max(5, settings.watcherIntervalMinutes) * 60_000) continue
           progress(`Checking issues and pull requests · ${project.name}`)

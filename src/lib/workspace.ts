@@ -1,6 +1,11 @@
 import { remoteRepository } from './remote-activity'
 import { reportKinds, type RepoProject, type Workspace } from '@/types'
 
+export function activeProjects(workspace: Workspace): RepoProject[] {
+  const ignored = new Set(workspace.ignoredProjectIds ?? [])
+  return workspace.projects.filter(project => !ignored.has(project.id))
+}
+
 /** Older scans only grouped declared workspaces, so an omitted flag retains that meaning. */
 export function isDeclaredWorkspaceMember(project: RepoProject): boolean {
   return !!project.monorepo && project.monorepo.declaredWorkspace !== false
@@ -15,7 +20,7 @@ export function packageWorkspaceId(project: RepoProject): string {
 export function preservePreviews(next: Workspace, previous?: Workspace): Workspace {
   if (!previous) return next
   const saved = new Map(previous.projects.map(project => [project.id, project]))
-  return { ...next, projects: next.projects.map(project => {
+  return { ...next, ...(previous.mode === next.mode && previous.rootPath === next.rootPath && previous.rootName === next.rootName ? { ignoredProjectIds: previous.ignoredProjectIds } : {}), projects: next.projects.map(project => {
     const cached = saved.get(project.id)
     if (!cached) return project
     const merged: RepoProject = { ...project, reportState: { ...cached.reportState, ...project.reportState } }

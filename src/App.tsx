@@ -47,7 +47,7 @@ import { api, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/li
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveConfigPreferences, saveFavorites, saveProjectTags, saveWorkspace } from '@/lib/storage'
-import { preservePreviews, protectReportRevisions } from '@/lib/workspace'
+import { activeProjects, preservePreviews, protectReportRevisions } from '@/lib/workspace'
 import { isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, RepoProject, Workspace } from '@/types'
 
@@ -102,7 +102,9 @@ function WorkspaceApp() {
     workspace, busy, workspaceVersion, setBusy, setLogs, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
   })
   const rawProjects = workspace?.projects ?? (workspaceStatus === 'ready' ? demoProjects : emptyProjects)
-  const projects = useMemo(() => rawProjects.map(project => ({ ...project, tags: projectTags[project.id] ?? [], ...(project.outdated ? { outdated: configureOutdatedReport(project.outdated, settings) } : {}) })), [rawProjects, projectTags, settings])
+  const ignoredIds = useMemo(() => new Set(workspace?.ignoredProjectIds ?? []), [workspace?.ignoredProjectIds])
+  const ignoredProjects = rawProjects.filter(project => ignoredIds.has(project.id))
+  const projects = useMemo(() => rawProjects.filter(project => !ignoredIds.has(project.id)).map(project => ({ ...project, tags: projectTags[project.id] ?? [], ...(project.outdated ? { outdated: configureOutdatedReport(project.outdated, settings) } : {}) })), [rawProjects, projectTags, settings, ignoredIds])
   const projectTodos = useProjectTodos(projects, workspace)
   const tagProject = projects.find(p => p.id === tagProjectId)
   const availableTags = useMemo(() => normalizeTags(projects.flatMap(project => project.tags)), [projects])
@@ -122,7 +124,7 @@ function WorkspaceApp() {
       stageStartedAt: selectedBatch.progress.stageStartedAt, startedAt: selectedBatch.progress.startedAt,
     } : undefined
   const isDemo = !workspace && workspaceStatus === 'ready'
-  const running = projects.filter(isRunning).length
+  const running = rawProjects.filter(isRunning).length
   const favoriteIds = useMemo(() => new Set(favorites), [favorites])
   const favoriteCount = projects.filter(p => favoriteIds.has(p.id)).length
   const stacks = useMemo(() => [...new Set(projects.flatMap(p => p.stack))].sort((a, b) => projects.filter(p => p.stack.includes(b)).length - projects.filter(p => p.stack.includes(a)).length).slice(0, settings.sidebarTechnologyLimit), [projects, settings.sidebarTechnologyLimit])
@@ -243,6 +245,13 @@ function WorkspaceApp() {
   function openTodos(project?: RepoProject) {
     setTodoProjectId(project?.id)
     setPage('todos')
+  }
+  function toggleIgnored(id: string) {
+    if (!workspace || busy) return
+    workspaceVersion.current += 1
+    const next = ignoredIds.has(id) ? [...ignoredIds].filter(value => value !== id) : [...ignoredIds, id]
+    void persist({ ...workspace, ignoredProjectIds: next })
+    requestAnimationFrame(() => (document.getElementById(`ignored-project-${id}`) ?? document.getElementById(`project-open-${id}`) ?? searchRef.current)?.focus())
   }
   function toggleFavorite(id: string) {
     favoritesVersion.current += 1
@@ -368,7 +377,7 @@ function WorkspaceApp() {
         </div> : page === 'todos' ? <>
           {projectTodos.storageError && <p role="alert">Todo dismissals could not be saved in this browser. They will stay dismissed for this session.</p>}
           <ProjectTodos projects={projects} todos={projectTodos.todos} projectId={todoProjectId} onClearProject={() => setTodoProjectId(undefined)} onOpen={openProject} onDismiss={projectTodos.dismiss} isDemo={isDemo} onConnect={() => setConnectOpen(true)} />
-        </> : page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
+        </> : page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={workspace ? activeProjects(workspace) : projects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
         <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
           watcherStatus={workspace && <WorkspaceWatcherStatus watcher={watcher} mode={settings.watcherMode} scanning={busy === 'watcher'} />}
           scanAllRemoteActivity={scanAllRemoteActivity} scanAllOutdated={scanAllOutdated}
@@ -387,10 +396,10 @@ function WorkspaceApp() {
           sort={sort} setSort={setSort} view={view} setView={setView} />
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
-        <ProjectResults projects={filtered} allProjects={projects} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
+        <ProjectResults ignoredProjects={ignoredProjects} onIgnore={workspace ? toggleIgnored : undefined} projects={filtered} allProjects={projects} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
           todoCounts={projectTodos.counts} onTodos={openTodos}
-          filter={filter} hasRefinements={hasRefinements} emptyWorkspace={!projects.length} isDemo={isDemo}
-          onReset={() => { navigate('all'); if (!projects.length) setConnectOpen(true) }} onConnect={() => setConnectOpen(true)}
+          filter={filter} hasRefinements={hasRefinements} emptyWorkspace={!rawProjects.length} isDemo={isDemo}
+          onReset={() => { navigate('all'); if (!rawProjects.length) setConnectOpen(true) }} onConnect={() => setConnectOpen(true)}
           view={view} query={query} activeTags={filters.tags} tagsReady={tagsReady} busy={busy} onOpen={openProject} onEditTags={editTags}
           onToggleFavorite={toggleFavorite} onTagFilter={toggleTag} onTechnologyFilter={toggleTechnology} onAction={action} />
         </>}
