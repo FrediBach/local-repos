@@ -3,6 +3,7 @@ import path from 'node:path'
 import { ProjectRuntime } from './runtime'
 import { HelperError, ProjectRegistry, scanDirectory, type RegisteredProject } from './scanner'
 import { reportKinds, type RepoProject, type HelperActivity, type WorkspaceState, type ScanProgressReporter } from '../src/types'
+import { MaintenancePlans } from './mcp/maintenance-plans'
 import { Operations } from './operations'
 import { rootId } from './mcp/policy'
 import { ProjectIndex } from './project-index'
@@ -19,6 +20,7 @@ export class HelperApplication {
     const revision = ++this.revision
     for (const entry of entries) this.index.invalidate(entry.project, reason, revision)
   }, () => { this.revision++ })
+  readonly maintenancePlans = new MaintenancePlans(this)
   readonly operations: Operations
   readonly workspaces = new Map<string, RegisteredProject[]>()
   readonly roots = new Map<string, RootSnapshot>()

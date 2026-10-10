@@ -10,6 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { createApp } from '../app'
 import { loadPolicy, rootId, type McpPolicy } from './policy'
 import { Operations } from '../operations'
+import * as updateService from '../package-update'
 import * as auditService from '../package-audit'
 import type { PackageAudit } from '../../src/types'
 
@@ -77,6 +78,79 @@ async function scan(client: Client, requestId = 'scan') {
 }
 
 describe('authenticated MCP read release', () => {
+  it.each([true, false])('prepares and applies cleanup with explicit grants and retry protection (modern=%s)', async modern => {
+    const principal = policy.clients[0].principal
+    principal.capabilities.push('maintenance')
+    principal.maintenanceAutomation = ['dependency-cleanup']
+    const directory = await project('cleanup')
+    await mkdir(path.join(directory, 'node_modules'))
+    await writeFile(path.join(directory, 'node_modules', 'fixture'), 'disposable')
+    const client = await connect(modern)
+    await scan(client)
+    const id = (await call(client, 'list_projects')).data.items[0].id
+    const prepared = await call(client, 'prepare_dependency_cleanup', { projectId: id, requestId: 'prepare-cleanup' })
+    expect((await waitOperation(client, prepared.data.operationId)).state).toBe('succeeded')
+    const preparedResult = await call(client, 'get_operation_result', { operationId: prepared.data.operationId })
+    const plan = preparedResult.data.rows.items[0].plan
+    expect(plan.cleanup.target).toBe('node_modules')
+    expect(plan.affectedProjectIds).toEqual([id])
+    const invalid = await client.callTool({ name: 'local_repos_delete_node_modules', arguments: { planId: plan.planId, requestId: 'missing-confirmation' } })
+    expect(invalid.isError).toBe(true)
+    const args = { planId: plan.planId, confirm: true, requestId: 'apply-cleanup' }
+    const admitted = await call(client, 'delete_node_modules', args)
+    expect((await waitOperation(client, admitted.data.operationId)).state).toBe('succeeded')
+    const result = await call(client, 'get_operation_result', { operationId: admitted.data.operationId })
+    expect(result.data.rows.items[0]).toMatchObject({ status: 'succeeded', cleanupAttempted: true, storage: { hasNodeModules: false }, followUpAudit: 'not-run' })
+    const retry = await call(client, 'delete_node_modules', args)
+    expect(retry.data.operationId).toBe(admitted.data.operationId)
+    const reused = await call(client, 'delete_node_modules', { ...args, requestId: 'reuse-plan' })
+    expect((await waitOperation(client, reused.data.operationId)).error.code).toBe('PRECONDITION_FAILED')
+    const tools = await client.listTools()
+    expect(tools.tools.find(tool => tool.name === 'local_repos_delete_node_modules')?.annotations).toMatchObject({ destructiveHint: true, readOnlyHint: false })
+    expect((await call(client, 'get_report', { projectId: id, kind: 'audit' })).data.availability).toBe('invalidated')
+    const workspace = helper.application.workspaceState(rootId(root))
+    expect(workspace.projects[0].reportState?.audit?.validity).toBe('invalidated')
+  })
+
+  it('exposes preparation without apply tools when automation has not been explicitly granted', async () => {
+    policy.clients[0].principal.capabilities.push('maintenance')
+    const client = await connect()
+    const names = (await client.listTools()).tools.map(tool => tool.name)
+    expect(names).toContain('local_repos_prepare_package_update')
+    expect(names).not.toContain('local_repos_apply_package_update')
+    expect(names).not.toContain('local_repos_delete_node_modules')
+    await project('demo')
+    await scan(client)
+    const id = (await call(client, 'list_projects')).data.items[0].id
+    const result = await call(client, 'prepare_package_update', { projectId: id, level: 'patch', requestId: 'no-network' })
+    expect(result.error?.code).toBe('CAPABILITY_DISABLED')
+  })
+
+  it('retains typed partial mutation results when the operation fails and never replays its request', async () => {
+    const principal = policy.clients[0].principal
+    principal.capabilities.push('maintenance', 'network')
+    principal.maintenanceAutomation = ['package-update']
+    await project('partial')
+    vi.spyOn(updateService, 'preparePackageUpdate').mockResolvedValue({ level: 'patch', original: '', manager: 'npm', yarnMajor: 1, targets: [{ name: 'react', from: '19.0.0', to: '19.0.1', kind: 'dependencies' }], skipped: [] })
+    const apply = vi.spyOn(updateService, 'applyPackageUpdate').mockImplementation(async (_entry, plan, _runner, progress) => {
+      progress?.(plan.targets, false)
+      throw new Error('partial fixture failure')
+    })
+    const client = await connect()
+    await scan(client)
+    const id = (await call(client, 'list_projects')).data.items[0].id
+    const prepared = await call(client, 'prepare_package_update', { projectId: id, level: 'patch', requestId: 'prepare-partial' })
+    await waitOperation(client, prepared.data.operationId)
+    const planId = (await call(client, 'get_operation_result', { operationId: prepared.data.operationId })).data.rows.items[0].plan.planId
+    const args = { planId, requestId: 'apply-partial' }
+    const admitted = await call(client, 'apply_package_update', args)
+    expect(await waitOperation(client, admitted.data.operationId)).toMatchObject({ state: 'failed', resultAvailable: true })
+    const result = (await call(client, 'get_operation_result', { operationId: admitted.data.operationId })).data.rows.items[0]
+    expect(result).toMatchObject({ status: 'failed', attempted: [{ name: 'react' }], completed: [], invalidatedReports: [{ projectId: id }] })
+    expect((await call(client, 'apply_package_update', args)).data.operationId).toBe(admitted.data.operationId)
+    expect(apply).toHaveBeenCalledOnce()
+  })
+
   it('shares development processes across REST/MCP and stops only the observed generation after moves', async () => {
     policy.clients[0].principal.capabilities.push('development', 'network', 'project-execution')
     policy.clients[1].principal.discloseContent = true

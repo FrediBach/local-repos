@@ -97,6 +97,7 @@ export class ProjectRuntime {
   private readonly lighthouseControllers = new Set<AbortController>()
   private readonly updates = new Map<string, Promise<PackageUpdate>>()
   private readonly removals = new Map<string, Promise<ProjectStorage>>()
+  private readonly plannedMaintenance = new Set<Promise<unknown>>()
   private readonly maintenance = new Set<string>()
   private readonly logHistory = new Map<string, { text: string; truncated: boolean }>()
   private readonly processTokens = new Map<string, string>()
@@ -293,6 +294,36 @@ export class ProjectRuntime {
       // Reuse persistent user servers, and honor explicit starts during a scan.
       if (auditedServer && this.running.get(id) === auditedServer && !this.keepAlive.has(id)) await this.stop(id).catch(() => undefined)
     }
+  }
+
+  /** Reserve the entire maintenance scope before any asynchronous validation. */
+  async withMaintenance<T>(id: string, run: (entry: RegisteredProject, markAttempted: () => void) => Promise<T>): Promise<T> {
+    this.available(id)
+    if (this.metadataScan || this.scopeBusy(id)) throw new HelperError('Stop dev servers and wait for scans or maintenance in this package workspace.', 409)
+    this.maintenance.add(id)
+    const related = this.registry.related(id)
+    let attempted = false
+    const task = (async () => {
+      try { return await run(await this.registry.get(id), () => { attempted = true }) }
+      finally {
+        if (attempted) {
+          this.onInvalidate(related, 'Dependency maintenance was attempted; refresh affected reports.')
+          for (const member of related) {
+            member.project.audit = undefined
+            member.project.outdated = undefined
+            member.project.unused = undefined
+            member.project.reactDoctor = undefined
+            member.project.lighthouse = undefined
+            member.project.storage = undefined
+            try { member.project.dependencies = parsePackageJson(await readFile(path.join(member.directory, 'package.json'), 'utf8')).dependencies }
+            catch { member.project.dependencies = undefined }
+          }
+        }
+      }
+    })()
+    this.plannedMaintenance.add(task)
+    try { return await task }
+    finally { this.plannedMaintenance.delete(task); this.maintenance.delete(id) }
   }
 
   async updatePackages(id: string, level: unknown): Promise<PackageUpdate> {
@@ -735,7 +766,7 @@ export class ProjectRuntime {
     // closed check immediately closes it, and awaiting here prevents orphaning
     // Chromium when the helper's entry point exits the process.
     await Promise.allSettled([...this.captures.values(), ...this.lighthouseScans.values()])
-    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.unusedScans.values(), ...this.reactDoctorScans.values(), ...this.removals.values(), ...this.updates.values()])
+    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.unusedScans.values(), ...this.reactDoctorScans.values(), ...this.removals.values(), ...this.updates.values(), ...this.plannedMaintenance])
     if (this.screenshotDirectory) await rm(await this.screenshotDirectory, { recursive: true, force: true }).catch(() => undefined)
   }
 }

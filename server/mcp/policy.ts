@@ -6,7 +6,8 @@ import { z } from 'zod'
 import { isWithin } from '../scanner'
 import { McpFailure } from './errors'
 
-const capability = z.enum(['read', 'discovery', 'git', 'analysis', 'preview', 'network', 'project-execution', 'development'])
+export const maintenanceKind = z.enum(['package-update', 'vulnerability-fix', 'dependency-cleanup'])
+const capability = z.enum(['read', 'discovery', 'git', 'analysis', 'preview', 'network', 'project-execution', 'development', 'maintenance'])
 const configSchema = z.strictObject({
   enabled: z.literal(true),
   roots: z.array(z.string().min(1).max(4096)).min(1).max(32),
@@ -15,6 +16,7 @@ const configSchema = z.strictObject({
     token: z.string().regex(/^[a-zA-Z0-9_-]{43,128}$/),
     roots: z.array(z.string().min(1).max(4096)).min(1).max(32),
     capabilities: z.array(capability).default(['read', 'discovery', 'git']),
+    maintenanceAutomation: z.array(maintenanceKind).max(3).default([]),
     disclosePaths: z.boolean().default(false),
     discloseContent: z.boolean().default(false),
   })).min(1).max(32),
@@ -24,6 +26,7 @@ export interface Principal {
   id: string
   roots: AllowedRoot[]
   capabilities: z.infer<typeof capability>[]
+  maintenanceAutomation?: z.infer<typeof maintenanceKind>[]
   disclosePaths: boolean
   discloseContent: boolean
 }
@@ -67,7 +70,7 @@ export async function loadPolicy(filename: string | undefined): Promise<McpPolic
     if (new Set(granted).size !== selected.length) throw new Error('Client roots must name configured roots.')
     const digest = createHash('sha256').update(client.token).digest()
     if (clients.some(other => other.principal.id === client.id || timingSafeEqual(other.digest, digest))) throw new Error('MCP clients need distinct IDs and credentials.')
-    clients.push({ digest, principal: { id: client.id, roots: selected, capabilities: client.capabilities, disclosePaths: client.disclosePaths, discloseContent: client.discloseContent } })
+    clients.push({ digest, principal: { id: client.id, roots: selected, capabilities: client.capabilities, maintenanceAutomation: client.maintenanceAutomation, disclosePaths: client.disclosePaths, discloseContent: client.discloseContent } })
   }
   return { roots, clients }
 }

@@ -16,12 +16,12 @@ import * as s from './schemas'
 export function createReadServer(application: HelperApplication, principal: Principal, git: GitReads, dev: DevReads) {
   const server = new McpServer({ name: 'local-repos', version: '0.5.0' })
   const index = application.index
-  const info = () => ({ appVersion: '0.5.0', schemaVersion: 1 as const, protocols: ['2026-07-28', '2025-11-25'], helperInstanceId: application.helperInstanceId, platform: process.platform, capabilities: principal.capabilities, supportedChecks: principal.capabilities.includes('analysis') ? s.reportKind.options.filter(check => check === 'storage' || (principal.capabilities.includes('network') && (['audit', 'outdated'].includes(check) || principal.capabilities.includes('project-execution')))) : [], limits: { pageSize: 100, responseBytes: 128 * 1024, readmeBytes: 32 * 1024, imageBytes: 2 * 1024 * 1024, logBytes: 16 * 1024, logSnapshotBytes: 64 * 1024 }, stateLifetime: 'Helper lifetime; terminal operations expire after 30 minutes or bounded retention. No browser cache, preferences, tags, or restart resume.', browserDataAvailable: false as const, contentDisclosure: principal.discloseContent, pathDisclosure: principal.disclosePaths })
+  const info = () => ({ appVersion: '0.5.0', schemaVersion: 1 as const, protocols: ['2026-07-28', '2025-11-25'], helperInstanceId: application.helperInstanceId, platform: process.platform, capabilities: principal.capabilities, supportedChecks: principal.capabilities.includes('analysis') ? s.reportKind.options.filter(check => check === 'storage' || (principal.capabilities.includes('network') && (['audit', 'outdated'].includes(check) || principal.capabilities.includes('project-execution')))) : [], limits: { pageSize: 100, responseBytes: 128 * 1024, readmeBytes: 32 * 1024, imageBytes: 2 * 1024 * 1024, logBytes: 16 * 1024, logSnapshotBytes: 64 * 1024, maintenancePlanBytes: 12 * 1024, maintenancePlansPerClient: 10, maintenancePlansPerHelper: 100, maintenancePlanTtlMs: 600_000 }, stateLifetime: 'Helper lifetime; terminal operations expire after 30 minutes or bounded retention. No browser cache, preferences, tags, or restart resume.', browserDataAvailable: false as const, contentDisclosure: principal.discloseContent, pathDisclosure: principal.disclosePaths })
   const base = () => ({ schemaVersion: 1 as const, helperInstanceId: application.helperInstanceId, revision: application.revision, observedAt: new Date().toISOString(), warnings: [] })
-  function tool<I extends z.ZodObject, O extends z.ZodType>(name: string, capability: Principal['capabilities'][number], input: I, output: O, description: string, run: (args: z.output<I>) => unknown | Promise<unknown>, accepted = false, openWorld = false) {
+  function tool<I extends z.ZodObject, O extends z.ZodType>(name: string, capability: Principal['capabilities'][number], input: I, output: O, description: string, run: (args: z.output<I>) => unknown | Promise<unknown>, accepted = false, openWorld = false, destructive = false) {
     if (!principal.capabilities.includes(capability)) return
     const outputSchema = s.envelope(output)
-    server.registerTool(`local_repos_${name}`, { description, inputSchema: input as StandardSchemaWithJSON, outputSchema, annotations: { readOnlyHint: !accepted, destructiveHint: false, idempotentHint: !accepted, openWorldHint: openWorld } }, async args => {
+    server.registerTool(`local_repos_${name}`, { description, inputSchema: input as StandardSchemaWithJSON, outputSchema, annotations: { readOnlyHint: !accepted, destructiveHint: destructive, idempotentHint: !accepted, openWorldHint: openWorld } }, async args => {
       let result: unknown
       try {
         requireCapability(principal, capability)
@@ -149,8 +149,31 @@ export function createReadServer(application: HelperApplication, principal: Prin
       return [{ kind: 'development', action: 'stop', projectId: args.projectId, dev: { ...stopped, owned: false, processGeneration: args.processGeneration } }]
     }, { allowConcurrent: true })
   }, true, true)
+  const finding = z.strictObject({ name: z.string().min(1).max(214), title: z.string().min(1).max(8000), range: z.string().max(2000).optional(), url: z.string().max(2000).optional() })
+  for (const [name, kind] of [['package_update', 'package-update'], ['vulnerability_fix', 'vulnerability-fix'], ['dependency_cleanup', 'dependency-cleanup']] as const) {
+    const prepareInput = z.strictObject({ ...project, requestId: s.requestId,
+      ...(kind === 'package-update' ? { level: z.enum(['minor', 'patch']) } : {}),
+      ...(kind === 'vulnerability-fix' ? { finding } : {}),
+    })
+    tool(`prepare_${name}`, 'maintenance', prepareInput, s.operation, 'Prepare a complete ten-minute, single-use maintenance plan without installing or deleting. Package plans require network permission. Poll and review the result; preparation does not authorize application.', args => {
+      index.entry(principal, args.projectId)
+      if (kind !== 'dependency-cleanup') requireCapability(principal, 'network')
+      return application.operations.admit(principal.id, args.requestId, `prepare-${kind}`, args, [args.projectId], async () => [{ kind: 'maintenance-plan', plan: await application.maintenancePlans.prepare(principal, args.projectId, kind, kind === 'package-update' ? z.enum(['minor', 'patch']).parse(args.level) : undefined, kind === 'vulnerability-fix' ? finding.parse(args.finding) : undefined) }])
+    }, true, kind !== 'dependency-cleanup')
+    if (principal.maintenanceAutomation?.includes(kind)) {
+      const applyInput = z.strictObject({ planId: s.planId, requestId: s.requestId, ...(kind === 'dependency-cleanup' ? { confirm: z.literal(true) } : {}) })
+      tool(kind === 'dependency-cleanup' ? 'delete_node_modules' : `apply_${name}`, 'maintenance', applyInput, s.operation, 'Apply only this reviewed plan under the operator’s explicit local scoped automation grant. Validates scope, content hashes, identity, expiry and single use under shared guards. May partially change files; poll status AND results. Never automatically replay after restart.', args => {
+        if (kind !== 'dependency-cleanup') requireCapability(principal, 'network')
+        return application.operations.admit(principal.id, args.requestId, `apply-${kind}`, args, application.maintenancePlans.projectIds(principal, args.planId), async context => {
+          const before = index.invalidationCount
+          try { return [await application.maintenancePlans.apply(principal, args.planId, kind)] }
+          finally { context.invalidated(index.invalidationCount - before) }
+        })
+      }, true, kind !== 'dependency-cleanup', true)
+    }
+  }
   // Every profile that can admit work can also poll its operations.
-  const pollingCapability = principal.capabilities.includes('read') ? 'read' : principal.capabilities.includes('discovery') ? 'discovery' : principal.capabilities.includes('git') ? 'git' : principal.capabilities.includes('analysis') ? 'analysis' : principal.capabilities.includes('development') ? 'development' : 'preview'
+  const pollingCapability = principal.capabilities.includes('read') ? 'read' : principal.capabilities.includes('discovery') ? 'discovery' : principal.capabilities.includes('git') ? 'git' : principal.capabilities.includes('analysis') ? 'analysis' : principal.capabilities.includes('development') ? 'development' : principal.capabilities.includes('maintenance') ? 'maintenance' : 'preview'
   tool('get_operation', pollingCapability, z.strictObject({ operationId: s.operationId }), s.operation.extend({ pollingIntervalMs: z.number() }), 'Read only your admitted operation status. Start polling after one second; back off to five seconds.', args => ({ ...application.operations.get(principal.id, args.operationId), pollingIntervalMs: 1000 }))
   tool('get_operation_result', pollingCapability, z.strictObject({ operationId: s.operationId, ...s.pageInput }), s.operationResult, 'Read bounded terminal operation result pages. Records expire; this never replays work.', args => {
     const operation = application.operations.get(principal.id, args.operationId)

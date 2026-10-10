@@ -121,13 +121,13 @@ export async function measureProjectStorage(directory: string, onProgress?: Scan
 }
 
 /** Remove only this project's real, root-level node_modules directory. */
-export async function removeProjectNodeModules(directory: string): Promise<ProjectStorage> {
+export async function removeProjectNodeModules(directory: string, expected?: { dev: string; ino: string }): Promise<ProjectStorage> {
   const projectInfo = await projectDirectory(directory)
   const modulesPath = path.join(directory, 'node_modules')
   let modulesInfo: Stats
   try { modulesInfo = await lstat(modulesPath) }
   catch (error) {
-    if (missing(error)) return measureProjectStorage(directory)
+    if (missing(error) && !expected) return measureProjectStorage(directory)
     throw new HelperError('The node_modules folder cannot be read. Check its permissions.', 403)
   }
   if (modulesInfo.isSymbolicLink() || !modulesInfo.isDirectory()) {
@@ -136,7 +136,8 @@ export async function removeProjectNodeModules(directory: string): Promise<Proje
   try {
     const currentProject = await projectDirectory(directory)
     const currentModules = await lstat(modulesPath)
-    if (!sameEntry(projectInfo, currentProject) || !sameEntry(modulesInfo, currentModules)
+    if ((expected && (String(currentModules.dev) !== expected.dev || String(currentModules.ino) !== expected.ino))
+      || !sameEntry(projectInfo, currentProject) || !sameEntry(modulesInfo, currentModules)
       || currentModules.isSymbolicLink() || !currentModules.isDirectory()
       || await realpath(modulesPath) !== modulesPath) {
       throw new HelperError('The project or node_modules folder changed. Sync again before deleting dependencies.', 409)

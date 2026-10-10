@@ -379,8 +379,9 @@ The read catalog includes server/root/project metadata, dependency/script pages,
 README chunks, report summaries/rows, actionable findings, Git history/day/push
 reads, and operation polling/cancellation. Resources expose matching metadata,
 reports, READMEs, previews, and authorized operation status. Optional `run_check`
-and `capture_preview` tools use the shared runtime. There are also status/log reads and generation-safe dev start/stop tools. Desktop,
-script-launch, and dependency mutation MCP tools remain unavailable.
+and `capture_preview` tools use the shared runtime. There are also status/log reads and generation-safe dev start/stop tools. Desktop-launch
+and script-launch MCP tools remain unavailable. Dependency maintenance requires
+separate preparation and explicit locally granted application.
 
 Report snapshots belong to the current helper. Reads distinguish missing,
 unsupported, invalidated, and available reports; null scores, skipped declarations,
@@ -449,3 +450,51 @@ require a fresh first read; a valid cursor across a process replacement returns
 `resetRequired: true` with the new generation. Fresh reads refresh the retained
 tail. Runtime logs retain at most 40,000 characters, are reset for new starts,
 and cannot receive late output from an older child. Redaction remains best-effort.
+
+### Reviewed maintenance through MCP
+
+[`mcp/maintenance-plans.ts`](../server/mcp/maintenance-plans.ts) is owned by the
+shared application, not request-scoped MCP adapters. `maintenance` enables
+preparation; package update/fix preparation and application also require `network`.
+The client's optional `maintenanceAutomation` array explicitly authorizes the
+listed kinds (`package-update`, `vulnerability-fix`, `dependency-cleanup`) under
+its existing root grants. Without it apply tools are absent. This is local scoped
+automation authorization, not verification of a host UI approval gesture.
+
+Package services now separate `preparePackageUpdate` / `prepareAuditFix` from
+`applyPackageUpdate`; existing REST entry points compose these same services.
+Preparation resolves stable same-major exact direct targets and preserves skips,
+version bounds and audit-finding validation. Application accepts no replacement
+versions and performs no new version resolution. Fixed install arguments and
+environment retain disabled lifecycle scripts and pnpm hooks.
+
+`ProjectRuntime.withMaintenance()` reserves synchronously before filesystem
+validation, shares existing related-project/process/scan guards, and remains
+tracked through shutdown. Both prepare and apply use it. The plan service checks
+every effective workspace and registered related package against the client's
+current authority. [`maintenance-preconditions.ts`](../server/maintenance-preconditions.ts)
+hashes the known manifest, lock, package configuration, PnP, and ignore-file
+contents across that scope, including absent inputs, manager/workspace context,
+and canonical directory identities. Reads are no-follow and bounded to 8 MiB per
+file / 32 MiB per pass. Cleanup additionally binds the actual root `node_modules`
+identity and checks it again inside the removal service immediately before removal.
+These checks coordinate helper clients; they do not lock out unrelated OS processes.
+
+Preparation snapshots before and after resolution or measurement. Plans expire in
+ten minutes and retain immutable internal targets independently of public result
+objects. Revalidation and single-use consumption happen inside the maintenance
+reservation. Plan output is capped at 12 KiB / 100 targets and rejects truncation;
+retention is ten plans per principal, 100 overall, and 32 MiB including internal
+inputs. No plan survives restart. Request deduplication remains in `Operations`,
+so even a consumed or expired plan cannot cause an identical admitted request to
+run a second time while its operation record is retained.
+
+`OperationResultFailure` preserves typed partial outcome rows on failed mutations.
+Results report attempted groups, groups whose subprocess completed, cleanup
+attempts, fresh cleanup measurement when available, invalidated project/report
+IDs, and unknown state. This does not verify installed transitive dependencies or
+run a follow-up audit. The runtime invalidates all six reports across the related
+workspace after any attempted install/removal, including partial failures, then
+refreshes dependency metadata. Browser snapshots expose the same tombstones.
+Active cancellation is stop-after-current; neither cancellation nor failure
+promises rollback. Stale plans fail before mutation and need fresh preparation.

@@ -118,3 +118,14 @@ describe('dependency cleanup', () => {
     await expect(removeProjectNodeModules('.')).rejects.toMatchObject({ status: 400 })
   })
 })
+
+it('rechecks a prepared cleanup identity inside the removal service', async () => {
+  const modules = path.join(project, 'node_modules')
+  await mkdir(modules)
+  await writeFile(path.join(modules, 'keep'), 'fixture')
+  const info = await lstat(modules, { bigint: true })
+  await expect(removeProjectNodeModules(project, { dev: String(info.dev), ino: String(info.ino + 1n) })).rejects.toThrow('changed')
+  expect(await readFile(path.join(modules, 'keep'), 'utf8')).toBe('fixture')
+  await rm(modules, { recursive: true })
+  await expect(removeProjectNodeModules(project, { dev: String(info.dev), ino: String(info.ino) })).rejects.toThrow()
+})

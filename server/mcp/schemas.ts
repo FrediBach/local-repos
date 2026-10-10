@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { maintenanceKind } from './policy'
 
 export const text = z.string().max(32_768)
 export const id = z.string().regex(/^[a-f0-9]{20}$/)
@@ -41,7 +42,7 @@ export const projectSummary = z.object({
   id, name: text, description: text, stack: z.array(text), truncatedFields: z.array(text), packageManager: manager, hasPackageJson: z.boolean(), rootMemberships: z.array(membership), selectedMembership: membership.optional(),
   matches: z.object({ fields: z.array(text), dependencies: z.array(dependency), omittedDependencies: z.number().int().nonnegative() }).optional(), visualGroupId: id.optional(), packageWorkspaceId: id.optional(), git: z.object({ branch: text.optional(), dirty: z.boolean().optional() }).optional(), devStatus: z.enum(['stopped', 'starting', 'running', 'error']), reports: z.array(reportSummary), scannedAt: text,
 })
-export const projectDetail = projectSummary.extend({ version: text.optional(), author: text.optional(), license: text.optional(), homepage: text.optional(), origin: text.optional(), aiInstructionFiles: z.array(text), relatedProjectIds: z.array(id), capabilities: z.object({ analysis: z.boolean(), development: z.boolean(), mutation: z.literal(false), disabledReason: text }), resources: z.array(text), dependencies: page(dependency).optional(), scripts: page(script).optional(), preview: z.object({ capturedAt: text, source: text, kind: text.optional(), url: text.optional() }).optional() })
+export const projectDetail = projectSummary.extend({ version: text.optional(), author: text.optional(), license: text.optional(), homepage: text.optional(), origin: text.optional(), aiInstructionFiles: z.array(text), relatedProjectIds: z.array(id), capabilities: z.object({ analysis: z.boolean(), development: z.boolean(), mutation: z.boolean(), disabledReason: text }), resources: z.array(text), dependencies: page(dependency).optional(), scripts: page(script).optional(), preview: z.object({ capturedAt: text, source: text, kind: text.optional(), url: text.optional() }).optional() })
 export const rootSummary = z.object({ rootId: root, name: text, path: text.optional(), scanned: z.boolean(), scannedAt: text.optional(), projectCount: z.number(), notObservedCount: z.number(), warnings: z.array(text), completeness: z.enum(['complete', 'partial', 'unknown']) })
 export const readme = z.object({ text, contentRevision: text, nextCursor: z.string().nullable(), truncated: z.boolean(), sourceTimestamp: text, available: z.boolean() })
 export const operation = z.object({ operationId, helperInstanceId: text, requestId, kind: text, projectIds: z.array(id), state: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']), createdAt: text, startedAt: text.optional(), finishedAt: text.optional(), progress: z.object({ phase: text, detail: text.optional(), completed: z.number().optional(), total: z.number().optional() }).optional(), cancellation: z.literal('stop-after-current'), cancelRequested: z.boolean(), resultKind: text.optional(), resultAvailable: z.boolean(), error: z.object({ code: text, message: text }).optional() })
@@ -52,7 +53,25 @@ export const pushStatus = z.object({ available: z.boolean(), hasOrigin: z.boolea
 export const processGeneration = z.string().regex(/^proc_[a-f0-9-]{36}$/)
 export const devStatus = z.object({ status: z.enum(['stopped', 'starting', 'running', 'error']), url: text.optional(), error: text.optional(), owned: z.boolean(), processGeneration: processGeneration.optional() })
 export const devLogs = z.object({ text, processGeneration: processGeneration.optional(), truncated: z.boolean(), resetRequired: z.boolean(), snapshotAt: text, nextCursor: z.string().nullable() })
+export const planId = z.string().regex(/^plan_[a-f0-9-]{36}$/)
+export const packageTarget = z.object({ name: text, from: text, to: text, kind: dependencyKind })
+export const maintenancePlan = z.object({
+  planId, helperInstanceId: text, kind: maintenanceKind, projectId: id, affectedProjectIds: z.array(id),
+  createdAt: text, expiresAt: text, level: z.enum(['minor', 'patch']).optional(),
+  targets: z.array(packageTarget), skipped: z.array(z.object({ name: text, reason: text })),
+  cleanup: z.object({ target: z.literal('node_modules'), identity: text, allocatedBytes: z.number(), partial: z.boolean() }).optional(),
+  files: z.array(z.object({ projectId: id, name: text })), preconditions: text, impact: text,
+  lifecycleScripts: z.literal(false), approval: z.literal('local-scoped-automation-required'),
+})
+export const maintenanceResult = z.object({
+  kind: z.literal('maintenance'), planId, projectId: id, status: z.enum(['succeeded', 'failed']),
+  attempted: z.array(packageTarget), completed: z.array(packageTarget), cleanupAttempted: z.boolean(),
+  invalidatedReports: z.array(z.object({ projectId: id, kinds: z.array(reportKind) })),
+  storage: storage.optional(), unknowns: z.array(text), followUpAudit: z.literal('not-run'),
+})
 export const operationRow = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('maintenance-plan'), plan: maintenancePlan }),
+  maintenanceResult,
   z.object({ kind: z.literal('development'), projectId: id, action: z.enum(['start', 'stop']), dev: devStatus }),
   z.object({ kind: z.literal('check'), projectId: id, check: reportKind, report: reportSummary, resource: text }),
   z.object({ kind: z.literal('preview'), projectId: id, capturedAt: text.optional(), source: text.optional(), resource: text.optional() }),
@@ -64,7 +83,7 @@ export const operationRow = z.discriminatedUnion('kind', [
 export const operationResult = z.object({ operation, rows: page(operationRow), pollingIntervalMs: z.number() })
 export const finding = z.object({ id: text, projectId: id, kind: z.enum(['security', 'outdated', 'reactDoctor']), title: text, description: text, priority: z.enum(['critical', 'high']), scannedAt: text, findingKeys: z.array(text), findingKeysOmitted: z.number() })
 export const findings = z.object({ rows: page(finding), dismissalsAvailable: z.literal(false), scoringPolicy: text })
-export const serverInfo = z.object({ appVersion: text, schemaVersion: z.literal(1), protocols: z.array(text), helperInstanceId: text, platform: text, capabilities: z.array(text), supportedChecks: z.array(text), limits: z.object({ pageSize: z.number(), responseBytes: z.number(), readmeBytes: z.number(), imageBytes: z.number(), logBytes: z.number(), logSnapshotBytes: z.number() }), stateLifetime: text, browserDataAvailable: z.literal(false), contentDisclosure: z.boolean(), pathDisclosure: z.boolean() })
+export const serverInfo = z.object({ appVersion: text, schemaVersion: z.literal(1), protocols: z.array(text), helperInstanceId: text, platform: text, capabilities: z.array(text), supportedChecks: z.array(text), limits: z.object({ pageSize: z.number(), responseBytes: z.number(), readmeBytes: z.number(), imageBytes: z.number(), logBytes: z.number(), logSnapshotBytes: z.number(), maintenancePlanBytes: z.number(), maintenancePlansPerClient: z.number(), maintenancePlansPerHelper: z.number(), maintenancePlanTtlMs: z.number() }), stateLifetime: text, browserDataAvailable: z.literal(false), contentDisclosure: z.boolean(), pathDisclosure: z.boolean() })
 export const envelope = <T extends z.ZodType>(data: T) => {
   const base = { schemaVersion: z.literal(1), helperInstanceId: text, revision: z.number().int(), observedAt: text, warnings: z.array(warning) }
   return z.union([

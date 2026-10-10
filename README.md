@@ -414,7 +414,8 @@ The local helper can expose project discovery, bounded project context, cached
 reports, and local Git history to MCP clients without opening the browser UI.
 MCP is **disabled by default**. Optional fresh checks and preview capture require
 explicit capabilities. Development-server controls also require explicit grants.
-There are no desktop-launch, script-launch, or dependency mutation MCP tools. Reports exist only if this helper
+Dependency maintenance uses explicit prepare/apply tools with separately configured
+automation grants. There are no desktop-launch or script-launch MCP tools. Reports exist only if this helper
 has them; MCP cannot read your browser cache, favorites, tags, or settings.
 
 Create a JSON configuration outside all directories you intend to scan, for
@@ -578,3 +579,64 @@ npm run build
 Tests cover metadata parsing, browser scanning, helper scanning, and local API behavior. Build output is written to `dist/`.
 
 React Doctor reports React and related code findings with file locations. `npm run doctor` scans the full project with scoring and telemetry disabled; it exits nonzero when error-level findings remain. Findings should be checked against the code before making changes.
+
+### Reviewed dependency maintenance through MCP
+
+Add `maintenance` to a client's `capabilities` to enable preparation. Package
+updates and vulnerability fixes additionally require `network`; cleanup preparation
+only needs `maintenance`. Keep `read` and `discovery` for project discovery and
+report access. Preparation never installs or deletes dependencies.
+
+Applying plans requires an explicit `maintenanceAutomation` array on that same
+client in the protected helper configuration. It defaults to empty. For example,
+these client fields authorize compatible updates within that client's configured
+roots (retain its existing ID, token and roots):
+
+```json
+{
+  "capabilities": ["read", "discovery", "git", "maintenance", "network"],
+  "maintenanceAutomation": ["package-update", "vulnerability-fix"]
+}
+```
+
+Add `"dependency-cleanup"` only if that client should also be allowed to delete
+installed dependencies. This is an operator-granted automation policy for the
+listed maintenance kinds and authorized package workspaces. It permits the client
+to apply its prepared plans without a separate server-side approval prompt. A
+plan ID or `confirm: true` is not proof of a human approval gesture. Clients
+without this grant can prepare plans but have no apply tools. Restart the helper
+after editing policy; MCP cannot grant its own permissions.
+
+1. Call `local_repos_prepare_package_update` with `projectId`, `level` (`patch` or
+   `minor`), and a unique `requestId`. For a compatible vulnerability fix, use
+   `local_repos_prepare_vulnerability_fix` with the exact audit `finding`
+   (`name`, `title`, and the reported `range` / `url`) instead. For disk cleanup,
+   use `local_repos_prepare_dependency_cleanup` with `projectId` and `requestId`.
+2. Poll the operation and read its result. Review the complete plan: exact direct
+   package targets, skips, affected project IDs, checked files, impact, content
+   preconditions, and expiry. Cleanup includes the real root-level `node_modules`
+   identity, estimated allocated bytes, and whether measurement was partial.
+3. Apply the corresponding plan with `local_repos_apply_package_update` or
+   `local_repos_apply_vulnerability_fix`, passing only `planId` and a new
+   `requestId`. Cleanup uses `local_repos_delete_node_modules` and additionally
+   requires `confirm: true`.
+4. Inspect both operation status and result, even on failure. Results distinguish
+   attempted targets from install groups whose commands completed, list affected
+   report invalidations, and state remaining unknowns. Run a fresh audit separately;
+   an install does not establish a clean audit.
+
+Plans expire after ten minutes, belong to their preparing client, and can be used
+only once. Content or directory changes require a new plan. Applies never resolve
+new direct target versions; package managers may change transitive dependencies
+and shared lockfiles. Lifecycle scripts remain disabled. Cleanup removes only the
+selected project's real root-level `node_modules`, without following symlinks.
+Related projects must be authorized and idle. Preparation and apply share the
+browser's runtime guards; attempted mutations invalidate related reports even
+when they partially fail. There is no rollback guarantee.
+
+Complete plans are capped at 12 KiB and 100 direct targets. The helper retains at
+most ten plans per client, 100 overall, and 32 MiB of planning state. Package input
+hashing is bounded to 8 MiB per file and 32 MiB per preparation/revalidation pass.
+Oversized plans fail explicitly rather than omitting review details. Plans and
+operations disappear on helper restart: reconcile repository state before
+preparing another mutation, rather than automatically replaying a lost response.

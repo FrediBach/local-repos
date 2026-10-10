@@ -28,13 +28,17 @@ export function updateTarget(current: string, versions: string[], level: 'minor'
   })[0]
 }
 
-/** Explicit install action. Resolve every target before changing any packages. */
-export async function updateProject(entry: RegisteredProject, level: 'minor' | 'patch', runner: OutdatedRunner = runOutdatedCommand, selection?: UpdateSelection): Promise<PackageUpdate> {
-  const manifestPath = path.join(entry.directory, 'package.json')
-  const { dependencies, original, manifest } = await readProjectManifest(entry)
-  const report = await outdatedProject(entry, runner)
+export interface PreparedPackageUpdate {
+  level: 'minor' | 'patch'
+  original: string
+  manager: RegisteredProject['project']['packageManager']
+  yarnMajor: number
+  targets: { name: string; from: string; to: string; kind: ProjectDependency['kind'] }[]
+  skipped: PackageUpdate['skipped']
+}
+
+function updateCommands(entry: RegisteredProject, runner: OutdatedRunner) {
   const manager = entry.project.packageManager
-  const result: PackageUpdate = { level, updatedAt: new Date().toISOString(), packages: [], skipped: [] }
   const env = { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', NODE_ENV: 'development',
     COREPACK_ENABLE_NETWORK: '0', COREPACK_ENABLE_AUTO_PIN: '0', npm_config_ignore_scripts: 'true',
     npm_config_ignore_pnpmfile: 'true', PNPM_CONFIG_IGNORE_PNPMFILE: 'true',
@@ -51,6 +55,17 @@ export async function updateProject(entry: RegisteredProject, level: 'minor' | '
     if (output.exitCode !== 0) throw new HelperError(`Could not complete ${manager} package updates. Check the registry connection and dependency conflicts. Some files may have changed; resync before retrying.`, 502)
     return output
   }
+  return { run, options }
+}
+
+/** Resolve exact versions without running an install. */
+export async function preparePackageUpdate(entry: RegisteredProject, level: 'minor' | 'patch', runner: OutdatedRunner = runOutdatedCommand, selection?: UpdateSelection): Promise<PreparedPackageUpdate> {
+  const manifestPath = path.join(entry.directory, 'package.json')
+  const { dependencies, original, manifest } = await readProjectManifest(entry)
+  const report = await outdatedProject(entry, runner)
+  const manager = entry.project.packageManager
+  const result: PackageUpdate = { level, updatedAt: new Date().toISOString(), packages: [], skipped: [] }
+  const { run, options } = updateCommands(entry, runner)
   let yarnMajor = 1
   let modernYarn = false
   if (manager === 'yarn') {
@@ -90,6 +105,17 @@ export async function updateProject(entry: RegisteredProject, level: 'minor' | '
   // Avoid overwriting edits made while registry requests were in progress.
   if (!(await lstat(manifestPath)).isFile() || await readFile(manifestPath, 'utf8') !== original) throw new HelperError('package.json changed during the update check. Resync and try again.', 409)
   if (targets.length) await selection?.beforeInstall()
+  return { level, original, manager, yarnMajor, targets, skipped: result.skipped }
+}
+
+/** Install only the resolved targets; never query newer registry versions here. */
+export async function applyPackageUpdate(entry: RegisteredProject, plan: PreparedPackageUpdate, runner: OutdatedRunner = runOutdatedCommand, progress?: (group: PreparedPackageUpdate['targets'], completed: boolean) => void): Promise<PackageUpdate> {
+  const manifestPath = path.join(entry.directory, 'package.json')
+  if (!(await lstat(manifestPath)).isFile() || await readFile(manifestPath, 'utf8') !== plan.original || entry.project.packageManager !== plan.manager) throw new HelperError('Package inputs changed. Prepare a new update.', 409)
+  const { manager, yarnMajor, targets, level } = plan
+  const modernYarn = yarnMajor >= 2
+  const { run, options } = updateCommands(entry, runner)
+  const result: PackageUpdate = { level, updatedAt: new Date().toISOString(), packages: [], skipped: plan.skipped }
   for (const kind of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
     const group = targets.filter(target => target.kind === kind)
     if (!group.length) continue
@@ -108,8 +134,15 @@ export async function updateProject(entry: RegisteredProject, level: 'minor' | '
       if (manager === 'pnpm') args.push('--ignore-workspace-root-check', '--ignore-pnpmfile')
       if (manager === 'yarn' && !modernYarn) args.push('--non-interactive', '--ignore-workspace-root-check')
     }
+    progress?.(group, false)
     await run(manager, args, { ...options, cwd })
+    progress?.(group, true)
     result.packages.push(...group)
   }
   return result
+}
+
+/** REST uses the same resolution and exact installation services. */
+export async function updateProject(entry: RegisteredProject, level: 'minor' | 'patch', runner: OutdatedRunner = runOutdatedCommand, selection?: UpdateSelection): Promise<PackageUpdate> {
+  return applyPackageUpdate(entry, await preparePackageUpdate(entry, level, runner, selection), runner)
 }

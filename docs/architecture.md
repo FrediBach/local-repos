@@ -50,7 +50,7 @@ starting the helper separately.
 | [src/types.ts](../src/types.ts) | Shared project, workspace, scan, Git, preview, and maintenance contracts. |
 | [server/app.ts](../server/app.ts) | Express API construction, request checks, dispatch, and error responses. |
 | [server/application.ts](../server/application.ts), [server/project-index.ts](../server/project-index.ts), [server/operations.ts](../server/operations.ts) | Shared helper composition, current root membership, bounded projections, and ephemeral operations. |
-| [server/mcp](../server/mcp) | Optional authenticated loopback MCP discovery, reads, analysis, and development control; local policy, schemas, and stdio bridge. |
+| [server/mcp](../server/mcp) | Optional authenticated loopback MCP discovery, reads, analysis, and development control; reviewed dependency maintenance, local policy, schemas, and stdio bridge. |
 | [server/scanner.ts](../server/scanner.ts) | Node filesystem discovery, Git metadata, and registered project identity. |
 | [server/runtime.ts](../server/runtime.ts) | Process lifecycle, previews, maintenance coordination, and application opening. |
 | [server](../server) feature modules | Git queries, package tools, storage, script validation, and preview rendering. |
@@ -150,7 +150,8 @@ entries, a random boot identity, monotonic revisions, and bounded operation
 records. Discovery and package maintenance share a reservation. Overlapping scans
 preserve authoritative package/Git scope and keep independent display memberships.
 MCP cannot access browser-owned IndexedDB or preferences. Reviewed maintenance
-and optional desktop/script launching remain planned;
+uses ephemeral, principal-bound plans and explicit local automation grants.
+Optional desktop/script launching remains planned;
 see [the helper architecture](local-helper.md#optional-mcp-read-service) and
 [setup](../README.md#optional-mcp-access).
 
@@ -163,3 +164,10 @@ helper-lifetime report tombstones and public activity projections. The browser
 still owns persistence and preferences; synchronization never grants MCP access
 to IndexedDB. See [helper contracts](local-helper.md#optional-mcp-read-service)
 and [browser reconciliation](frontend.md#helper-workspace-reconciliation).
+
+Maintenance preparation resolves exact direct versions through the same services
+as REST updates. `MaintenancePlans` stores bounded ten-minute plans within the
+shared helper application. Content hashes and canonical directory identities are
+checked under runtime maintenance reservations before consumption and application.
+Failed mutations retain typed outcomes and emit the same report tombstones used
+by the browser; no persistent approval store or mutation replay is introduced.

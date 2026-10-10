@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto'
 import type { ScanProgress } from '../src/types'
 import { failure, McpFailure } from './mcp/errors'
 
+/** Failed mutations retain bounded, typed outcome details without claiming rollback. */
+export class OperationResultFailure extends McpFailure {
+  constructor(readonly result: unknown[]) { super('OPERATION_FAILED', 'Maintenance may have partially changed files. Inspect the result before preparing another plan.') }
+}
+
 export interface Operation {
   operationId: string; helperInstanceId: string; requestId: string; kind: string; projectIds: string[]
   state: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
@@ -60,6 +65,15 @@ export class Operations {
         operation.resultAvailable = true
         operation.state = 'succeeded'
       } catch (error) {
+        if (error instanceof OperationResultFailure) {
+          const bytes = Buffer.byteLength(JSON.stringify(error.result))
+          if (bytes <= 8 * 1024 * 1024) {
+            entry.result = error.result
+            entry.bytes = bytes
+            operation.resultKind = kind
+            operation.resultAvailable = true
+          }
+        }
         const problem = failure(error)
         operation.error = { code: problem.code, message: problem.message }
         operation.state = 'failed'

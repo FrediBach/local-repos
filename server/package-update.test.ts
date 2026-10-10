@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { updateProject, updateTarget } from './package-update'
+import { updateProject, updateTarget, preparePackageUpdate, applyPackageUpdate } from './package-update'
 import type { OutdatedRunner } from './package-outdated'
 import type { RegisteredProject } from './scanner'
 
@@ -110,4 +110,18 @@ it.each(['pnpm', 'yarn-classic', 'yarn-modern', 'bun'] as const)('uses the %s re
   expect(install[1]).toContain('alpha@1.2.4')
   expect(install[1]).toContain(variant === 'yarn-modern' ? '--mode=skip-build' : '--ignore-scripts')
   expect(install[1]).toContain(manager === 'pnpm' ? '--save-exact' : '--exact')
+})
+
+it('prepares exact targets without installing and applies without resolving versions again', async () => {
+  const entry = await fixture(), run = runner()
+  const plan = await preparePackageUpdate(entry, 'patch', run)
+  expect(run.mock.calls.some(([, args]) => args[0] === 'install')).toBe(false)
+  run.mockClear()
+  run.mockImplementation(async (_command, args) => {
+    expect(args[0]).toBe('install')
+    return output({})
+  })
+  const result = await applyPackageUpdate(entry, plan, run)
+  expect(result.packages.map(item => item.to)).toEqual(['1.2.4', '1.2.4'])
+  expect(run).toHaveBeenCalledTimes(2)
 })

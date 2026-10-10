@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AuditFinding } from '../src/types'
-import { fixAuditFinding, validateAuditFixRequest } from './package-audit-fix'
+import { fixAuditFinding, validateAuditFixRequest, prepareAuditFix } from './package-audit-fix'
 import type { AuditRunner } from './package-audit'
 import type { OutdatedRunner } from './package-outdated'
 import type { RegisteredProject } from './scanner'
@@ -124,4 +124,12 @@ it('does not change a workspace member whose installed dependency is outside the
     : implementation(...args))
   await expect(fixAuditFinding(entry, request, run, auditRun())).rejects.toThrow('not affected by this finding')
   expect(run.mock.calls.some(([, args]) => args[0] === 'install' || args[0] === 'view')).toBe(false)
+})
+
+it('prepares a freshly audited exact fix without invoking an install', async () => {
+  const entry = await fixture(), run = updateRun(), audit = auditRun()
+  const plan = await prepareAuditFix(entry, request, run, audit)
+  expect(audit).toHaveBeenCalledOnce()
+  expect(plan.targets).toEqual([{ name: 'alpha', from: '1.2.0', to: '1.8.0', kind: 'dependencies' }])
+  expect(run.mock.calls.some(([, args]) => args[0] === 'install')).toBe(false)
 })
