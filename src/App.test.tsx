@@ -80,6 +80,52 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('project workspace interactions', () => {
+  it.each(['helper', 'browser'] as const)('hides demo content while restoring a %s workspace', async mode => {
+    let resolve!: (workspace: Workspace) => void
+    storage.loadWorkspace.mockReturnValue(new Promise<Workspace>(done => { resolve = done }))
+    render(<App />)
+    expect(screen.getByText('Loading saved workspace…')).toBeTruthy()
+    expect(screen.queryByRole('article')).toBeNull()
+    expect(screen.queryByText('Demo workspace')).toBeNull()
+    expect(screen.queryByText('You’re looking at an example workspace.')).toBeNull()
+
+    await act(async () => { resolve({ ...scan, mode }) })
+    expect(screen.getByRole('button', { name: `View ${project.name}` })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'View margin' })).toBeNull()
+    expect(screen.queryByText('Demo workspace')).toBeNull()
+  })
+
+  it('shows demo projects only after confirming no workspace is saved', async () => {
+    let resolve!: (workspace: undefined) => void
+    storage.loadWorkspace.mockReturnValue(new Promise<undefined>(done => { resolve = done }))
+    render(<App />)
+    expect(screen.queryByRole('article')).toBeNull()
+    await act(async () => { resolve(undefined) })
+    expect(screen.getByRole('button', { name: 'View margin' })).toBeTruthy()
+    expect(screen.getByText('Demo workspace')).toBeTruthy()
+  })
+
+  it('keeps demo projects hidden after a cache error and allows connecting', async () => {
+    storage.loadWorkspace.mockRejectedValue(new Error('Storage unavailable'))
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Saved workspace could not be loaded.')
+    expect(screen.queryByRole('article')).toBeNull()
+    expect(screen.queryByText('Demo workspace')).toBeNull()
+    const dialog = await openConnection(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Connect directory', exact: true }))
+    expect(await screen.findByRole('button', { name: `View ${project.name}` })).toBeTruthy()
+    expect(screen.queryByText('Saved workspace could not be loaded.')).toBeNull()
+  })
+
+  it('restores saved projects even if favorites fail to load', async () => {
+    storage.loadWorkspace.mockResolvedValue({ ...scan, mode: 'helper' })
+    storage.loadFavorites.mockRejectedValue(new Error('Storage unavailable'))
+    render(<App />)
+    expect(await screen.findByRole('button', { name: `View ${project.name}` })).toBeTruthy()
+    expect(screen.queryByText('Demo workspace')).toBeNull()
+  })
+
   it.each(['', 'alice@example.com'])('caches commit activity for author %s after connecting and syncing', async author => {
     vi.stubGlobal('localStorage', { getItem: (key: string) => key === 'local-repos:settings:v2' ? JSON.stringify({ commitActivityAuthor: author }) : null, setItem: vi.fn(), removeItem: vi.fn() })
     const today = new Date().toISOString().slice(0, 10)
@@ -229,7 +275,7 @@ describe('project workspace interactions', () => {
   it('returns focus to the project title after opening details from its actions menu', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Actions for margin' }))
+    await user.click(await screen.findByRole('button', { name: 'Actions for margin' }))
     await user.click(screen.getByRole('menuitem', { name: 'Project details' }))
     const dialog = screen.getByRole('dialog', { name: 'margin' })
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
@@ -240,7 +286,7 @@ describe('project workspace interactions', () => {
   it('supports keyboard tab navigation and returns focus to the project on Escape', async () => {
     const user = userEvent.setup()
     render(<App />)
-    const opener = screen.getByRole('button', { name: 'View margin' })
+    const opener = await screen.findByRole('button', { name: 'View margin' })
     await user.click(opener)
     const overview = screen.getByRole('tab', { name: 'Overview' })
     expect(overview.getAttribute('aria-selected')).toBe('true')
@@ -306,7 +352,7 @@ describe('project workspace interactions', () => {
     render(<App />)
     await waitFor(() => expect(storage.loadFavorites).toHaveBeenCalledOnce())
 
-    await user.click(screen.getByRole('button', { name: 'Favorite margin', exact: true }))
+    await user.click(await screen.findByRole('button', { name: 'Favorite margin', exact: true }))
     expect(storage.saveFavorites).toHaveBeenLastCalledWith(['demo-margin'])
     expect(screen.getByRole('button', { name: 'Unfavorite margin' }).getAttribute('aria-pressed')).toBe('true')
 
@@ -435,7 +481,7 @@ describe('project workspace interactions', () => {
     storage.loadFavorites.mockReturnValue(pendingFavorites)
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Favorite margin', exact: true }))
+    await user.click(await screen.findByRole('button', { name: 'Favorite margin', exact: true }))
 
     await act(async () => { finishLoading([]); await pendingFavorites })
     expect(screen.getByRole('button', { name: 'Unfavorite margin' }).getAttribute('aria-pressed')).toBe('true')

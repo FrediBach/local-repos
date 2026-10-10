@@ -48,6 +48,8 @@ import { preservePreviews } from '@/lib/workspace'
 import { isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, RepoProject, Workspace } from '@/types'
 
+const emptyProjects: RepoProject[] = []
+
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
 
 export default function App() {
@@ -64,6 +66,7 @@ function WorkspaceApp() {
   const [projectTags, setProjectTags] = useState<ProjectTags>({})
   const [tagsReady, setTagsReady] = useState(false)
   const [cacheReady, setCacheReady] = useState(false)
+  const [workspaceStatus, setWorkspaceStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [tagProjectId, setTagProjectId] = useState<string>()
   const tagOpener = useRef<HTMLElement | null>(null)
   const [view, setView] = useState<'grid' | 'list'>('grid')
@@ -91,7 +94,7 @@ function WorkspaceApp() {
   const { action, packageBusy, runAutomaticScan, scanProgress, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews } = useWorkspaceActions({
     workspace, busy, workspaceVersion, setBusy, setLogs, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
   })
-  const rawProjects = workspace?.projects ?? demoProjects
+  const rawProjects = workspace?.projects ?? (workspaceStatus === 'ready' ? demoProjects : emptyProjects)
   const projects = useMemo(() => rawProjects.map(project => ({ ...project, tags: projectTags[project.id] ?? [], ...(project.outdated ? { outdated: configureOutdatedReport(project.outdated, settings) } : {}) })), [rawProjects, projectTags, settings])
   const projectTodos = useProjectTodos(projects, workspace)
   const tagProject = projects.find(p => p.id === tagProjectId)
@@ -110,7 +113,7 @@ function WorkspaceApp() {
       title: selectedBatch.title, projectId: selectedId, projectName: selected?.name, stage: selectedBatch.progress.stage,
       stageStartedAt: selectedBatch.progress.stageStartedAt, startedAt: selectedBatch.progress.startedAt,
     } : undefined
-  const isDemo = !workspace
+  const isDemo = !workspace && workspaceStatus === 'ready'
   const running = projects.filter(isRunning).length
   const favoriteIds = useMemo(() => new Set(favorites), [favorites])
   const favoriteCount = projects.filter(p => favoriteIds.has(p.id)).length
@@ -134,13 +137,21 @@ function WorkspaceApp() {
   useEffect(() => {
     let active = true
     const initialVersion = workspaceVersion.current
-    Promise.all([loadWorkspace(), loadFavorites()]).then(([saved, stars]) => {
-      if (!active) return
-      setCacheReady(true)
-      if (workspaceVersion.current !== initialVersion) return
-      setWorkspace(saved); if (!favoritesVersion.current) setFavorites(stars); setPath(saved?.rootPath ?? '')
+    const workspaceLoad = loadWorkspace().then(saved => {
+      if (!active || workspaceVersion.current !== initialVersion) return
+      setWorkspace(saved); setPath(saved?.rootPath ?? '')
+      setWorkspaceStatus('ready')
       setHelperWorkspacePath(saved?.mode === 'helper' ? saved.rootPath : undefined)
-    }).catch(() => setNotice({ text: 'Browser storage is unavailable. You can still browse this session.', error: true }))
+    }).catch(error => {
+      if (active && workspaceVersion.current === initialVersion) setWorkspaceStatus('error')
+      throw error
+    })
+    const favoritesLoad = loadFavorites().then(stars => {
+      if (active && !favoritesVersion.current) setFavorites(stars)
+    })
+    Promise.all([workspaceLoad, favoritesLoad]).then(() => {
+      if (active) setCacheReady(true)
+    }).catch(() => { if (active) setNotice({ text: 'Browser storage is unavailable. You can still browse this session.', error: true }) })
     if (!hosted) api<{ ok: boolean }>('/health').then(result => active && setHelper(result.ok)).catch(() => {})
     const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallEvent) }
     const onOnline = () => setOnline(navigator.onLine)
@@ -172,6 +183,7 @@ function WorkspaceApp() {
   async function persist(next: Workspace, reportError = true, refreshActivity = false) {
     setHelperWorkspacePath(next.mode === 'helper' ? next.rootPath : undefined)
     setWorkspace(next)
+    setWorkspaceStatus('ready')
     if (refreshActivity) setActivitySync(next)
     try { await saveWorkspace(next); return true } catch { if (reportError) setNotice({ text: 'Projects loaded, but browser storage could not save this workspace.', error: true }); return false }
   }
@@ -310,7 +322,7 @@ function WorkspaceApp() {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     ++workspaceVersion.current
     setBusy('disconnect')
-    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); lighthouseBatch.dismiss(); auditHistory.current.clear(); setCriticalAlerts([]); setWorkspace(undefined); setHelperWorkspacePath(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
+    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); lighthouseBatch.dismiss(); auditHistory.current.clear(); setCriticalAlerts([]); setWorkspace(undefined); setWorkspaceStatus('ready'); setHelperWorkspacePath(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
     catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Could not disconnect the workspace.', error: true }) }
     finally { setBusy('') }
   }
@@ -322,7 +334,7 @@ function WorkspaceApp() {
 
   return <div className="app-shell">
     <a className="skip-link" href="#projects">{page === 'todos' ? 'Skip to todos' : page === 'summary' ? 'Skip to daily summary' : 'Skip to projects'}</a>
-    <WorkspaceSidebar workspace={workspace} projects={projects} stacks={stacks} busy={!!busy} page={page} filter={filter} filters={filters}
+    <WorkspaceSidebar workspaceStatus={workspaceStatus} workspace={workspace} projects={projects} stacks={stacks} busy={!!busy} page={page} filter={filter} filters={filters}
       hasFilters={hasFilters} favoriteCount={favoriteCount} running={running} navigate={navigate} onSummary={() => setPage('summary')}
       onTodos={() => openTodos()} todoCount={projectTodos.todos.length}
       toggleTechnology={toggleTechnology} onConnect={() => setConnectOpen(true)} onHelp={() => setHelpOpen(true)}
@@ -336,7 +348,11 @@ function WorkspaceApp() {
         {activeScanProgress && <ScanProgressPanel progress={activeScanProgress} />}
         <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
           onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />
-        {page === 'todos' ? <>
+        {!workspace && workspaceStatus !== 'ready' ? <div className="empty-state" role="status">
+          <Folder size={24} aria-hidden="true" />
+          <h2>{workspaceStatus === 'loading' ? 'Loading saved workspace…' : 'Saved workspace could not be loaded.'}</h2>
+          {workspaceStatus === 'error' && <p>Reload to try again, or connect a directory to browse this session.</p>}
+        </div> : page === 'todos' ? <>
           {projectTodos.storageError && <p role="alert">Todo dismissals could not be saved in this browser. They will stay dismissed for this session.</p>}
           <ProjectTodos projects={projects} todos={projectTodos.todos} projectId={todoProjectId} onClearProject={() => setTodoProjectId(undefined)} onOpen={openProject} onDismiss={projectTodos.dismiss} isDemo={isDemo} onConnect={() => setConnectOpen(true)} />
         </> : page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>

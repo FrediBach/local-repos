@@ -29,7 +29,7 @@ and maintenance-report contracts used by both the frontend and helper.
 
 | Mode | Data source | Capabilities |
 | --- | --- | --- |
-| Demo | [`demo.ts`](../src/lib/demo.ts), used while `workspace` is undefined | Sample projects and browsing; helper actions prompt the connection flow. |
+| Demo | [`demo.ts`](../src/lib/demo.ts), used after cache restoration confirms no saved workspace | Sample projects and browsing; helper actions prompt the connection flow. |
 | Browser directory | File System Access API directory handle | Read-only discovery and metadata, packages, README, and limited Git information. It cannot run scripts or maintenance commands. |
 | Local helper | Same-origin `/api` requests proxied to the Node helper | Full scans, Git queries, processes, previews, package maintenance, storage actions, and application/terminal shortcuts. |
 | Hosted deployment | Demo or browser directory access | Helper connection controls are replaced with local-install guidance; the startup helper health probe is skipped. |
@@ -53,15 +53,19 @@ settings context owns validated application settings. Feature hooks own their
 derived data, schedules, request state, and batch progress; there is no external
 state-management library.
 
-On startup, `App` restores the workspace and favorites together and loads tags
-separately from IndexedDB. It registers the cached helper root with `api.ts`
-without immediately rescanning it. Version refs prevent an older cache load from
+On startup, `App` restores the workspace, favorites, and tags independently from
+IndexedDB. Until the workspace read succeeds, demo projects and labels remain
+hidden behind a loading or cache-error state. A failed preference read does not
+prevent a saved workspace from appearing. The app registers the cached helper root
+with `api.ts` without immediately rescanning it. Version refs prevent an older cache load from
 replacing a newer connection or favorite edit. Readiness flags keep configuration
 imports and tag editing from racing initial preference restoration.
 
 The rendering pipeline is:
 
-1. Take scanned projects from the workspace, or use the demo projects.
+1. Take scanned projects from the workspace, or use demo projects only after
+   confirming there is no saved workspace. While loading or on a workspace read
+   error, use no projects.
 2. Overlay tags from preferences and recalculate outdated-package scores using
    current settings. These display values do not replace the raw scan results.
 3. Derive todo findings, filter groups, search matches, sorted results, and counts.

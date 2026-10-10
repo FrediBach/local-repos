@@ -19,7 +19,7 @@ Screenshot capture also needs Playwright's Chromium browser, installed once from
 npx playwright install chromium
 ```
 
-The initial screen contains labeled sample projects and illustrative previews. Connect your own directory to replace them.
+On startup, the app restores your saved directory before showing projects. Labeled sample projects and illustrative previews appear only when no directory is saved. Connect your own directory to replace them.
 
 ## Appearance and keyboard navigation
 
