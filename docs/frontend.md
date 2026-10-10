@@ -85,6 +85,24 @@ They reject stale results when the selected day or workspace changes. Push
 reminders also use up to three workers, defer while busy or hidden, and use the
 browser's local day and configured reminder time.
 
+## Workspace controls and project browsing
+
+[`workspace-toolbar.tsx`](../src/components/workspace-toolbar.tsx) keeps directory
+identity and workspace actions together. **Run checks** opens the existing Radix
+menu for public repository activity, outdated packages, vulnerabilities, React
+Doctor, and Lighthouse; preview capture remains a direct action. The menu explains
+that checks include projects hidden by filters and preserves eligibility, helper
+connection, and global busy guards. Selections use the same action callbacks and
+batch progress panels as before. Keyboard dismissal restores focus to the trigger,
+or to the labeled action group while a check has disabled the trigger.
+
+Project count, resync, and watcher status share a compact metadata row. Unknown
+report freshness appears as a **Cached reports** disclosure with guidance in an
+overlay; opening it does not move the project list. Summary and todo pages retain
+the full report notice. Search scope and query share an outlined control, followed
+by sort/view controls and quiet quick-filter buttons with count badges. Controls
+wrap on narrow screens without changing filtering or persisted preferences.
+
 ## Search and command discovery
 
 [`project-command-search.tsx`](../src/components/project-command-search.tsx)
@@ -392,7 +410,7 @@ old report; metadata rescans, helper restarts and failed checks preserve matchin
 successful reports. Package mutations do not invalidate remote activity.
 
 The project menu and command search offer **Check issues and pull requests** for
-supported origins. The workspace toolbar's **Check issues & PRs** uses
+supported origins. The workspace toolbar's **Run checks → Check issues & PRs** uses
 [`use-remote-activity-batch.ts`](../src/hooks/use-remote-activity-batch.ts), with
 sequential requests, stop-after-current, generation guards and cache/failure
 reporting. Projects sharing a canonical origin are checked once and receive the

@@ -1,0 +1,12 @@
+.toolbar.project-search-toolbar { align-items: flex-start; gap: 12px 20px; padding-block: 16px 12px; }
+.project-search-toolbar .search-group { flex: 1 1 28rem; }
+.project-search-toolbar .toolbar-right { flex: 0 0 auto; min-height: 46px; gap: 16px; }
+.project-search-toolbar .sort-control select { min-height: 44px; font-size: .8125rem; }
+.project-search-toolbar .view-toggle { border-color: var(--border); background: var(--surface); padding: 3px; }
+.project-search-toolbar .view-toggle button { min-height: 36px; min-width: 36px; }
+@media (max-width: 600px) {
+  .toolbar.project-search-toolbar { gap: 8px; padding-block: 12px 10px; }
+  .project-search-toolbar .search-group { flex-basis: 100%; }
+  .project-search-toolbar .toolbar-right { width: 100%; justify-content: space-between; min-height: 44px; }
+  .project-search-toolbar .view-toggle button { min-width: 44px; min-height: 38px; }
+}

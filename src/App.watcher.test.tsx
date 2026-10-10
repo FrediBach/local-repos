@@ -117,7 +117,7 @@ describe('automatic workspace scans', () => {
     await advance(120_000)
     expect(fetch.mock.calls.map(([url]) => url).filter(url => url !== '/api/workspace-state')).toEqual(['/api/health', '/api/scan', '/api/projects/alpha/audit'])
     expect(screen.getByRole('region', { name: 'Workspace watcher' }).textContent).toBe('Manual scans only')
-    expect((screen.getByRole('button', { name: 'Scan vulnerabilities', exact: true }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Run checks', exact: true }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('honors selected checks and skips package checks for projects without package.json', async () => {
@@ -138,7 +138,7 @@ describe('automatic workspace scans', () => {
     await advance(3000)
     await advance(57_000)
     expect(screen.getByText('Helper work: Checking advisories')).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Scan vulnerabilities', exact: true }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Run checks', exact: true }) as HTMLButtonElement).disabled).toBe(true)
     expect(fetch.mock.calls.map(([url]) => url).filter(url => url !== '/api/workspace-state')).toEqual(['/api/health'])
     fetch.mockImplementation(original)
     await act(async () => window.dispatchEvent(new Event('focus')))

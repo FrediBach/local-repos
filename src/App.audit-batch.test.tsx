@@ -48,7 +48,11 @@ let pending: Record<string, ReturnType<typeof deferred<Response>>>
 let preview: ReturnType<typeof deferred<Response>>
 let scannedWorkspace: ScanResult
 const auditRequests = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/audit'))
-const scanButton = () => screen.getByRole('button', { name: 'Scan vulnerabilities', exact: true }) as HTMLButtonElement
+const runChecksButton = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Run checks', exact: true })
+async function startScan(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(runChecksButton())
+  await user.click(screen.getByRole('menuitem', { name: 'Scan vulnerabilities', exact: true }))
+}
 const progress = () => screen.getByRole('progressbar', { name: 'Vulnerability scan progress' })
 const progressSection = () => within(screen.getByRole('region', { name: 'Workspace vulnerability scan' }))
 const badge = (name: string, severity: AuditSeverity) => screen.getByRole('button', {
@@ -97,18 +101,13 @@ async function complete(id: keyof typeof reports, body: unknown = { audit: repor
 }
 
 describe('workspace vulnerability scans', () => {
-  it('places the scan before preview capture and audits every project sequentially even when the list is filtered', async () => {
+  it('audits every project sequentially from Run checks even when the list is filtered', async () => {
     const { user } = await renderConnected()
-    const reactScan = screen.getByRole('button', { name: 'Scan React projects', exact: true })
-    const lighthouseScan = screen.getByRole('button', { name: 'Scan frontends with Lighthouse', exact: true })
-    expect(scanButton().nextElementSibling).toBe(reactScan)
-    expect(reactScan.nextElementSibling).toBe(lighthouseScan)
-    expect(lighthouseScan.nextElementSibling).toBe(screen.getByRole('button', { name: 'Capture previews', exact: true }))
     await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo site')
     expect(screen.getAllByRole('article')).toHaveLength(1)
     const savedFirst = deferred<void>()
     storage.saveWorkspace.mockReturnValueOnce(savedFirst.promise)
-    await user.click(scanButton())
+    await startScan(user)
 
     expect(auditRequests()).toEqual([['/api/projects/alpha/audit', expect.objectContaining({ method: 'POST', body: '{}' })]])
     expect(progress().getAttribute('aria-valuemax')).toBe('3')
@@ -133,7 +132,7 @@ describe('workspace vulnerability scans', () => {
     expect(within(criticalAlert).getByText('Charlie tools')).toBeTruthy()
     await user.click(within(criticalAlert).getByRole('button', { name: 'Dismiss alert' }))
 
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(progress().getAttribute('aria-valuenow')).toBe('3')
     expect(progressSection().getByText('Vulnerability scan complete')).toBeTruthy()
     expect(progressSection().getByText('3 scanned')).toBeTruthy()
@@ -151,7 +150,7 @@ describe('workspace vulnerability scans', () => {
     loadProjects([{ ...projects[0], audit: previousReport }, projects[1], projects[2]])
     const { user } = await renderConnected()
     storage.saveWorkspace.mockRejectedValueOnce(new Error('Quota exceeded'))
-    await user.click(scanButton())
+    await startScan(user)
     await complete('alpha', { error: 'The package registry is unavailable.' }, false)
     await waitFor(() => expect(auditRequests()).toHaveLength(2))
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
@@ -176,8 +175,8 @@ describe('workspace vulnerability scans', () => {
 
   it('locks conflicting actions, stops after the current audit, and prevents scans during preview capture', async () => {
     const { user } = await renderConnected()
-    await user.click(scanButton())
-    expect(scanButton().disabled).toBe(true)
+    await startScan(user)
+    expect(runChecksButton().disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Capture previews', exact: true }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: /^Synced/ }) as HTMLButtonElement).disabled).toBe(true)
     for (const button of screen.getAllByRole('button', { name: 'Change directory', exact: true })) {
@@ -198,15 +197,15 @@ describe('workspace vulnerability scans', () => {
     expect((progressSection().getByRole('button', { name: 'Stopping…' }) as HTMLButtonElement).disabled).toBe(true)
     await complete('alpha')
 
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(auditRequests()).toHaveLength(1)
     expect(progress().getAttribute('aria-valuenow')).toBe('1')
     expect(progressSection().getByText('Vulnerability scan stopped')).toBeTruthy()
     expect(storage.saveWorkspace).toHaveBeenCalledOnce()
     expect(badge('Alpha notebook', 'high')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Capture previews', exact: true }))
-    expect(scanButton().disabled).toBe(true)
-    await user.click(scanButton())
+    expect(runChecksButton().disabled).toBe(true)
+    await user.click(runChecksButton())
     expect(auditRequests()).toHaveLength(1)
   })
 
@@ -230,10 +229,10 @@ describe('workspace vulnerability scans', () => {
     expect(within(dialog).getByText('Example high advisory')).toBeTruthy()
     await user.click(within(dialog).getByRole('button', { name: 'Close dialog' }))
 
-    await user.click(scanButton())
+    await startScan(user)
     await user.click(progressSection().getByRole('button', { name: 'Stop after current' }))
     await complete('alpha', { audit: audit() })
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(screen.queryByRole('button', { name: /View audit details/ })).toBeNull()
     expect(storage.saveWorkspace).toHaveBeenLastCalledWith(expect.objectContaining({
       projects: [{ ...projects[0], audit: audit() }, { ...projects[1], audit: reports.bravo }, projects[2]],
@@ -244,7 +243,7 @@ describe('workspace vulnerability scans', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: 'View Alpha notebook' })
-    await user.click(scanButton())
+    await startScan(user)
     await complete('alpha')
     await waitFor(() => expect(auditRequests()).toHaveLength(2))
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/scan')).toBe(false)
@@ -260,7 +259,7 @@ describe('workspace vulnerability scans', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: 'View Alpha notebook' })
-    await user.click(scanButton())
+    await startScan(user)
     expect(screen.getByRole('dialog', { name: 'Bring your projects together.' })).toBeTruthy()
     expect(auditRequests()).toHaveLength(0)
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
@@ -273,8 +272,8 @@ describe('workspace vulnerability scans', () => {
     render(<App />)
     if (mode === 'demo') await screen.findByText('You’re looking at an example workspace.')
     else await screen.findByText('No repositories or package.json files were found in this directory.')
-    expect(scanButton().disabled).toBe(true)
-    await user.click(scanButton())
+    expect(runChecksButton().disabled).toBe(true)
+    await user.click(runChecksButton())
     expect(auditRequests()).toHaveLength(0)
   })
 })

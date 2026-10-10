@@ -29,7 +29,11 @@ let fetchMock: ReturnType<typeof vi.fn>
 let pending: Record<string, ReturnType<typeof deferred<Response>>>
 let savedWorkspace: Workspace
 const requests = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/outdated'))
-const scanButton = () => screen.getByRole('button', { name: 'Scan outdated packages', exact: true }) as HTMLButtonElement
+const runChecksButton = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Run checks', exact: true })
+async function startScan(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(runChecksButton())
+  await user.click(screen.getByRole('menuitem', { name: 'Scan outdated packages', exact: true }))
+}
 const section = () => within(screen.getByRole('region', { name: 'Workspace outdated-package scan' }))
 
 beforeEach(() => {
@@ -65,16 +69,16 @@ describe('outdated-package actions', () => {
     const user = await renderConnected()
     await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo')
     expect(screen.getAllByRole('article')).toHaveLength(1)
-    await user.click(scanButton())
+    await startScan(user)
     expect(requests().map(([url]) => url)).toEqual(['/api/projects/alpha/outdated'])
-    expect((screen.getByRole('button', { name: 'Scan vulnerabilities', exact: true }) as HTMLButtonElement).disabled).toBe(true)
+    expect(runChecksButton().disabled).toBe(true)
     await complete('alpha')
     await waitFor(() => expect(requests()).toHaveLength(2))
     expect(storage.saveWorkspace).toHaveBeenLastCalledWith({ ...workspace, projects: [{ ...projects[0], outdated: report }, projects[1], projects[2]] })
     await complete('bravo', { outdated: clean })
     await waitFor(() => expect(requests()).toHaveLength(3))
     await complete('charlie', { outdated: { ...report, score: 0.3, level: 'low', findings: [{ name: 'tiny', current: '1.0.0', latest: '1.0.3', change: 'patch', majorGap: 0, score: 0.3 }] } })
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(section().getByText('3 scanned')).toBeTruthy()
     expect(section().getByText('2 with outdated packages')).toBeTruthy()
     expect(section().getByText('10.3 total lag points')).toBeTruthy()
@@ -85,13 +89,13 @@ describe('outdated-package actions', () => {
   it('preserves previous reports after failures, keeps scanning, and stops after the current project', async () => {
     savedWorkspace = { ...workspace, projects: [{ ...projects[0], outdated: report }, projects[1], projects[2]] }
     const user = await renderConnected()
-    await user.click(scanButton())
+    await startScan(user)
     await complete('alpha', { error: 'Registry unavailable.' }, false)
     await waitFor(() => expect(requests()).toHaveLength(2))
     storage.saveWorkspace.mockRejectedValueOnce(new Error('Quota exceeded'))
     await user.click(section().getByRole('button', { name: 'Stop after current' }))
     await complete('bravo', { outdated: { ...clean, skipped: [{ name: 'local', reason: 'Workspace dependency' }] } })
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(requests()).toHaveLength(2)
     expect(section().getByText('Outdated-package scan stopped')).toBeTruthy()
     expect(section().getByText('1 failed')).toBeTruthy()
@@ -124,7 +128,7 @@ describe('outdated-package actions', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('button', { name: 'View Alpha' })
-    await user.click(scanButton())
+    await startScan(user)
     expect(screen.getByRole('dialog', { name: 'Bring your projects together.' })).toBeTruthy()
     expect(requests()).toHaveLength(0)
   })

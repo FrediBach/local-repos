@@ -167,29 +167,35 @@ describe('Lighthouse badge and tab', () => {
 })
 
 describe('Lighthouse workspace control', () => {
-  const toolbarProps = { projectCount: 2, busy: '', onResync: vi.fn(), scanAllOutdated: vi.fn(), scanAllVulnerabilities: vi.fn(), scanAllReactDoctor: vi.fn(), scanAllLighthouse: vi.fn(), captureAllPreviews: vi.fn() }
+  const toolbarProps = { projectCount: 2, busy: '', onResync: vi.fn(), scanAllRemoteActivity: vi.fn(), scanAllOutdated: vi.fn(), scanAllVulnerabilities: vi.fn(), scanAllReactDoctor: vi.fn(), scanAllLighthouse: vi.fn(), captureAllPreviews: vi.fn() }
   const backend = { ...project, id: 'api', scripts: { start: 'node api.js' } }
   const workspace = { rootName: 'Projects', syncedAt: report.scannedAt, mode: 'helper' as const, projects: [project, backend] }
 
   it('counts eligible frontends across the workspace and runs through the global callback', async () => {
     const user = userEvent.setup(), onScan = vi.fn()
     render(<WorkspaceToolbar {...toolbarProps} workspace={workspace} scanAllLighthouse={onScan} />)
-    const button = screen.getByRole('button', { name: 'Scan frontends with Lighthouse' })
+    await user.click(screen.getByRole('button', { name: 'Run checks' }))
+    const button = screen.getByRole('menuitem', { name: 'Scan frontends with Lighthouse' })
     expect(button.title).toContain('all 1 frontend project, including those hidden by filters')
     await user.click(button)
     expect(onScan).toHaveBeenCalledOnce()
   })
 
-  it('disables absent, ineligible and busy workspaces while explaining browser access', () => {
+  it('disables absent, ineligible and busy workspaces while explaining browser access', async () => {
+    const user = userEvent.setup()
     const { rerender } = render(<WorkspaceToolbar {...toolbarProps} />)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Scan frontends with Lighthouse' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Run checks' }).disabled).toBe(true)
     rerender(<WorkspaceToolbar {...toolbarProps} workspace={{ ...workspace, projects: [backend] }} />)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Scan frontends with Lighthouse' }).disabled).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Run checks' }))
+    expect(screen.getByRole('menuitem', { name: 'Scan frontends with Lighthouse' }).getAttribute('aria-disabled')).toBe('true')
+    await user.keyboard('{Escape}')
     rerender(<WorkspaceToolbar {...toolbarProps} workspace={workspace} busy="batch-lighthouse" />)
-    expect(screen.getByRole('button', { name: 'Scan frontends with Lighthouse' }).getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Run checks' }).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Run checks' }).getAttribute('aria-busy')).toBe('true')
     rerender(<WorkspaceToolbar {...toolbarProps} workspace={{ ...workspace, mode: 'browser' }} />)
-    const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Scan frontends with Lighthouse' })
-    expect(button.disabled).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Run checks' }))
+    const button = screen.getByRole('menuitem', { name: 'Scan frontends with Lighthouse' })
+    expect(button.getAttribute('aria-disabled')).not.toBe('true')
     expect(button.title).toBe('Connect the local helper to run Lighthouse')
   })
 })

@@ -30,7 +30,11 @@ let fetchMock: ReturnType<typeof vi.fn>
 let pending: Record<string, ReturnType<typeof deferred<Response>>>
 let savedWorkspace: Workspace
 const requests = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/lighthouse'))
-const scanButton = () => screen.getByRole('button', { name: 'Scan frontends with Lighthouse', exact: true }) as HTMLButtonElement
+const runChecksButton = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Run checks', exact: true })
+async function startScan(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(runChecksButton())
+  await user.click(screen.getByRole('menuitem', { name: 'Scan frontends with Lighthouse', exact: true }))
+}
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -65,15 +69,15 @@ describe('Lighthouse actions', () => {
   it('scans every frontend despite filters, skips React libraries, and saves reports sequentially', async () => {
     const user = await renderConnected()
     await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo')
-    await user.click(scanButton())
+    await startScan(user)
     expect(requests().map(([url]) => url)).toEqual(['/api/projects/alpha/lighthouse'])
-    expect((screen.getByRole('button', { name: 'Scan vulnerabilities', exact: true }) as HTMLButtonElement).disabled).toBe(true)
+    expect(runChecksButton().disabled).toBe(true)
     await complete('alpha')
     await waitFor(() => expect(requests()).toHaveLength(2))
     expect(requests()[1][0]).toBe('/api/projects/charlie/lighthouse')
     expect(storage.saveWorkspace).toHaveBeenLastCalledWith({ ...workspace, projects: [{ ...projects[0], lighthouse: report }, projects[1], projects[2]] })
     await complete('charlie', { lighthouse: { ...report, categories: report.categories.map(category => ({ ...category, score: 100 })), audits: [] } })
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(storage.saveWorkspace).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Lighthouse scan complete')).toBeTruthy()
   })
@@ -81,10 +85,10 @@ describe('Lighthouse actions', () => {
   it('retains the last report after failure and stops after the current project', async () => {
     savedWorkspace = { ...workspace, projects: [{ ...projects[0], lighthouse: report }, projects[1], projects[2]] }
     const user = await renderConnected()
-    await user.click(scanButton())
+    await startScan(user)
     await user.click(screen.getByRole('button', { name: 'Stop after current' }))
     await complete('alpha', { error: 'Lighthouse timed out.' }, false)
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(requests()).toHaveLength(1)
     expect(screen.getByText('Lighthouse timed out.')).toBeTruthy()
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
@@ -112,13 +116,14 @@ describe('Lighthouse actions', () => {
   it('offers the helper connection in browser mode and disables the global scan without frontend projects', async () => {
     savedWorkspace = { ...workspace, mode: 'browser' }
     const user = await renderConnected()
-    await user.click(scanButton())
+    await startScan(user)
     expect(screen.getByRole('dialog', { name: 'Bring your projects together.' })).toBeTruthy()
     expect(requests()).toHaveLength(0)
     cleanup()
     savedWorkspace = { ...workspace, projects: [projects[1]] }
     render(<App />)
     await screen.findByRole('button', { name: 'View Bravo' })
-    expect(scanButton().disabled).toBe(true)
+    await user.click(runChecksButton())
+    expect(screen.getByRole('menuitem', { name: 'Scan frontends with Lighthouse' }).getAttribute('aria-disabled')).toBe('true')
   })
 })

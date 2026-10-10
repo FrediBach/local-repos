@@ -1,11 +1,13 @@
-.project-filters { margin: -4px 0 24px; }
-.filter-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.filter-shortcut, .filter-expand { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted-foreground); font-size: .8125rem; }
+.project-filters { margin: 0 0 20px; }
+.filter-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.filter-shortcut, .filter-expand { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted-foreground); font-size: .8125rem; }
 .filter-shortcut:hover, .filter-expand:hover { background: var(--hover); color: var(--foreground); }
 .filter-shortcut[aria-pressed="true"], .filter-expand[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-.filter-expand { margin-left: auto; color: var(--foreground); }
+.filter-expand { margin-left: auto; border-color: var(--border); color: var(--foreground); padding-inline: 10px; }
 .filter-expand .is-open { transform: rotate(180deg); }
 .filter-count { font-variant-numeric: tabular-nums; font-size: .75rem; opacity: .85; }
+.filter-shortcuts .filter-count { min-width: 20px; padding: 0 5px; border-radius: 4px; background: var(--surface-muted); font-size: .6875rem; line-height: 20px; text-align: center; }
+.filter-shortcut[aria-pressed="true"] .filter-count, .tag-filter-trigger[data-active="true"] .filter-count { background: var(--accent-soft); color: var(--accent); opacity: 1; }
 .tag-filter-trigger[data-active="true"], .tag-filter-trigger[data-state="open"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .tag-filter-menu { min-width: 230px; max-width: min(340px, calc(100vw - 32px)); max-height: min(420px, var(--radix-dropdown-menu-content-available-height)); overflow-y: auto; }
 .tag-filter-heading { padding: 8px 10px; color: var(--muted-foreground); font-size: .75rem; }

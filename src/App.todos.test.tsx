@@ -198,9 +198,10 @@ describe('automatic workspace todos', () => {
     actionResponses['/api/projects/alpha/audit'] = { body: { audit: audit() } }
     actionResponses['/api/projects/bravo/audit'] = { body: { audit: audit('high') } }
     const { user } = await renderConnected()
-    const scanButton = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Scan vulnerabilities', exact: true })
-    await user.click(scanButton())
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    const runChecksButton = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Run checks', exact: true })
+    await user.click(runChecksButton())
+    await user.click(screen.getByRole('menuitem', { name: 'Scan vulnerabilities', exact: true }))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(screen.queryByRole('button', { name: 'Alpha: 1 todo. View todos' })).toBeNull()
     expect(todoBadge('Bravo', 1)).toBeTruthy()
 
@@ -209,13 +210,15 @@ describe('automatic workspace todos', () => {
     await screen.findByText('Up to date. 2 projects synced.')
     expect(todoBadge('Bravo', 1)).toBeTruthy()
     actionResponses['/api/projects/bravo/audit'] = { body: { error: 'Registry unavailable.' }, ok: false }
-    await user.click(scanButton())
+    await user.click(runChecksButton())
+    await user.click(screen.getByRole('menuitem', { name: 'Scan vulnerabilities', exact: true }))
     await screen.findByText(/Registry unavailable\./)
     expect(todoBadge('Bravo', 1)).toBeTruthy()
 
     actionResponses['/api/projects/bravo/audit'] = { body: { audit: audit() } }
-    await user.click(scanButton())
-    await waitFor(() => expect(scanButton().disabled).toBe(false))
+    await user.click(runChecksButton())
+    await user.click(screen.getByRole('menuitem', { name: 'Scan vulnerabilities', exact: true }))
+    await waitFor(() => expect(runChecksButton().disabled).toBe(false))
     expect(screen.queryByRole('button', { name: /\. View todos$/ })).toBeNull()
     await user.click(todosNav())
     expect(screen.queryByRole('listitem')).toBeNull()

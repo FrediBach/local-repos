@@ -141,16 +141,18 @@ export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, 
   return <div className="search-group command-search" ref={container} onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
   }}>
-    <select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => {
-      setSearchScope(event.target.value as 'all' | 'packages'); setSelection({}); setScopedQuery(''); setActive(0); setLimit(pageSize); setOpen(false)
-    }}><option value="all">Projects & actions</option><option value="packages">Package name & version</option></select>
-    <div className="search-box">
-      <Search size={17} aria-hidden="true" />
-      <input ref={searchRef} value={input} onChange={event => changeInput(event.target.value)} onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onKeyDown={onKeyDown}
-        placeholder={searchScope === 'packages' ? 'Find a package or version…' : selectedProject ? 'Find an action or script…' : selectedTemplate ? 'Find a project or script…' : 'Search projects, actions, scripts…'}
-        role="combobox" aria-label="Search projects" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-autocomplete="list" aria-haspopup="listbox"
-        aria-activedescendant={open && current ? `${id}-option-${activeIndex}` : undefined} aria-describedby={`${id}-hint`} autoComplete="off" spellCheck={false} />
-      {input ? <button aria-label="Clear search" onClick={() => { changeInput(''); searchRef.current?.focus() }}><X size={14} /></button> : <kbd aria-hidden="true">⌘ K</kbd>}
+    <div className="command-input-group">
+      <select className="search-scope" aria-label="Search scope" value={searchScope} onChange={event => {
+        setSearchScope(event.target.value as 'all' | 'packages'); setSelection({}); setScopedQuery(''); setActive(0); setLimit(pageSize); setOpen(false)
+      }}><option value="all">Projects & actions</option><option value="packages">Package name & version</option></select>
+      <div className="search-box">
+        <Search size={17} aria-hidden="true" />
+        <input ref={searchRef} value={input} onChange={event => changeInput(event.target.value)} onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onKeyDown={onKeyDown}
+          placeholder={searchScope === 'packages' ? 'Find a package or version…' : selectedProject ? 'Find an action or script…' : selectedTemplate ? 'Find a project or script…' : 'Search projects, actions, scripts…'}
+          role="combobox" aria-label="Search projects" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-autocomplete="list" aria-haspopup="listbox"
+          aria-activedescendant={open && current ? `${id}-option-${activeIndex}` : undefined} aria-describedby={`${id}-hint`} autoComplete="off" spellCheck={false} />
+        {input ? <button aria-label="Clear search" onClick={() => { changeInput(''); searchRef.current?.focus() }}><X size={14} /></button> : <kbd aria-hidden="true">⌘ K</kbd>}
+      </div>
     </div>
     {scoped && <div className="command-scope"><button type="button" onClick={back} aria-label="Back to all commands"><ArrowLeft size={14} /><span>{scopeLabel ?? 'All commands'}</span><X size={12} /></button><span>{selectedProject ? selectedProject.relativePath : selectedTemplate?.id === 'scripts' ? 'Choose a script and project' : 'Choose a project'}</span></div>}
     <span id={`${id}-hint`} className="sr-only">Search projects, actions, scripts, tags, technologies, or packages. Arrow keys browse suggestions. Enter selects. Tab completes a project or action. Escape dismisses. Backspace in an empty search goes back.</span>

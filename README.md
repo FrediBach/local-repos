@@ -49,6 +49,7 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 - Open a project for its README, package metadata, current branch, latest commit, and origin link.
 - Use each project’s **Actions** menu in grid or list view to rerun vulnerability, outdated-package, unused-package, React Doctor, Lighthouse, and disk-usage scans individually. Package, React, and frontend checks appear only for eligible projects. **Capture preview** offers **Automatic**, **Local project**, and **Project URL**, even when a preview already exists. You can also start or stop the project’s development server. Local actions require the helper and are disabled while another operation is busy; failed checks preserve previous successful reports and previews.
 - Use **Add tags** on a project, or **Edit tags** in its actions menu or details, to organize projects with labels such as **work**, **private**, and **contributing**. Choose a suggestion or type a custom tag, then **Save tags**. Tags appear in both grid and list views; click one to filter, or use the **Tags** menu to select several or find **Untagged** projects. Tags also appear in **All filters** and general search.
+- Use **Run checks** beside the directory path for workspace-wide issue/PR, outdated-package, vulnerability, React Doctor, and Lighthouse scans. **Capture previews** stays beside it. These actions include projects hidden by search or filters.
 - Use **Synced …** to rescan, or configure automatic rescans in **Settings → Watcher**. The default is manual only; reopening the app restores cached projects without rescanning. After a helper restart, opening project history or invoking a helper action reconnects the workspace on demand.
 - Browser folder permissions can expire; resync may request read permission again.
 - Use **How it works → Forget this directory** to remove the saved workspace. This does not delete project files.
@@ -185,7 +186,7 @@ Critical findings are compared with the last successful report, including the sa
 
 Package-change detection reads file metadata for package.json, npm/pnpm/Yarn/Bun lockfiles, pnpm-workspace.yaml, .npmrc, and .yarnrc.yml. A shared workspace input change also affects its member packages. It does not traverse node_modules or follow symlink targets. New projects outside the known project directories need a manual or periodic rescan. Enabling change watching after a helper restart first refreshes the workspace and runs the selected checks to establish a baseline.
 
-The watcher runs while the app is open and online, waits for existing app actions, and avoids overlapping runs in the same tab. Browser background throttling or computer sleep can delay scans; this is not a system background service. Changing to manual mode stops queued checks after the current request finishes. Changing or forgetting the connected directory clears its schedule. The workspace watcher status shows activity and failures; hover it for the next scheduled scan or change check. Use a single tab for automatic scans.
+The watcher runs while the app is open and online, waits for existing app actions, and avoids overlapping runs in the same tab. Browser background throttling or computer sleep can delay scans; this is not a system background service. Changing to manual mode stops queued checks after the current request finishes. Changing or forgetting the connected directory clears its schedule. The workspace watcher status beside the directory sync status shows activity and failures; hover it for the next scheduled scan or change check. Use a single tab for automatic scans.
 
 Browser directory connections support periodic metadata scans only. They never request folder permission automatically: use **Synced …** to restore expired permission. Vulnerabilities, outdated packages, disk usage, React Doctor, Lighthouse, and package-change watching require the local helper. Restart `npm run dev` after updating Local Repos to load the helper's watcher endpoint.
 
@@ -234,11 +235,11 @@ Run **Scan again** after changing ignore rules or to refresh expired suppression
 
 Disk measurements and successful package scan results are cached with timestamps, including across helper restarts. They describe the last measurement or scan: refresh disk usage or scan again after project changes. Failed scans keep the previous successful result visible.
 
-Use **Scan vulnerabilities**, to the left of **Capture previews**, to audit every project in the workspace, including projects hidden by filters. The local helper processes one project at a time and saves each successful result immediately. Progress shows the current project, completed scans, projects with vulnerabilities, and failures. A missing package manifest or supported lockfile is reported for that project and the queue continues. **Stop after current** finishes the active audit and then stops; keep the app open while scanning. Preview capture, resync, directory changes, and other project actions are disabled until the scan finishes or stops.
+Use **Run checks → Scan vulnerabilities** to audit every project in the workspace, including projects hidden by filters. The local helper processes one project at a time and saves each successful result immediately. Progress shows the current project, completed scans, projects with vulnerabilities, and failures. A missing package manifest or supported lockfile is reported for that project and the queue continues. **Stop after current** finishes the active audit and then stops; keep the app open while scanning. Preview capture, resync, directory changes, and other project actions are disabled until the scan finishes or stops.
 
 Projects with reported vulnerabilities show a shield icon and count in both grid and list views. The color represents the highest reported severity. Defaults are red for critical/high, orange for moderate, blue for low, and neutral for informational findings; change the mapping in **Settings → Badges & scores**. Hover for the severity breakdown and last scan time, or click to open **Vulnerabilities** and review the report. Clean and unscanned projects have no warning icon. A failed rescan keeps the previous result and its icon; a successful clean scan removes it.
 
-Use **Updates → Scan for outdated packages** for one project, or **Scan outdated packages** above the project list for the whole workspace, including projects hidden by filters. Scans run one project at a time, save results immediately, and support **Stop after current**. The global progress panel sums lag points from successful results in that scan; failed projects retain their previous saved reports and do not contribute to that run’s total. No dependencies are installed or updated.
+Use **Updates → Scan for outdated packages** for one project, or **Run checks → Scan outdated packages** above the project list for the whole workspace, including projects hidden by filters. Scans run one project at a time, save results immediately, and support **Stop after current**. The global progress panel sums lag points from successful results in that scan; failed projects retain their previous saved reports and do not contribute to that run’s total. No dependencies are installed or updated.
 
 Outdated scanning uses the detected, already installed package manager: [npm](https://docs.npmjs.com/cli/v11/commands/npm-outdated/), [pnpm](https://pnpm.io/cli/outdated), [Yarn Classic](https://classic.yarnpkg.com/lang/en/docs/cli/outdated/), Yarn 2.3+’s [resolved package info](https://yarnpkg.com/cli/info) and [registry info](https://yarnpkg.com/cli/npm/info), or [Bun 1.2+](https://bun.sh/docs/pm/cli/outdated). It checks direct dependencies in the selected project’s manifest, including development and optional packages, against the configured registry. A regular manifest and the manager’s lockfile are required; resolved versions must be available to the manager. npm also falls back to exact versions in `npm-shrinkwrap.json` or `package-lock.json` when dependencies have been removed (lockfile versions 1–3; up to 8 MiB). Peer-only requirements, local/workspace/catalog/Git/aliased dependencies, and uncomparable versions are listed as skipped. Workspace members use the shared lockfile and are scanned separately; transitive dependencies are outside this scan. Commands are limited to 60 seconds and 8 MiB of output, with a 120-second deadline for the whole project scan. Modern Yarn uses two info commands; npm verifies omitted packages with up to four registry lookups at a time so silent omissions cannot be mistaken for current packages. Missing tools, unsupported output and registry errors fail the scan. Windows currently requires Bun or running the helper in WSL.
 
@@ -267,7 +268,7 @@ Commands use [npm install](https://docs.npmjs.com/cli/install/), [pnpm add](http
 
 ### React Doctor
 
-Use **Scan React projects** above the project list to scan every React project in the connected workspace, including projects hidden by filters. Other projects are skipped. Open a React project's **React Doctor** tab to scan it individually. Global scans run sequentially, save each result immediately, and support **Stop after current**. These actions require the local helper; restart `npm run dev` after updating Local Repos to load the endpoint.
+Use **Run checks → Scan React projects** above the project list to scan every React project in the connected workspace, including projects hidden by filters. Other projects are skipped. Open a React project's **React Doctor** tab to scan it individually. Global scans run sequentially, save each result immediately, and support **Stop after current**. These actions require the local helper; restart `npm run dev` after updating Local Repos to load the endpoint.
 
 Scanned React projects display a score badge on their cards, including healthy scores. Click the badge to open the findings tab. The tab shows the score out of 100, errors and warnings, affected files, and the last scan time. Search findings or filter by severity and category; expand a rule to read guidance and file locations. Reports remain available after rescans, helper restarts, and browser reloads. Failed scans retain the previous saved report. Scan again after changing source or configuration; package update attempts clear reports for the affected repository.
 
@@ -277,7 +278,7 @@ Source analysis runs locally. React Doctor sends diagnostic details to its scori
 
 ### Lighthouse
 
-Use **Scan frontends with Lighthouse** above the project list to run [Lighthouse](https://github.com/GoogleChrome/lighthouse) on eligible frontend projects, including those hidden by filters. Scan one project from its **Actions** menu or **Lighthouse** tab. Workspace scans run sequentially, save each successful report, and offer **Stop after current**. Lighthouse requires the local helper and Playwright Chromium (`npx playwright install chromium`). Restart `npm run dev` after updating Local Repos.
+Use **Run checks → Scan frontends with Lighthouse** above the project list to run [Lighthouse](https://github.com/GoogleChrome/lighthouse) on eligible frontend projects, including those hidden by filters. Scan one project from its **Actions** menu or **Lighthouse** tab. Workspace scans run sequentially, save each successful report, and offer **Stop after current**. Lighthouse requires the local helper and Playwright Chromium (`npx playwright install chromium`). Restart `npm run dev` after updating Local Repos.
 
 Eligibility uses the selected `dev`, `start`, or `serve` script, in that order. Recognized commands include Vite, Next.js, Astro, Nuxt, Angular, Vue CLI, webpack dev servers, Parcel, and Create React App. Build/watch commands, backend servers, native apps, and React libraries without a frontend server are skipped. Custom launchers and compound scripts can opt in by setting `localRepos.previewUrl` in `package.json` to the frontend's HTTP(S) URL. A dependency on React or a package homepage alone does not qualify. The helper rechecks the manifest and verifies that the page serves successful HTML before auditing it.
 
@@ -407,7 +408,7 @@ The manifest includes a stable app ID, root scope, language, categories, theme c
 
 ## Public issues and pull requests
 
-Use **Check issues & PRs** above the project list to scan all known public
+Use **Run checks → Check issues & PRs** above the project list to scan all known public
 GitHub.com and GitLab.com repositories. Each project's action menu also has
 **Check issues and pull requests**. These checks require the local helper and
 use the project's Git origin; GitLab subgroups and SSH origins are supported.
@@ -574,9 +575,8 @@ work every three seconds and on focus. Development-server starts, stops, and
 unexpected exits also update that shared revision. After a helper restart, the browser
 re-registers its connected directory, including in manual watcher mode. Successful
 cached reports remain visible with unknown freshness, with a compact **Cached reports**
-note at the top right beside the directory sync status (below it on narrow screens).
-Rerun the relevant scans to refresh those
-reports; explicit helper invalidations
+disclosure beside the directory sync and watcher status (wrapping on narrow screens).
+Open it for guidance, then use **Run checks** to refresh the relevant reports; explicit helper invalidations
 remove stale reports from the browser cache. Browser-directory and hosted modes
 are unaffected.
 
