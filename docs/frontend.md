@@ -103,6 +103,14 @@ the full report notice. Search scope and query share an outlined control, follow
 by sort/view controls and quiet quick-filter buttons with count badges. Controls
 wrap on narrow screens without changing filtering or persisted preferences.
 
+[`project-filters.tsx`](../src/components/project-filters.tsx) renders the full
+filter panel with native single-select controls and Radix checkbox menus for
+tags, technologies, and package managers. Multi-select menus keep selection live,
+provide per-group clearing, and search lists longer than eight options without
+hiding selected values. Search is local to each menu and resets on reopening.
+Portaled menus keep long option lists out of the panel's scrolling layout;
+Escape dismisses the menu before the panel and restores focus to its trigger.
+
 ## Search and command discovery
 
 [`project-command-search.tsx`](../src/components/project-command-search.tsx)

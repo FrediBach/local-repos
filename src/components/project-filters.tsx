@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown, GitBranch, Package, Play, ShieldAlert, SlidersHorizontal, Star, Tag, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { filterOptionCounts, type FilterContext, type FilterGroup, type FilterOption, type FilterKey, type ProjectFilters as Filters } from '@/lib/project-filters'
@@ -31,8 +31,6 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
   const [open, setOpen] = useState(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const close = () => { setOpen(false); toggleRef.current?.focus() }
-  const [technologyQuery, setTechnologyQuery] = useState('')
-  const technologyTerm = (groups.find(group => group.key === 'stack')?.options.length ?? 0) > 8 ? technologyQuery.trim().toLowerCase() : ''
   const counts = useMemo(() => filterOptionCounts(projects, filters, groups, context), [projects, filters, groups, context])
   const active = groups.flatMap(group => group.options.filter(option => filters[group.key]?.includes(option.value)).map(option => ({ group, option })))
   const tagOptions = groups.find(group => group.key === 'tags')?.options ?? []
@@ -60,28 +58,74 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
     </div>
 
     <ActiveFilters active={active} query={query} packageSearch={packageSearch} matching={matching} total={total}
-      onClear={() => { setTechnologyQuery(''); onClear() }} onClearSearch={onClearSearch}
+      onClear={onClear} onClearSearch={onClearSearch}
       onRemove={(key, value) => set(key, filters[key]!.filter(current => current !== value))} />
 
     {open && <section className="filter-panel" id="project-filter-panel" aria-label="Project filters" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close() } }}>
-      <div className="filter-panel-heading"><div><h2>Refine your projects</h2><p>Combine filters to narrow your workspace. Counts include your search and other filters.</p></div><button type="button" aria-label="Close filters" onClick={close}><X size={18} /></button></div>
+      <div className="filter-panel-heading"><h2>Filters</h2><button type="button" aria-label="Close filters" onClick={close}><X size={18} /></button></div>
       <div className="filter-sections">
-        {(['Maintenance', 'Project', 'Metadata'] as const).map(section => <section className="filter-section" key={section} aria-label={`${section} filters`}>
+        {(['Maintenance', 'Project', 'Metadata'] as const).map(section => <section className="filter-section" key={section} aria-label={`${section} filter group`}>
           <h3>{section}</h3>
-          {groups.filter(group => group.section === section).map(group => group.multiple ? <fieldset key={group.key} className="filter-multiple">
-            <legend>{group.label}<span>Match any</span></legend>
-            {group.key === 'stack' && group.options.length > 8 && <input type="search" aria-label="Find a technology" placeholder="Find a technology…" value={technologyQuery} onChange={event => setTechnologyQuery(event.target.value)} />}
-            <div className="filter-choices">{group.options.filter(option => group.key !== 'stack' || !technologyTerm || option.label.toLowerCase().includes(technologyTerm) || filters.stack?.includes(option.value)).map(option => <label key={option.value} className="filter-choice"><input type="checkbox" checked={filters[group.key]?.includes(option.value) ?? false} onChange={() => toggle(group.key, option.value)} /><span>{option.label}</span><span className="filter-count" aria-hidden="true">{counts[group.key][option.value]}</span></label>)}</div>
-            {group.key === 'stack' && !group.options.some(option => option.label.toLowerCase().includes(technologyTerm)) && <p className="filter-note">No matching technologies.</p>}
-          </fieldset> : <label key={group.key} className="filter-field"><span>{group.label}</span><select value={filters[group.key]?.[0] ?? ''} onChange={event => set(group.key, event.target.value ? [event.target.value] : [])}>
-            <option value="">Any · {counts[group.key]['']}</option>
+          {groups.filter(group => group.section === section).map(group => group.multiple ? <FilterMultiSelect key={group.key} group={group} selected={filters[group.key] ?? []} counts={counts[group.key]} onToggle={value => toggle(group.key, value)} onClear={() => set(group.key, [])} /> : <label key={group.key} className="filter-field"><span>{group.label}</span><select data-active={!!filters[group.key]?.length} value={filters[group.key]?.[0] ?? ''} onChange={event => set(group.key, event.target.value ? [event.target.value] : [])}>
+            <option value="">Any</option>
             {group.options.map(option => <option key={option.value} value={option.value}>{option.label} · {counts[group.key][option.value]}</option>)}
           </select></label>)}
-          {section === 'Maintenance' && <p className="filter-note">Based on the last saved scans and measurements. Unscanned projects are separate from clean results. Sizes may be lower bounds.</p>}
-          {section === 'Project' && <p className="filter-note">Activity uses the project’s last update or commit date. Rescanning alone does not count as activity.</p>}
         </section>)}
       </div>
     </section>}
+  </div>
+}
+
+function FilterMultiSelect({ group, selected, counts, onToggle, onClear }: {
+  group: FilterGroup; selected: string[]; counts: Record<string, number>; onToggle: (value: string) => void; onClear: () => void
+}) {
+  const id = useId()
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const searchable = group.options.length > 8
+  const term = searchable ? query.trim().toLowerCase() : ''
+  const matches = group.options.filter(option => option.label.toLowerCase().includes(term))
+  const options = group.options.filter(option => matches.includes(option) || selected.includes(option.value))
+  const summary = group.options.filter(option => selected.includes(option.value)).map(option => option.label).join(', ') || 'Any'
+  const searchLabel = group.key === 'stack' ? 'Find a technology' : `Find ${group.label.toLowerCase()}`
+
+  return <div className="filter-field">
+    <span id={`${id}-label`}>{group.label}</span>
+    <DropdownMenu modal={false} open={open} onOpenChange={value => { setOpen(value); setQuery('') }}>
+      <DropdownMenuTrigger asChild><button type="button" className="filter-select" data-active={selected.length > 0} aria-labelledby={`${id}-label ${id}-value`} title={summary}>
+        <span id={`${id}-value`}>{summary}</span>{selected.length > 1 && <span className="filter-count" aria-hidden="true">{selected.length}</span>}<ChevronDown size={16} aria-hidden="true" />
+      </button></DropdownMenuTrigger>
+      <DropdownMenuContent className="filter-select-menu" align="start" aria-label={`Filter by ${group.label.toLowerCase()}`} aria-labelledby={undefined} onEscapeKeyDown={event => event.stopPropagation()} onKeyDownCapture={event => {
+        if (searchable && event.key === 'ArrowUp' && event.target === event.currentTarget.querySelector('[role="menuitemcheckbox"]')) {
+          event.preventDefault()
+          event.stopPropagation()
+          searchRef.current?.focus()
+        }
+      }}>
+        <div className="filter-select-heading">Match any</div>
+        {searchable && <input ref={searchRef} className="filter-select-search" type="search" aria-label={searchLabel} placeholder={`${searchLabel}…`} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+          if (event.key === 'Escape') return
+          event.stopPropagation()
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            const items = event.currentTarget.closest('[role="menu"]')?.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+            const item = event.key === 'ArrowDown' ? items?.[0] : items?.[items.length - 1]
+            item?.focus()
+          } else if (event.key === 'Tab') {
+            event.preventDefault()
+            setOpen(false)
+          }
+        }} />}
+        <div className="filter-select-options">
+          {options.map(option => <DropdownMenuCheckboxItem key={option.value} checked={selected.includes(option.value)} onSelect={event => event.preventDefault()} onCheckedChange={() => onToggle(option.value)}>
+            <span className="filter-option-name">{option.label}</span><span className="filter-count" aria-hidden="true">{counts[option.value]}</span>
+          </DropdownMenuCheckboxItem>)}
+          {!matches.length && <p className="filter-select-empty" role="status">{term ? 'No matches.' : 'No options.'}</p>}
+        </div>
+        <DropdownMenuItem className="filter-select-clear" disabled={!selected.length} onSelect={event => { event.preventDefault(); setQuery(''); onClear(); searchRef.current?.focus() }}><X size={14} />Clear {group.label.toLowerCase()}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   </div>
 }
 

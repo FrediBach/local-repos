@@ -128,6 +128,13 @@ Use the quick filters below search, or open **All filters**, to combine:
 
 Different filters narrow each other. Multiple tags, technologies, or package managers match **any** selected value within that group. Sidebar favorites, running servers, and technology shortcuts use the same filters and preserve your other selections and search. General search also includes paths, authors, licenses, package managers, Git origins, and parent workspace names; package-only search retains its name and version syntax.
 
+**All filters** uses compact dropdowns. Tags, technologies, and package managers
+stay open while you select multiple values and offer a per-group **Clear** action.
+Long lists include search; selected values remain available while searching.
+Selections appear in the closed control, and active controls are highlighted.
+**Escape** closes a dropdown first, then the filter panel, returning focus to its
+opener.
+
 Option counts reflect your search and the other filter groups, ignoring the current group so you can compare alternatives. Active filter chips stay visible when the panel is closed: remove one chip to broaden the results, or use **Clear filters** / **All projects** to reset filters and search. Filters apply equally to grid and list views and remain active while project metadata or stars change. Filter selections last for the current session.
 
 Sort by vulnerability severity (then count), package lag, project or node_modules size, starred projects, name, technology, or newest/oldest activity. Missing reports, measurements, and activity dates sort last. Maintenance filters use the last saved results; an unscanned audit is never clean, and an outdated scan with skipped packages is never labeled fully up to date. Git cleanliness and missing node_modules require explicit metadata. Activity uses the last project update or commit, never the scan time. Disk thresholds include partial measurements when their measured lower bound already exceeds the threshold.
