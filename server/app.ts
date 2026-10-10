@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { HelperApplication } from './application'
 import { mountMcp } from './mcp/http'
@@ -59,6 +60,13 @@ export function createApp(options: { allowedOrigins?: string[]; mcpPolicy?: McpP
       return application.scan(request.body?.path, onProgress)
     })
   })
+  app.post('/api/workspace-state', (request, response) => {
+    const parsed = z.strictObject({ rootId: z.string().regex(/^root_[a-f0-9]{20}$/), helperInstanceId: z.string().max(100).optional(), afterRevision: z.number().int().nonnegative().optional() }).safeParse(request.body)
+    if (!parsed.success) throw new HelperError('Invalid workspace state request.')
+    const state = application.workspaceState(parsed.data.rootId, parsed.data.helperInstanceId, parsed.data.afterRevision)
+    if (Buffer.byteLength(JSON.stringify(state)) > 32 * 1024 * 1024) throw new HelperError('Workspace state exceeds 32 MiB.', 413)
+    response.json(state)
+  })
   app.post('/api/package-changes', async (request, response) => {
     const entries = workspaces.get(request.body?.path)
     // After a helper restart the client must first register its workspace again.
@@ -93,20 +101,21 @@ export function createApp(options: { allowedOrigins?: string[]; mcpPolicy?: McpP
   })
   app.post('/api/projects/:id/start', async (request, response) => response.json({ dev: await runtime.start(request.params.id) }))
   app.post('/api/projects/:id/stop', async (request, response) => response.json({ dev: await runtime.stop(request.params.id) }))
-  app.post('/api/projects/:id/storage', async (request, response) => respondWithScan(request, response, async onProgress => ({ storage: await application.readReport(request.params.id, 'storage', () => runtime.storage(request.params.id, onProgress)) })))
-  app.post('/api/projects/:id/delete-node-modules', async (request, response) => response.json({ storage: await runtime.deleteNodeModules(request.params.id, request.body?.confirm) }))
-  app.post('/api/projects/:id/audit', async (request, response) => respondWithScan(request, response, async onProgress => ({ audit: await application.readReport(request.params.id, 'audit', () => runtime.audit(request.params.id, onProgress)) })))
+  app.post('/api/projects/:id/storage', async (request, response) => respondWithScan(request, response, async onProgress => ({ storage: await application.readReport(request.params.id, 'storage', () => runtime.storage(request.params.id, onProgress)), reportState: { storage: application.projectState(registry.lookup(request.params.id).project).reportState?.storage } })))
+  app.post('/api/projects/:id/delete-node-modules', async (request, response) => response.json({ storage: await runtime.deleteNodeModules(request.params.id, request.body?.confirm), reportState: application.projectState(registry.lookup(request.params.id).project).reportState }))
+  app.post('/api/projects/:id/audit', async (request, response) => respondWithScan(request, response, async onProgress => ({ audit: await application.readReport(request.params.id, 'audit', () => runtime.audit(request.params.id, onProgress)), reportState: { audit: application.projectState(registry.lookup(request.params.id).project).reportState?.audit } })))
   app.post('/api/projects/:id/update-packages', async (request, response) => response.json({ packageUpdate: await runtime.updatePackages(request.params.id, request.body?.level) }))
   app.post('/api/projects/:id/fix-vulnerability', async (request, response) => response.json({ packageUpdate: await runtime.fixVulnerability(request.params.id, request.body) }))
-  app.post('/api/projects/:id/outdated', async (request, response) => respondWithScan(request, response, async onProgress => ({ outdated: await application.readReport(request.params.id, 'outdated', () => runtime.outdated(request.params.id, onProgress)) })))
-  app.post('/api/projects/:id/unused', async (request, response) => respondWithScan(request, response, async onProgress => ({ unused: await application.readReport(request.params.id, 'unused', () => runtime.unused(request.params.id, onProgress)) })))
-  app.post('/api/projects/:id/react-doctor', async (request, response) => respondWithScan(request, response, async onProgress => ({ reactDoctor: await application.readReport(request.params.id, 'reactDoctor', () => runtime.reactDoctor(request.params.id, onProgress)) })))
-  app.post('/api/projects/:id/lighthouse', async (request, response) => respondWithScan(request, response, async onProgress => ({ lighthouse: await application.readReport(request.params.id, 'lighthouse', () => runtime.lighthouse(request.params.id, onProgress)) })))
+  app.post('/api/projects/:id/outdated', async (request, response) => respondWithScan(request, response, async onProgress => ({ outdated: await application.readReport(request.params.id, 'outdated', () => runtime.outdated(request.params.id, onProgress)), reportState: { outdated: application.projectState(registry.lookup(request.params.id).project).reportState?.outdated } })))
+  app.post('/api/projects/:id/unused', async (request, response) => respondWithScan(request, response, async onProgress => ({ unused: await application.readReport(request.params.id, 'unused', () => runtime.unused(request.params.id, onProgress)), reportState: { unused: application.projectState(registry.lookup(request.params.id).project).reportState?.unused } })))
+  app.post('/api/projects/:id/react-doctor', async (request, response) => respondWithScan(request, response, async onProgress => ({ reactDoctor: await application.readReport(request.params.id, 'reactDoctor', () => runtime.reactDoctor(request.params.id, onProgress)), reportState: { reactDoctor: application.projectState(registry.lookup(request.params.id).project).reportState?.reactDoctor } })))
+  app.post('/api/projects/:id/lighthouse', async (request, response) => respondWithScan(request, response, async onProgress => ({ lighthouse: await application.readReport(request.params.id, 'lighthouse', () => runtime.lighthouse(request.params.id, onProgress)), reportState: { lighthouse: application.projectState(registry.lookup(request.params.id).project).reportState?.lighthouse } })))
   app.post('/api/projects/:id/screenshot', async (request, response) => {
     const source = request.body?.source ?? 'auto'
     if (source !== 'auto' && source !== 'local' && source !== 'website') throw new HelperError('Choose automatic, local, or website preview capture.')
     await respondWithScan(request, response, async onProgress => {
       const screenshot = await runtime.screenshot(request.params.id, source, onProgress)
+      application.revision++
       return { screenshot, preview: registry.lookup(request.params.id).project.preview, dev: await runtime.status(request.params.id) }
     })
   })

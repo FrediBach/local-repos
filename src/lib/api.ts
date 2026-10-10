@@ -78,15 +78,12 @@ export async function api<T>(path: string, body?: unknown, retry = true, onProgr
     if (!(error instanceof HelperError)) throw error
     failure = error
   }
-  // Manual mode restores cached browsing without scanning on startup. Register
-  // lazily if a user opens history or invokes an action after a helper restart.
-  // Background status polling must never initiate this scan.
+  // Share restart registration with workspace reconciliation. Background process
+  // status reads alone must never initiate discovery.
   if (failure?.status === 404 && failure.message === 'Project not found. Sync its folder again.' && retry && root && path.startsWith('/projects/') && !path.endsWith('/status')) {
     if (helperWorkspacePath !== root) throw new Error('The connected directory changed. Try the action again.')
     onProgress?.({ phase: 'Reconnecting to the workspace', detail: 'Restoring the helper’s project registrations before retrying this scan.' })
-    if (!registration || registration.path !== root) registration = { path: root, promise: scanWithHelper(root, onProgress) }
-    const pending = registration
-    try { await pending.promise } finally { if (registration === pending) registration = undefined }
+    await registerHelperWorkspace(root, onProgress)
     if (helperWorkspacePath !== root) throw new Error('The connected directory changed. Try the action again.')
     return api<T>(path, body, false, onProgress)
   }
@@ -94,6 +91,11 @@ export async function api<T>(path: string, body?: unknown, retry = true, onProgr
   return data!
 }
 export const scanWithHelper = (path: string, onProgress?: ScanProgressReporter) => api<ScanResult>('/scan', { path }, true, onProgress)
+export async function registerHelperWorkspace(path: string, onProgress?: ScanProgressReporter) {
+  if (!registration || registration.path !== path) registration = { path, promise: scanWithHelper(path, onProgress) }
+  const pending = registration
+  try { return await pending.promise } finally { if (registration === pending) registration = undefined }
+}
 export const projectAction = <T = Partial<RepoProject>>(id: string, action: string, body: unknown = {}, onProgress?: ScanProgressReporter) => api<T>(`/projects/${encodeURIComponent(id)}/${action}`, body, true, onProgress)
 export const projectHistory = (id: string, query: GitHistoryQuery = {}) => projectAction<GitHistory>(id, 'history', query)
 export const projectDay = (id: string, query: GitDayQuery) => projectAction<GitDay>(id, 'daily-summary', query)

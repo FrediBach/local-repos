@@ -77,6 +77,61 @@ async function scan(client: Client, requestId = 'scan') {
 }
 
 describe('authenticated MCP read release', () => {
+  it('gates execution effects and shares fresh checks, progress, deduplication and report state with REST', async () => {
+    policy.clients[0].principal.capabilities.push('analysis', 'preview')
+    await project('analysis')
+    const client = await connect()
+    await scan(client)
+    const id = (await call(client, 'list_projects')).data.items[0].id
+    expect((await call(client, 'run_check', { projectId: id, check: 'audit', requestId: 'denied' })).error?.code).toBe('CAPABILITY_DISABLED')
+    expect((await call(client, 'capture_preview', { projectId: id, requestId: 'preview-denied' })).error?.code).toBe('CAPABILITY_DISABLED')
+    const storage = await call(client, 'run_check', { projectId: id, check: 'storage', requestId: 'storage' })
+    expect((await waitOperation(client, storage.data.operationId)).state).toBe('succeeded')
+    expect((await call(client, 'get_operation_result', { operationId: storage.data.operationId })).data.rows.items[0]).toMatchObject({ kind: 'check', check: 'storage', report: { availability: 'available' } })
+    policy.clients[0].principal.capabilities.push('network')
+    expect((await call(client, 'run_check', { projectId: id, check: 'unused', requestId: 'execution-denied' })).error?.code).toBe('CAPABILITY_DISABLED')
+    const report: PackageAudit = { manager: 'npm', scannedAt: new Date().toISOString(), counts: { info: 0, low: 0, moderate: 0, high: 0, critical: 0 }, findings: [] }
+    let finish!: (report: PackageAudit) => void
+    const audit = vi.spyOn(auditService, 'auditProject').mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const admitted = await call(client, 'run_check', { projectId: id, check: 'audit', requestId: 'audit' })
+    await vi.waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    const repeated = await call(client, 'run_check', { projectId: id, check: 'audit', requestId: 'audit' })
+    expect(repeated.data.operationId).toBe(admitted.data.operationId)
+    const stateUrl = url.replace('/mcp', '/api/workspace-state')
+    const state = await fetch(stateUrl, { method: 'POST', headers: { 'X-Local-Repos': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ rootId: rootId(root) }) }).then(response => response.json())
+    expect(state.activeOperations).toMatchObject([{ kind: 'check', projectIds: [id] }])
+    expect(JSON.stringify(state.activeOperations)).not.toContain('requestId')
+    const rest = fetch(url.replace('/mcp', `/api/projects/${id}/audit`), { method: 'POST', headers: { 'X-Local-Repos': '1' } }).then(response => response.json())
+    // Let the REST request attach to the pending shared runtime task.
+    await new Promise(resolve => setTimeout(resolve, 30))
+    finish(report)
+    expect((await rest).audit).toEqual(report)
+    expect((await waitOperation(client, admitted.data.operationId)).state).toBe('succeeded')
+    expect(audit).toHaveBeenCalledOnce()
+    audit.mockRejectedValue(new Error('Check failed'))
+    const failed = await call(client, 'run_check', { projectId: id, check: 'audit', requestId: 'failed' })
+    expect((await waitOperation(client, failed.data.operationId)).state).toBe('failed')
+    const snapshot = helper.application.workspaceState(rootId(root))
+    expect(snapshot.projects[0].audit).toEqual(report)
+    expect(snapshot.projects[0].reportState?.audit?.validity).toBe('available')
+    helper.application.index.invalidate(helper.registry.lookup(id).project, 'Dependencies changed')
+    const invalidated = helper.application.workspaceState(rootId(root))
+    expect(invalidated.projects[0].audit).toBeUndefined()
+    expect(invalidated.projects[0].reportState?.audit).toMatchObject({ validity: 'invalidated', reason: 'Dependencies changed' })
+    policy.clients[0].principal.capabilities.push('project-execution')
+    const capture = vi.spyOn(helper.runtime, 'screenshot').mockImplementation(async projectId => {
+      helper.registry.lookup(projectId).project.preview = { capturedAt: report.scannedAt, source: 'configured' }
+      return `/api/screenshots/${projectId}.png`
+    })
+    const preview = await call(client, 'capture_preview', { projectId: id, source: 'website', requestId: 'preview' })
+    expect((await waitOperation(client, preview.data.operationId)).state).toBe('succeeded')
+    expect(capture).toHaveBeenCalledWith(id, 'website', expect.any(Function))
+    expect((await call(client, 'get_operation_result', { operationId: preview.data.operationId })).data.rows.items[0]).toMatchObject({ kind: 'preview', source: 'configured', resource: `local-repos://v1/projects/${id}/preview` })
+    await scan(client, 'rescan')
+    expect(helper.application.workspaceState(rootId(root)).projects[0].reportState?.audit?.validity).toBe('invalidated')
+    expect((await fetch(stateUrl, { method: 'POST', headers: { 'X-Local-Repos': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ rootId: rootId(root), arbitrary: true }) })).status).toBe(400)
+  })
+
   it.each([true, false])('serves the official SDK client (modern=%s) with schemas, resources, operations and bounded context', async modern => {
     await project('alpha'); await project('beta')
     const client = await connect(modern)
@@ -172,6 +227,13 @@ describe('authenticated MCP read release', () => {
     await helper.application.scan(child)
     const entry = helper.registry.lookup(childId)
     expect(entry.workspaceDirectory).toBe(mono)
+    const parentId = helper.application.workspaces.get(root)!.find(entry => entry.directory === mono)!.project.id
+    let release!: () => void
+    const pending = new Promise<void>(resolve => { release = resolve })
+    helper.application.operations.admit('scope-fixture', 'work', 'check', {}, [parentId], async () => { await pending; return [] })
+    try {
+      expect(helper.application.workspaceState(rootId(child)).activeOperations).toMatchObject([{ projectIds: [childId] }])
+    } finally { release() }
     const nested = { ...policy.clients[0].principal, roots: [{ id: rootId(child), directory: child, name: 'child' }] }
     await expect(helper.application.index.checkedEntry(nested, childId, true)).rejects.toMatchObject({ code: 'ROOT_NOT_ALLOWED' })
     expect(helper.application.index.detail(nested, childId).relatedProjectIds).toEqual([childId])

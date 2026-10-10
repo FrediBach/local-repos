@@ -50,7 +50,7 @@ starting the helper separately.
 | [src/types.ts](../src/types.ts) | Shared project, workspace, scan, Git, preview, and maintenance contracts. |
 | [server/app.ts](../server/app.ts) | Express API construction, request checks, dispatch, and error responses. |
 | [server/application.ts](../server/application.ts), [server/project-index.ts](../server/project-index.ts), [server/operations.ts](../server/operations.ts) | Shared helper composition, current root membership, bounded projections, and ephemeral operations. |
-| [server/mcp](../server/mcp) | Optional authenticated loopback MCP read service, local policy, schemas, and stdio bridge. |
+| [server/mcp](../server/mcp) | Optional authenticated loopback MCP discovery, reads, and analysis; local policy, schemas, and stdio bridge. |
 | [server/scanner.ts](../server/scanner.ts) | Node filesystem discovery, Git metadata, and registered project identity. |
 | [server/runtime.ts](../server/runtime.ts) | Process lifecycle, previews, maintenance coordination, and application opening. |
 | [server](../server) feature modules | Git queries, package tools, storage, script validation, and preview rendering. |
@@ -153,3 +153,12 @@ MCP cannot access browser-owned IndexedDB or preferences. Browser reconciliation
 fresh MCP analysis, process control, and reviewed maintenance are future phases;
 see [the helper architecture](local-helper.md#optional-mcp-read-service) and
 [setup](../README.md#optional-mcp-access).
+
+
+The optional MCP adapter also admits explicitly authorized fresh checks and
+preview capture through `HelperApplication` and the shared runtime. Browser tabs
+consume a revisioned REST workspace snapshot (`/api/workspace-state`), with
+helper-lifetime report tombstones and public activity projections. The browser
+still owns persistence and preferences; synchronization never grants MCP access
+to IndexedDB. See [helper contracts](local-helper.md#optional-mcp-read-service)
+and [browser reconciliation](frontend.md#helper-workspace-reconciliation).

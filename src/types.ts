@@ -197,7 +197,33 @@ export interface LighthouseReport {
   warnings: string[]
 }
 
+export const reportKinds = ['storage', 'audit', 'outdated', 'unused', 'reactDoctor', 'lighthouse'] as const
+export type HelperReportKind = typeof reportKinds[number]
+export interface HelperReportState {
+  helperInstanceId: string
+  revision: number
+  validity: 'available' | 'missing' | 'invalidated' | 'unknown'
+  reason?: string
+}
+export interface HelperActivity {
+  operationId: string
+  kind: string
+  projectIds: string[]
+  progress?: ScanProgress
+}
+export interface WorkspaceState {
+  rootId: string
+  helperInstanceId: string
+  revision: number
+  resetRequired: boolean
+  registered: boolean
+  projects: RepoProject[]
+  activeOperations: HelperActivity[]
+  warnings: string[]
+}
+
 export interface RepoProject {
+  reportState?: Partial<Record<HelperReportKind, HelperReportState>>
   id: string
   name: string
   dirName: string

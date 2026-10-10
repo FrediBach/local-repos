@@ -1,6 +1,7 @@
 # MCP server plan
 
-Status: phases 0–1 implemented on 2026-10-10; phases 2–5 remain planned.
+Status: phases 0–1 and single-project phase 2 implemented on 2026-10-10.
+Optional phase 2 batches and phases 3–5 remain planned.
 This document preserves the design proposal below. For shipped configuration,
 contracts, limits, and verification status, see [README](../../README.md#optional-mcp-access)
 and [helper architecture](../local-helper.md#optional-mcp-read-service).
@@ -9,8 +10,9 @@ The initial release includes authenticated HTTP and a stdio bridge, read/discove
 Git tools, resources, bounded operation polling, and shared root/scope guards.
 Official SDK clients cover both transport modes and protocol revisions. External
 host application interoperability remains unverified; no universal OAuth support
-is claimed. Fresh analysis, browser reconciliation, process controls, mutations,
-prompts, and optional protocol extensions are not shipped.
+is claimed. Single-project checks, preview capture, and revisioned browser
+reconciliation are shipped with explicit effect capabilities. Process controls,
+mutations, prompts, and optional protocol extensions are not shipped.
 
 ## 1. Recommended direction
 
@@ -697,7 +699,8 @@ POST /api/workspace-state
      invalidations, activeOperations, warnings }
 ```
 
-This is proposed, not an existing endpoint. Keep normal REST host/origin/header
+The shipped endpoint uses per-project `reportState` tombstones rather than a
+separate `invalidations` array, and adds `rootId` and `registered`. Keep normal REST host/origin/header
 validation. A full authorized root snapshot is an acceptable initial
 implementation at the current 300-project scan limit; avoid a durable event-bus
 dependency. Missing fields and explicit invalidations have different meanings.

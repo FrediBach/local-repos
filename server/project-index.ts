@@ -90,13 +90,14 @@ export class ProjectIndex {
     this.reportState(project, kind).lastAttempt = { operationId, status, at: new Date().toISOString(), ...(status === 'failed' ? { errorCode: 'OPERATION_FAILED' } : {}) }
     this.application.revision++
   }
-  invalidate(project: RepoProject, reason: string) {
+  invalidate(project: RepoProject, reason: string, revision = ++this.application.revision) {
     this.invalidationCount += s.reportKind.options.length
     for (const kind of s.reportKind.options) {
       const state = this.reportState(project, kind)
       state.invalidation = { at: new Date().toISOString(), reason }
-      state.value = project[kind]
-      state.revision = ++this.application.revision
+      project[kind] = undefined
+      state.value = undefined
+      state.revision = revision
     }
   }
   reportSummary(project: RepoProject, kind: s.ReportKind): z.infer<typeof s.reportSummary> {
@@ -172,7 +173,7 @@ export class ProjectIndex {
   detail(principal: Principal, projectId: string, include: string[] = []) {
     const entry = this.entry(principal, projectId), p = entry.project
     const visible = new Set(this.entries(principal).map(entry => entry.project.id))
-    return clean({ ...this.summary(principal, entry), version: p.version, author: p.author, license: p.license, homepage: p.homepage, origin: !entry.gitDirectory || principal.roots.some(root => isWithin(root.directory, entry.gitDirectory!)) ? p.git?.origin : undefined, aiInstructionFiles: p.aiInstructionFiles ?? [], relatedProjectIds: this.application.registry.related(projectId).map(entry => entry.project.id).filter(id => visible.has(id)), capabilities: { analysis: false as const, development: false as const, mutation: false as const, disabledReason: 'Only metadata discovery and local Git inspection are enabled in this release.' }, resources: [`local-repos://v1/projects/${projectId}`, ...(principal.discloseContent ? [`local-repos://v1/projects/${projectId}/readme`] : []), ...s.reportKind.options.map(kind => `local-repos://v1/projects/${projectId}/reports/${kind}`), ...(p.preview && principal.discloseContent ? [`local-repos://v1/projects/${projectId}/preview`] : [])], ...(include.includes('dependencies') ? { dependencies: this.dependencies(principal, projectId, {}) } : {}), ...(include.includes('scripts') ? { scripts: this.scripts(principal, projectId, {}) } : {}), preview: p.preview ? { capturedAt: p.preview.capturedAt, source: p.preview.source, kind: p.preview.kind, url: p.preview.url } : undefined }, principal)
+    return clean({ ...this.summary(principal, entry), version: p.version, author: p.author, license: p.license, homepage: p.homepage, origin: !entry.gitDirectory || principal.roots.some(root => isWithin(root.directory, entry.gitDirectory!)) ? p.git?.origin : undefined, aiInstructionFiles: p.aiInstructionFiles ?? [], relatedProjectIds: this.application.registry.related(projectId).map(entry => entry.project.id).filter(id => visible.has(id)), capabilities: { analysis: principal.capabilities.includes('analysis'), development: false as const, mutation: false as const, disabledReason: 'Checks require analysis and their network/project-execution capabilities. Development and mutation are unavailable.' }, resources: [`local-repos://v1/projects/${projectId}`, ...(principal.discloseContent ? [`local-repos://v1/projects/${projectId}/readme`] : []), ...s.reportKind.options.map(kind => `local-repos://v1/projects/${projectId}/reports/${kind}`), ...(p.preview && principal.discloseContent ? [`local-repos://v1/projects/${projectId}/preview`] : [])], ...(include.includes('dependencies') ? { dependencies: this.dependencies(principal, projectId, {}) } : {}), ...(include.includes('scripts') ? { scripts: this.scripts(principal, projectId, {}) } : {}), preview: p.preview ? { capturedAt: p.preview.capturedAt, source: p.preview.source, kind: p.preview.kind, url: p.preview.url } : undefined }, principal)
   }
   readme(principal: Principal, projectId: string, query: { cursor?: string; maxBytes?: number }) {
     if (!principal.discloseContent) throw new McpFailure('CAPABILITY_DISABLED', 'README content disclosure is disabled.')

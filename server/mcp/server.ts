@@ -15,12 +15,12 @@ import * as s from './schemas'
 export function createReadServer(application: HelperApplication, principal: Principal, git: GitReads) {
   const server = new McpServer({ name: 'local-repos', version: '0.5.0' })
   const index = application.index
-  const info = () => ({ appVersion: '0.5.0', schemaVersion: 1 as const, protocols: ['2026-07-28', '2025-11-25'], helperInstanceId: application.helperInstanceId, platform: process.platform, capabilities: principal.capabilities, supportedChecks: [], limits: { pageSize: 100, responseBytes: 128 * 1024, readmeBytes: 32 * 1024, imageBytes: 2 * 1024 * 1024 }, stateLifetime: 'Helper lifetime; terminal operations expire after 30 minutes or bounded retention. No browser cache, preferences, tags, or restart resume.', browserDataAvailable: false as const, contentDisclosure: principal.discloseContent, pathDisclosure: principal.disclosePaths })
+  const info = () => ({ appVersion: '0.5.0', schemaVersion: 1 as const, protocols: ['2026-07-28', '2025-11-25'], helperInstanceId: application.helperInstanceId, platform: process.platform, capabilities: principal.capabilities, supportedChecks: principal.capabilities.includes('analysis') ? s.reportKind.options.filter(check => check === 'storage' || (principal.capabilities.includes('network') && (['audit', 'outdated'].includes(check) || principal.capabilities.includes('project-execution')))) : [], limits: { pageSize: 100, responseBytes: 128 * 1024, readmeBytes: 32 * 1024, imageBytes: 2 * 1024 * 1024 }, stateLifetime: 'Helper lifetime; terminal operations expire after 30 minutes or bounded retention. No browser cache, preferences, tags, or restart resume.', browserDataAvailable: false as const, contentDisclosure: principal.discloseContent, pathDisclosure: principal.disclosePaths })
   const base = () => ({ schemaVersion: 1 as const, helperInstanceId: application.helperInstanceId, revision: application.revision, observedAt: new Date().toISOString(), warnings: [] })
-  function tool<I extends z.ZodObject, O extends z.ZodType>(name: string, capability: Principal['capabilities'][number], input: I, output: O, description: string, run: (args: z.output<I>) => unknown | Promise<unknown>, accepted = false) {
+  function tool<I extends z.ZodObject, O extends z.ZodType>(name: string, capability: Principal['capabilities'][number], input: I, output: O, description: string, run: (args: z.output<I>) => unknown | Promise<unknown>, accepted = false, openWorld = false) {
     if (!principal.capabilities.includes(capability)) return
     const outputSchema = s.envelope(output)
-    server.registerTool(`local_repos_${name}`, { description, inputSchema: input as StandardSchemaWithJSON, outputSchema, annotations: { readOnlyHint: !accepted, destructiveHint: false, idempotentHint: !accepted, openWorldHint: false } }, async args => {
+    server.registerTool(`local_repos_${name}`, { description, inputSchema: input as StandardSchemaWithJSON, outputSchema, annotations: { readOnlyHint: !accepted, destructiveHint: false, idempotentHint: !accepted, openWorldHint: openWorld } }, async args => {
       let result: unknown
       try {
         requireCapability(principal, capability)
@@ -79,8 +79,40 @@ export function createReadServer(application: HelperApplication, principal: Prin
     const ids = index.entries(principal, args.rootId).map(entry => entry.project.id)
     return application.operations.admit(principal.id, requestId, 'daily-summary', query, ids, context => git.daily(principal, query, context))
   }, true)
+  function effects(check: s.ReportKind | 'preview') {
+    requireCapability(principal, check === 'preview' ? 'preview' : 'analysis')
+    if (check !== 'storage') requireCapability(principal, 'network')
+    if (!['storage', 'audit', 'outdated'].includes(check)) requireCapability(principal, 'project-execution')
+  }
+  async function authorizeWork(projectId: string, check: s.ReportKind | 'preview') {
+    effects(check)
+    await index.checkedEntry(principal, projectId, check !== 'storage')
+    if (check !== 'storage') {
+      for (const entry of application.registry.related(projectId)) await index.checkedEntry(principal, entry.project.id, true)
+    }
+    effects(check)
+    index.entry(principal, projectId)
+  }
+  tool('run_check', 'analysis', z.strictObject({ ...project, check: s.reportKind, requestId: s.requestId }), s.operation, 'Run one fresh check through the shared helper runtime. Storage is local; other checks require network permission. Unused, React Doctor and Lighthouse also require project-execution permission. Poll the operation; cancellation retains current work.', async args => {
+    await authorizeWork(args.projectId, args.check)
+    return application.operations.admit(principal.id, args.requestId, 'check', { projectId: args.projectId, check: args.check }, [args.projectId], async context => {
+      await authorizeWork(args.projectId, args.check)
+      await application.readReport<unknown>(args.projectId, args.check, () => application.runtime[args.check](args.projectId, context.progress), context.operationId)
+      return [{ kind: 'check', projectId: args.projectId, check: args.check, report: index.reportSummary(index.entry(principal, args.projectId).project, args.check), resource: `local-repos://v1/projects/${args.projectId}/reports/${args.check}` }]
+    })
+  }, true, true)
+  tool('capture_preview', 'preview', z.strictObject({ ...project, source: z.enum(['auto', 'local', 'website']).default('auto'), requestId: s.requestId }), s.operation, 'Capture a preview through the shared runtime. Requires network and project-execution permissions, and may start project code. Different concurrent sources conflict. Image disclosure requires read and discloseContent.', async args => {
+    await authorizeWork(args.projectId, 'preview')
+    return application.operations.admit(principal.id, args.requestId, 'preview', { projectId: args.projectId, source: args.source }, [args.projectId], async context => {
+      await authorizeWork(args.projectId, 'preview')
+      await application.runtime.screenshot(args.projectId, args.source, context.progress)
+      application.revision++
+      const preview = index.entry(principal, args.projectId).project.preview
+      return [{ kind: 'preview', projectId: args.projectId, capturedAt: preview?.capturedAt, source: preview?.source, ...(principal.discloseContent && principal.capabilities.includes('read') ? { resource: `local-repos://v1/projects/${args.projectId}/preview` } : {}) }]
+    })
+  }, true, true)
   // Polling is available to discovery-only and Git-only clients too.
-  const pollingCapability = principal.capabilities.includes('read') ? 'read' : principal.capabilities.includes('discovery') ? 'discovery' : 'git'
+  const pollingCapability = principal.capabilities.includes('read') ? 'read' : principal.capabilities.includes('discovery') ? 'discovery' : principal.capabilities.includes('git') ? 'git' : principal.capabilities.includes('analysis') ? 'analysis' : 'preview'
   tool('get_operation', pollingCapability, z.strictObject({ operationId: s.operationId }), s.operation.extend({ pollingIntervalMs: z.number() }), 'Read only your admitted operation status. Start polling after one second; back off to five seconds.', args => ({ ...application.operations.get(principal.id, args.operationId), pollingIntervalMs: 1000 }))
   tool('get_operation_result', pollingCapability, z.strictObject({ operationId: s.operationId, ...s.pageInput }), s.operationResult, 'Read bounded terminal operation result pages. Records expire; this never replays work.', args => {
     const operation = application.operations.get(principal.id, args.operationId)

@@ -27,7 +27,7 @@ export class Operations {
       terminal = terminal.filter(other => other !== entry)
     }
   }
-  admit(principal: string, requestId: string, kind: string, args: unknown, projectIds: string[], work: (context: { progress: (value: ScanProgress) => void; cancelled: () => boolean; invalidated: (count: number) => void }) => Promise<unknown[]>) {
+  admit(principal: string, requestId: string, kind: string, args: unknown, projectIds: string[], work: (context: { operationId: string; progress: (value: ScanProgress) => void; cancelled: () => boolean; invalidated: (count: number) => void }) => Promise<unknown[]>) {
     this.prune()
     const key = JSON.stringify([principal, requestId])
     const normalized = JSON.stringify([kind, args])
@@ -51,7 +51,7 @@ export class Operations {
       operation.state = 'running'
       operation.startedAt = new Date(this.now()).toISOString()
       try {
-        const result = await work({ progress: value => { operation.progress = value }, cancelled: () => operation.cancelRequested, invalidated: count => { invalidationCount += count } })
+        const result = await work({ operationId: operation.operationId, progress: value => { operation.progress = value }, cancelled: () => operation.cancelRequested, invalidated: count => { invalidationCount += count } })
         const bytes = Buffer.byteLength(JSON.stringify(result))
         if (bytes > 8 * 1024 * 1024) throw new McpFailure('RESOURCE_LIMIT', 'Operation results exceeded 8 MiB.')
         entry.result = result
@@ -92,6 +92,9 @@ export class Operations {
     const entry = this.entry(principal, id)
     if (!entry.operation.finishedAt) entry.operation.cancelRequested = true
     return { ...entry.operation }
+  }
+  active() {
+    return [...this.records.values()].filter(entry => !entry.operation.finishedAt).map(({ operation }) => ({ operationId: operation.operationId, kind: operation.kind, projectIds: [...operation.projectIds], progress: operation.progress }))
   }
   async shutdown() {
     this.closed = true

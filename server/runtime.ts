@@ -83,6 +83,7 @@ const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(reso
 export class ProjectRuntime {
   private readonly running = new Map<string, RunningServer>()
   private readonly starts = new Map<string, Promise<DevState>>()
+  private readonly captureSources = new Map<string, PreviewMode>()
   private readonly captures = new Map<string, ProgressTask<string>>()
   private readonly storageScans = new Map<string, ProgressTask<ProjectStorage>>()
   private readonly audits = new Map<string, ProgressTask<PackageAudit>>()
@@ -113,6 +114,10 @@ export class ProjectRuntime {
     return () => { this.metadataScan = false }
   }
 
+  activeWork() {
+    const groups = { preview: this.captures, storage: this.storageScans, audit: this.audits, outdated: this.outdatedScans, unused: this.unusedScans, reactDoctor: this.reactDoctorScans, lighthouse: this.lighthouseScans, start: this.starts, maintenance: this.maintenance }
+    return Object.entries(groups).flatMap(([kind, values]) => [...values.keys()].map(id => ({ operationId: `runtime:${kind}:${id}`, kind, projectIds: [id] })))
+  }
   scopeBusy(id: string): boolean {
     return this.registry.related(id).some(({ project: { id: key } }) =>
       this.running.has(key) || this.starts.has(key) || this.captures.has(key) || this.storageScans.has(key)
@@ -469,13 +474,18 @@ export class ProjectRuntime {
     this.available(id)
     if (this.registry.related(id).some(entry => this.lighthouseScans.has(entry.project.id))) throw new HelperError('Wait for Lighthouse to finish before capturing a preview in this workspace.', 409)
     const pending = this.captures.get(id)
-    if (pending) return followProgress(pending, onProgress)
+    if (pending) {
+      if (this.captureSources.get(id) !== source) throw new HelperError('A preview with a different source is already running.', 409)
+      return followProgress(pending, onProgress)
+    }
+    this.captureSources.set(id, source)
     const promise = createProgressTask(report => this.captureOnce(id, source, report))
     this.captures.set(id, promise)
     try {
       return await followProgress(promise, onProgress)
     } finally {
       this.captures.delete(id)
+      this.captureSources.delete(id)
     }
   }
 

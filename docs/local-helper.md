@@ -323,7 +323,9 @@ and admitted operations. The static app and Vite proxy do not expose `/mcp`.
 MCP is absent unless `LOCAL_REPOS_MCP_CONFIG` names a valid, owner-only local
 configuration file outside the configured roots. [`mcp/policy.ts`](../server/mcp/policy.ts)
 canonicalizes roots, validates unique clients and credentials, and loads immutable
-per-client `read`, `discovery`, and `git` grants. Restart to apply policy changes
+per-client grants. Defaults are `read`, `discovery`, and `git`; `analysis`,
+`preview`, `network`, and `project-execution` require explicit configuration.
+Restart to apply policy changes
 or revoke credentials. README and preview content disclosure defaults off;
 absolute path disclosure defaults off. These settings are disclosure choices,
 not a sandbox or a guarantee that repository text contains no secrets.
@@ -370,8 +372,8 @@ and terminal controls are removed on output, with best-effort secret protection.
 The read catalog includes server/root/project metadata, dependency/script pages,
 README chunks, report summaries/rows, actionable findings, Git history/day/push
 reads, and operation polling/cancellation. Resources expose matching metadata,
-reports, READMEs, previews, and authorized operation status. There are no analysis,
-process-control, desktop, script-launch, or dependency mutation MCP tools.
+reports, READMEs, previews, and authorized operation status. Optional `run_check` and `capture_preview` tools use the shared runtime. There
+are no process-control, desktop, script-launch, or dependency mutation MCP tools.
 
 Report snapshots belong to the current helper. Reads distinguish missing,
 unsupported, invalidated, and available reports; null scores, skipped declarations,
@@ -393,10 +395,25 @@ completed work is still recorded as successful. Disconnecting never cancels an
 admitted job. Terminal diagnostics log only operation ID, kind, project IDs,
 duration, outcome, and invalidation count.
 
-Browser reconciliation and fresh MCP analysis remain later phases. The browser
-continues owning its durable cache and does not consume MCP invalidations or
-operation progress. REST scan responses now add optional `rootId`,
-`helperInstanceId`, and `revision`; existing consumers may ignore these fields.
+`POST /api/workspace-state` accepts strict `{ rootId, helperInstanceId?,
+afterRevision? }` input under the normal REST security checks. It returns a full
+root snapshot capped at 32 MiB, boot ID, revision, reset/registration flags,
+warnings, and public active-operation projections without client credentials or
+request IDs. Project `reportState` entries distinguish missing data from explicit
+invalidations and carry boot/revision identities. Tombstones survive operation
+expiry; package maintenance invalidates all related reports at one revision,
+including failed attempts. Fresh successes supersede tombstones. REST reports and
+metadata scans carry these markers too.
+
+Checks require `analysis`; all except storage also require `network`. Unused,
+React Doctor, and Lighthouse additionally require `project-execution`. Preview
+capture requires `preview`, `network`, and `project-execution` for all sources.
+Defaults remain read/discovery/Git only. These grants acknowledge effects rather
+than sandboxing repository code. Admission and execution both check capability
+and effective workspace scope, including registered related packages. Checks
+reuse runtime task deduplication and progress. Preview deduplication requires an
+identical source. Operations return compact summaries and resource links; report
+contents retain existing pagination and limits. Optional MCP batches are deferred.
 The protocol tests exercise official SDK HTTP and stdio clients under both
 2026-07-28 and 2025-11-25. External host application interoperability and OAuth
 flows have not been verified or advertised.

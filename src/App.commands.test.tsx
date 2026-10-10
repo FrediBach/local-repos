@@ -154,7 +154,8 @@ describe('smart project search', () => {
       await user.click(search)
       await user.click(suggestion('Alpha'))
     }
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/projects/'))).toHaveLength(0)
+    // Scheduled local Git reads are independent of these UI interactions.
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/projects/') && !String(url).endsWith('/push-status'))).toHaveLength(0)
   })
 
   it('supports keyboard browsing, completion, backtracking, and dismissal without launching on Tab', async () => {
@@ -232,7 +233,8 @@ describe('smart project search', () => {
     const details = within(screen.getByRole('dialog', { name: 'Alpha' }))
     expect(details.getByRole('tab', { name: tab }).getAttribute('aria-selected')).toBe('true')
     expect(details.getByRole('button', { name: control })).toBeTruthy()
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/projects/'))).toHaveLength(0)
+    // Scheduled local Git reads are independent of these UI interactions.
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/projects/') && !String(url).endsWith('/push-status'))).toHaveLength(0)
     await user.keyboard('{Escape}')
     expect(document.activeElement).toBe(search)
   })

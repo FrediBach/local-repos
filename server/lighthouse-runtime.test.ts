@@ -56,7 +56,7 @@ describe('Lighthouse helper integration', () => {
     expect((await fetch(`${address}${endpoint}`, { method: 'POST' })).status).toBe(403)
     const response = await post(endpoint, { url: 'file:///tmp/ignored', command: 'ignored' })
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ lighthouse: report })
+    expect(await response.json()).toMatchObject({ lighthouse: report, reportState: { lighthouse: { validity: 'available' } } })
     expect(lighthouse.validateLighthousePage).toHaveBeenCalledWith(browser, url)
     expect(lighthouse.lighthouseProject).toHaveBeenCalledWith(url, expect.any(Number), expect.any(AbortSignal), undefined, expect.any(Function))
     expect(browser.close).toHaveBeenCalledOnce()

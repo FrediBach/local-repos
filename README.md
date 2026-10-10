@@ -409,8 +409,9 @@ The manifest includes a stable app ID, root scope, language, categories, theme c
 
 The local helper can expose project discovery, bounded project context, cached
 reports, and local Git history to MCP clients without opening the browser UI.
-MCP is **disabled by default**. This first release cannot run checks, start
-servers, launch scripts, or change dependencies. Reports exist only if this helper
+MCP is **disabled by default**. Optional fresh checks and preview capture require
+explicit capabilities. There are no server-control, script-launch, or dependency
+mutation tools. Reports exist only if this helper
 has them; MCP cannot read your browser cache, favorites, tags, or settings.
 
 Create a JSON configuration outside all directories you intend to scan, for
@@ -475,8 +476,8 @@ summaries accept explicit UTC start/end instants for a 22–26 hour calendar day
 Git inspection never fetches, commits, or pushes.
 
 Pages default to 25 rows, with a maximum of 100 and additional byte limits.
-Cursors expire when their snapshot changes. A scan or daily summary has one active
-operation per client, at most 100 admitted work items across the helper, and
+Cursors expire when their snapshot changes. Each client has one active
+operation, at most 100 admitted work items across the helper, and
 bounded terminal-result retention (30 minutes, 200 records, 32 MiB). Daily roots
 with more than 100 projects require a smaller configured scan root. Reusing a
 request ID with identical arguments returns the admitted operation; changed
@@ -486,8 +487,34 @@ loses operations, registrations, and reports. Rescan explicitly after restart.
 The official SDK integration tests cover HTTP and stdio with protocol revisions
 2026-07-28 and 2025-11-25. External host applications have not yet been verified;
 HTTP clients must support configured bearer headers, and OAuth discovery is not
-implemented. Browser reconciliation and fresh MCP analysis are deferred. See the
+implemented. Single-project checks, preview capture, and browser reconciliation
+are available; optional MCP batches remain deferred. See the
 [helper architecture](docs/local-helper.md#optional-mcp-read-service) for details.
+
+To enable fresh checks for a client, add `analysis` to its `capabilities` array.
+`storage` needs only `analysis`; `audit` and `outdated` also need `network`.
+`unused`, `reactDoctor`, and `lighthouse` additionally need `project-execution`:
+these tools can execute repository configuration or project code. Preview capture
+requires `preview`, `network`, and `project-execution`, for every source mode.
+These grants permit effects; they do not sandbox project code or restrict its
+network access. Keep `read` to retrieve report resources, and `discloseContent`
+to retrieve preview images. For example, a client with
+`["read", "discovery", "analysis", "network"]` can run storage, audit, and outdated
+checks, but cannot execute project configuration or capture previews through MCP.
+
+`local_repos_run_check` accepts `projectId`, `check`, and a unique `requestId`.
+`local_repos_capture_preview` accepts `projectId`, `source` (`auto`, `local`, or
+`website`), and `requestId`. Poll the returned operation, then read its result;
+checks return dated report summaries and report resource URIs. Cancellation does
+not abort shared work already running. Simultaneous preview requests for different
+sources return a busy error.
+
+Visible helper-connected browser tabs reconcile reports and externally active
+work every three seconds and on focus. After a helper restart, the browser
+re-registers its connected directory, including in manual watcher mode. Successful
+cached reports remain visible with unknown freshness; explicit helper invalidations
+remove stale reports from the browser cache. Browser-directory and hosted modes
+are unaffected.
 
 ## Architecture
 

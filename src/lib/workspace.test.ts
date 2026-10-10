@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { preservePreviews } from './workspace'
+import { preservePreviews, protectReportRevisions } from './workspace'
 import type { LighthouseReport, RepoProject, Workspace } from '../types'
 
 const cachedPng = 'data:image/png;base64,aGVsbG8='
@@ -94,5 +94,41 @@ describe('captured preview persistence', () => {
     expect(preservePreviews(next).projects[0].screenshot).toBe(fresh)
     const previous = workspace([project('one', '/api/screenshots/expired.png')])
     expect(preservePreviews(next, previous).projects[0].screenshot).toBe(fresh)
+  })
+})
+
+
+describe('helper report reconciliation', () => {
+  const report = { scannedAt: '2026-10-09T10:00:00Z', version: '0.9.17', score: 82, label: 'Great', findings: [] }
+  const state = (revision: number, validity: 'available' | 'invalidated' | 'missing', helperInstanceId = 'boot_a') => ({ helperInstanceId, revision, validity })
+  it('keeps tombstones through late scans and accepts only a newer successful report', () => {
+    const saved = workspace([{ ...project('one'), reactDoctor: report, reportState: { reactDoctor: state(1, 'available') } }])
+    const invalidated = preservePreviews(workspace([{ ...project('one'), reportState: { reactDoctor: state(2, 'invalidated') } }]), saved)
+    expect(invalidated.projects[0].reactDoctor).toBeUndefined()
+    const late = preservePreviews(saved, invalidated)
+    expect(late.projects[0].reactDoctor).toBeUndefined()
+    expect(late.projects[0].reportState?.reactDoctor?.revision).toBe(2)
+    const staleWrite = protectReportRevisions({ ...saved, helperInstanceId: 'boot_a', revision: 1 }, { ...invalidated, helperInstanceId: 'boot_a', revision: 2 })
+    expect(staleWrite.projects[0].reactDoctor).toBeUndefined()
+    expect(staleWrite.revision).toBe(2)
+    const invalidatingWrite = protectReportRevisions({ ...saved, helperInstanceId: 'boot_a', projects: [{ ...saved.projects[0], reportState: { reactDoctor: state(2, 'invalidated') } }] }, { ...saved, helperInstanceId: 'boot_a' })
+    expect(invalidatingWrite.projects[0].reactDoctor).toBeUndefined()
+    expect(preservePreviews(workspace([project('one')]), late).projects[0].reactDoctor).toBeUndefined()
+    const fresh = preservePreviews(workspace([{ ...project('one'), reactDoctor: report, reportState: { reactDoctor: state(3, 'available') } }]), late)
+    expect(fresh.projects[0].reactDoctor).toEqual(report)
+  })
+  it('retains successful snapshots with unknown freshness after a restart', () => {
+    const saved = workspace([{ ...project('one'), reactDoctor: report, reportState: { reactDoctor: state(100, 'available') } }])
+    const restored = preservePreviews(workspace([{ ...project('one'), reportState: { reactDoctor: state(0, 'missing', 'boot_b') } }]), saved)
+    expect(restored.projects[0].reactDoctor).toEqual(report)
+    expect(restored.projects[0].reportState?.reactDoctor).toMatchObject({ helperInstanceId: 'boot_b', validity: 'unknown' })
+    const fresh = { ...report, score: 99 }
+    const afterLazyRegistration = protectReportRevisions({ ...saved, helperInstanceId: 'boot_a', projects: [{ ...saved.projects[0], reactDoctor: fresh, reportState: { reactDoctor: state(1, 'available', 'boot_b') } }] }, { ...saved, helperInstanceId: 'boot_a' })
+    expect(afterLazyRegistration.projects[0].reactDoctor).toEqual(fresh)
+  })
+  it('does not replace a new external preview with an older cached image', () => {
+    const old = workspace([{ ...project('one', cachedPng), preview: { source: 'local', capturedAt: '2026-10-01' } }])
+    const next = workspace([{ ...project('one', '/api/screenshots/new.png'), preview: { source: 'local', capturedAt: '2026-10-02' } }])
+    expect(preservePreviews(next, old).projects[0].screenshot).toBe('/api/screenshots/new.png')
   })
 })

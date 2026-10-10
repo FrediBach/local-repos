@@ -92,7 +92,7 @@ describe('request-scoped scan progress', () => {
       if (part.done) break
       remaining += new TextDecoder().decode(part.value)
     }
-    expect(JSON.parse(remaining.trim())).toEqual({ type: 'result', result: { audit: report } })
+    expect(JSON.parse(remaining.trim())).toMatchObject({ type: 'result', result: { audit: report, reportState: { audit: { validity: 'available' } } } })
     expect(helper.registry.lookup(project.id).project.audit).toEqual(report)
   })
 
@@ -429,6 +429,8 @@ describe('project storage and package actions', () => {
     await expect(helper.runtime.fixVulnerability(admin.id, { name: 'alpha', title: 'Advisory' })).rejects.toMatchObject({ status: 409 })
     finish(updateResult)
     expect(await updating).toEqual(updateResult)
+    const revisions = helper.registry.related(web.id).flatMap(entry => Object.values(helper.application.projectState(entry.project).reportState!).map(state => state.revision))
+    expect(new Set(revisions).size).toBe(1)
     expect(helper.registry.lookup(web.id).project.packageUpdate).toEqual(updateResult)
     update.mockResolvedValueOnce(updateResult)
     expect((await post(`/api/projects/${admin.id}/update-packages`, { level: 'minor' })).status).toBe(200)
@@ -447,8 +449,12 @@ describe('project storage and package actions', () => {
     expect(entry.project.audit).toBeUndefined()
     expect(entry.project.unused).toBeUndefined()
     expect(entry.project.reactDoctor).toBeUndefined()
+    const markers = Object.values(helper.application.projectState(entry.project).reportState!)
+    expect(markers.every(state => state.validity === 'invalidated')).toBe(true)
+    expect(new Set(markers.map(state => state.revision)).size).toBe(1)
     vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
     expect(await helper.runtime.outdated(project.id)).toEqual(outdatedResult)
+    expect(helper.application.projectState(entry.project).reportState?.outdated?.validity).toBe('available')
   })
 
   const auditResult: PackageAudit = {
@@ -472,7 +478,7 @@ describe('project storage and package actions', () => {
     expect((await post(endpoint, {}, { Origin: 'https://untrusted.example' })).status).toBe(403)
     const response = await post(endpoint)
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ reactDoctor: reactDoctorResult })
+    expect(await response.json()).toMatchObject({ reactDoctor: reactDoctorResult, reportState: { reactDoctor: { validity: 'available' } } })
     expect(scan).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect((await (await post('/api/scan', { path: directory })).json()).projects[0].reactDoctor).toEqual(reactDoctorResult)
     scan.mockRejectedValueOnce(new Error('Configuration failed'))
@@ -528,7 +534,7 @@ describe('project storage and package actions', () => {
     expect((await post(endpoint, {}, { Origin: 'https://untrusted.example' })).status).toBe(403)
     const response = await post(endpoint)
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ unused: unusedResult })
+    expect(await response.json()).toMatchObject({ unused: unusedResult, reportState: { unused: { validity: 'available' } } })
     expect(unused).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect((await (await post('/api/scan', { path: directory })).json()).projects[0].unused).toEqual(unusedResult)
     unused.mockRejectedValueOnce(new Error('Configuration failed'))
@@ -597,7 +603,7 @@ describe('project storage and package actions', () => {
     const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
     const response = await post(`/api/projects/${project.id}/audit`)
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ audit: auditResult })
+    expect(await response.json()).toMatchObject({ audit: auditResult, reportState: { audit: { validity: 'available' } } })
     expect(audit).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect(helper.registry.lookup(project.id).project.audit).toEqual(auditResult)
   })
@@ -607,7 +613,7 @@ describe('project storage and package actions', () => {
     const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
     const response = await post(`/api/projects/${project.id}/outdated`)
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ outdated: outdatedResult })
+    expect(await response.json()).toMatchObject({ outdated: outdatedResult, reportState: { outdated: { validity: 'available' } } })
     expect(outdated).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect(helper.registry.lookup(project.id).project.outdated).toEqual(outdatedResult)
     const rescan = await (await post('/api/scan', { path: directory })).json()
@@ -657,6 +663,21 @@ describe('project storage and package actions', () => {
     rejectRemoval(new Error('Fixture deletion failure'))
     expect(await deletion).toMatchObject({ message: 'Fixture deletion failure' })
     expect(await helper.runtime.storage(project.id)).toMatchObject({ hasNodeModules: false })
+  })
+
+  it('shares identical preview sources but rejects a conflicting source before filesystem work', async () => {
+    const project = await createProject()
+    let reject!: (error: Error) => void
+    const get = vi.spyOn(helper.registry, 'get').mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+    const first = helper.runtime.screenshot(project.id, 'local').catch(error => error)
+    const same = helper.runtime.screenshot(project.id, 'local').catch(error => error)
+    await expect(helper.runtime.screenshot(project.id, 'website')).rejects.toMatchObject({ status: 409 })
+    expect(get).toHaveBeenCalledOnce()
+    reject(new Error('Fixture filesystem unavailable'))
+    expect(await first).toMatchObject({ message: 'Fixture filesystem unavailable' })
+    expect(await same).toMatchObject({ message: 'Fixture filesystem unavailable' })
+    get.mockRejectedValueOnce(new Error('New request reached the filesystem'))
+    await expect(helper.runtime.screenshot(project.id, 'website')).rejects.toThrow('New request reached the filesystem')
   })
 
   it('refuses cleanup during pending starts and captures before either acquires a server', async () => {

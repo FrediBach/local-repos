@@ -1,3 +1,4 @@
+import { useHelperState } from '@/hooks/use-helper-state'
 import { useCommitActivity } from '@/hooks/use-commit-activity'
 import { WorkspaceTopbar } from '@/components/workspace-topbar'
 import { ProjectResults } from '@/components/project-results'
@@ -44,7 +45,7 @@ import { api, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/li
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveConfigPreferences, saveFavorites, saveProjectTags, saveWorkspace } from '@/lib/storage'
-import { preservePreviews } from '@/lib/workspace'
+import { preservePreviews, protectReportRevisions } from '@/lib/workspace'
 import { isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, RepoProject, Workspace } from '@/types'
 
@@ -76,7 +77,7 @@ function WorkspaceApp() {
   const [todoProjectId, setTodoProjectId] = useState<string>()
   const [path, setPath] = useState('')
   const [helper, setHelper] = useState(false)
-  const [busy, setBusy] = useState('')
+  const [localBusy, setBusy] = useState('')
   const [connectError, setConnectError] = useState('')
   const [notice, setNotice] = useState<{ text: string; error?: boolean }>()
   const [criticalAlerts, setCriticalAlerts] = useState<CriticalVulnerabilityAlert[]>([])
@@ -89,6 +90,10 @@ function WorkspaceApp() {
   const settingsTriggerRef = useRef<HTMLButtonElement>(null)
   const projectOpener = useRef<HTMLElement | null>(null)
   const workspaceVersion = useRef(0)
+  const workspaceRef = useRef(workspace)
+  workspaceRef.current = workspace
+  const helperState = useHelperState({ workspace, localBusy, workspaceVersion, persist })
+  const busy = localBusy || (helperState.operations.length ? 'external' : '')
   const favoritesVersion = useRef(0)
   const metadataProgress = useScanProgress()
   const { action, packageBusy, runAutomaticScan, scanProgress, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews } = useWorkspaceActions({
@@ -181,6 +186,8 @@ function WorkspaceApp() {
   }, [workspace?.mode, workspace?.projects, running, busy, settings.statusPollSeconds])
 
   async function persist(next: Workspace, reportError = true, refreshActivity = false) {
+    next = protectReportRevisions(next, workspaceRef.current)
+    workspaceRef.current = next
     setHelperWorkspacePath(next.mode === 'helper' ? next.rootPath : undefined)
     setWorkspace(next)
     setWorkspaceStatus('ready')
@@ -345,6 +352,9 @@ function WorkspaceApp() {
         connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
+        {helperState.operations.length > 0 && <p role="status">Helper work: {helperState.operations.map(operation => operation.progress?.phase ?? operation.kind).join(', ')}</p>}
+        {helperState.error && <p role="status">{helperState.error}</p>}
+        {workspace?.projects.some(project => Object.values(project.reportState ?? {}).some(state => state?.validity === 'unknown')) && <p role="status">Some dated reports are cached snapshots whose freshness is unknown after reconnecting.</p>}
         {activeScanProgress && <ScanProgressPanel progress={activeScanProgress} />}
         <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
           onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />

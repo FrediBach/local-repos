@@ -1,4 +1,4 @@
-import type { RepoProject, Workspace } from '@/types'
+import { reportKinds, type RepoProject, type Workspace } from '@/types'
 
 /** Older scans only grouped declared workspaces, so an omitted flag retains that meaning. */
 export function isDeclaredWorkspaceMember(project: RepoProject): boolean {
@@ -17,16 +17,51 @@ export function preservePreviews(next: Workspace, previous?: Workspace): Workspa
   return { ...next, projects: next.projects.map(project => {
     const cached = saved.get(project.id)
     if (!cached) return project
-    return {
-      ...project,
-      ...(cached.screenshot?.startsWith('data:image/png;base64,') ? { screenshot: cached.screenshot, preview: cached.preview } : {}),
-      ...(project.storage === undefined && cached.storage ? { storage: cached.storage } : {}),
-      ...(project.audit === undefined && cached.audit ? { audit: cached.audit } : {}),
-      ...(project.outdated === undefined && cached.outdated ? { outdated: cached.outdated } : {}),
-      ...(project.unused === undefined && cached.unused ? { unused: cached.unused } : {}),
-      ...(project.reactDoctor === undefined && cached.reactDoctor ? { reactDoctor: cached.reactDoctor } : {}),
-      ...(project.lighthouse === undefined && cached.lighthouse ? { lighthouse: cached.lighthouse } : {}),
+    const merged: RepoProject = { ...project, reportState: { ...cached.reportState, ...project.reportState } }
+    for (const kind of reportKinds) {
+      const incoming = project.reportState?.[kind]
+      const previousState = cached.reportState?.[kind]
+      const sameBoot = incoming?.helperInstanceId === previousState?.helperInstanceId
+      // Missing data never revokes a dated success. Explicit tombstones do.
+      if (previousState && (!incoming || (sameBoot && previousState.revision > incoming.revision))) {
+        Object.assign(merged, { [kind]: cached[kind] })
+        merged.reportState![kind] = previousState
+      } else if (incoming?.validity === 'invalidated') {
+        merged[kind] = undefined
+      } else if (project[kind] === undefined && cached[kind]) {
+        Object.assign(merged, { [kind]: cached[kind] })
+        if (incoming) merged.reportState![kind] = { ...incoming, validity: 'unknown' }
+      }
     }
+    if (!Object.keys(merged.reportState!).length) delete merged.reportState
+    if (cached.screenshot?.startsWith('data:image/png;base64,') && (!project.preview || project.preview.capturedAt === cached.preview?.capturedAt)) {
+      merged.screenshot = cached.screenshot
+      merged.preview = cached.preview
+    }
+    return merged
+  }) }
+}
+
+/** Protect local writes built from an older render without reviving explicitly cleared data. */
+export function protectReportRevisions(next: Workspace, previous?: Workspace): Workspace {
+  if (previous?.rootPath !== next.rootPath || previous?.mode !== 'helper' || next.mode !== 'helper') return next
+  const cached = new Map(previous.projects.map(project => [project.id, project]))
+  return { ...next, ...(previous.helperInstanceId === next.helperInstanceId && previous.revision !== undefined ? { revision: Math.max(previous.revision, next.revision ?? 0) } : {}), projects: next.projects.map(project => {
+    const saved = cached.get(project.id)
+    const merged: RepoProject = { ...project, ...(saved?.reportState || project.reportState ? { reportState: { ...saved?.reportState, ...project.reportState } } : {}) }
+    for (const kind of reportKinds) {
+      const old = saved?.reportState?.[kind]
+      const incoming = project.reportState?.[kind]
+      if (old && old.helperInstanceId === next.helperInstanceId && (!incoming || (old.helperInstanceId === incoming.helperInstanceId && (old.revision > incoming.revision || (old.revision === incoming.revision && old.validity === 'invalidated'))))) {
+        Object.assign(merged, { [kind]: old.validity === 'invalidated' ? undefined : saved?.[kind] })
+        merged.reportState = { ...merged.reportState, [kind]: old }
+      } else if (incoming?.validity === 'invalidated') {
+        merged[kind] = undefined
+      } else if (incoming?.validity === 'missing' && merged[kind]) {
+        merged.reportState = { ...merged.reportState, [kind]: { ...incoming, validity: 'unknown' } }
+      }
+    }
+    return merged
   }) }
 }
 

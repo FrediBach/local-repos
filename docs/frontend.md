@@ -57,7 +57,8 @@ On startup, `App` restores the workspace, favorites, and tags independently from
 IndexedDB. Until the workspace read succeeds, demo projects and labels remain
 hidden behind a loading or cache-error state. A failed preference read does not
 prevent a saved workspace from appearing. The app registers the cached helper root
-with `api.ts` without immediately rescanning it. Version refs prevent an older cache load from
+with `api.ts`; visible helper-state polling re-registers it when the helper has
+restarted or older cache data lacks root identity. Version refs prevent an older cache load from
 replacing a newer connection or favorite edit. Readiness flags keep configuration
 imports and tag editing from racing initial preference restoration.
 
@@ -360,3 +361,18 @@ findings, including from the previous-alert identity set so removing or expiring
 an ignore can produce a new critical alert after a fresh audit. Cached suppression
 state is preserved with the successful report and refreshed by auditing, not by
 ordinary metadata scans or the passage of time alone.
+
+
+### Helper workspace reconciliation
+
+`use-helper-state.ts` polls the REST workspace snapshot every three seconds while
+visible and helper-connected, and on focus. Local actions pause polling; workspace
+generation and revision guards reject late replies. Externally active work feeds
+the existing global busy state, deferring watcher and batch starts. The helper's
+runtime remains authoritative for races between polls. Reports and explicit
+invalidations persist through the existing workspace cache; ordinary missing
+fields preserve dated snapshots. Per-report revisions prevent late scans from
+restoring invalidated reports. Helper restarts re-register the root and retained
+cached reports are labeled as having unknown freshness. Changed preview images
+are downloaded into the durable cache. Cache failures retain the existing visible
+warning. No MCP access to browser preferences or durable storage is introduced.

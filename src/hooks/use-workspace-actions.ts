@@ -48,12 +48,12 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     lighthouseBatch.dismiss()
     try {
       await auditBatch.run(workspace.projects, async (project, isCurrent, reportProgress) => {
-        const result = await projectAction<{ audit?: PackageAudit }>(project.id, 'audit', {}, reportProgress)
+        const result = await projectAction<{ audit?: PackageAudit; reportState?: RepoProject['reportState'] }>(project.id, 'audit', {}, reportProgress)
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.audit) throw new Error('The helper did not return an audit report.')
         const audit = result.audit
         reportCriticalVulnerabilities(project, audit)
-        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, audit } : current) }
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, audit, ...(result.reportState ? { reportState: result.reportState } : {}) } : current) }
         reportProgress({ phase: 'Saving results', detail: 'Updating the workspace cache in this browser.' })
         const cached = await persist(nextWorkspace, false)
         return { cacheWarning: !cached, vulnerable: Object.values(audit.counts).some(count => count > 0) }
@@ -77,11 +77,11 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     lighthouseBatch.dismiss()
     try {
       await outdatedBatch.run(workspace.projects, async (project, isCurrent, reportProgress) => {
-        const result = await projectAction<{ outdated?: PackageOutdated }>(project.id, 'outdated', {}, reportProgress)
+        const result = await projectAction<{ outdated?: PackageOutdated; reportState?: RepoProject['reportState'] }>(project.id, 'outdated', {}, reportProgress)
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.outdated) throw new Error('The helper did not return an outdated-package report.')
         const outdated = result.outdated
-        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, outdated } : current) }
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, outdated, ...(result.reportState ? { reportState: result.reportState } : {}) } : current) }
         reportProgress({ phase: 'Saving results', detail: 'Updating the workspace cache in this browser.' })
         const cached = await persist(nextWorkspace, false)
         return { cacheWarning: !cached, outdated: outdated.findings.length > 0, score: outdated.score, report: outdated, skipped: outdated.skipped?.length ?? 0 }
@@ -106,11 +106,11 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     lighthouseBatch.dismiss()
     try {
       await reactDoctorBatch.run(projects, async (project, isCurrent, reportProgress) => {
-        const result = await projectAction<{ reactDoctor?: ReactDoctorReport }>(project.id, 'react-doctor', {}, reportProgress)
+        const result = await projectAction<{ reactDoctor?: ReactDoctorReport; reportState?: RepoProject['reportState'] }>(project.id, 'react-doctor', {}, reportProgress)
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.reactDoctor) throw new Error('The helper did not return a React Doctor report.')
         const reactDoctor = result.reactDoctor
-        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, reactDoctor } : current) }
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, reactDoctor, ...(result.reportState ? { reportState: result.reportState } : {}) } : current) }
         reportProgress({ phase: 'Saving results', detail: 'Updating the workspace cache in this browser.' })
         const cached = await persist(nextWorkspace, false)
         return { cacheWarning: !cached, report: reactDoctor }
@@ -135,11 +135,11 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     reactDoctorBatch.dismiss()
     try {
       await lighthouseBatch.run(projects, async (project, isCurrent, reportProgress) => {
-        const result = await projectAction<{ lighthouse?: LighthouseReport }>(project.id, 'lighthouse', {}, reportProgress)
+        const result = await projectAction<{ lighthouse?: LighthouseReport; reportState?: RepoProject['reportState'] }>(project.id, 'lighthouse', {}, reportProgress)
         if (!isCurrent() || version !== workspaceVersion.current) return
         if (!result.lighthouse) throw new Error('The helper did not return a Lighthouse report.')
         const lighthouse = result.lighthouse
-        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, lighthouse } : current) }
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, lighthouse, ...(result.reportState ? { reportState: result.reportState } : {}) } : current) }
         reportProgress({ phase: 'Saving results', detail: 'Updating the workspace cache in this browser.' })
         const cached = await persist(nextWorkspace, false)
         return { cacheWarning: !cached, report: lighthouse }
@@ -277,12 +277,12 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     if (fixing && packageUpdate && refreshed) {
       report?.({ phase: 'Rechecking vulnerabilities' })
       try {
-        const result = await projectAction<{ audit?: PackageAudit }>(project.id, 'audit', {}, report)
+        const result = await projectAction<{ audit?: PackageAudit; reportState?: RepoProject['reportState'] }>(project.id, 'audit', {}, report)
         if (!current()) return
         if (!result.audit) throw new Error('The helper did not return an audit report.')
         const audit = result.audit
         reportCriticalVulnerabilities(project, audit)
-        next = { ...next, projects: next.projects.map(item => item.id === project.id ? { ...item, audit } : item) }
+        next = { ...next, projects: next.projects.map(item => item.id === project.id ? { ...item, audit, ...(result.reportState ? { reportState: result.reportState } : {}) } : item) }
         report?.({ phase: 'Saving the fresh vulnerability report' })
         cached = await persist(next, false)
       } catch (error) {
