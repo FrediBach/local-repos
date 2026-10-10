@@ -106,6 +106,25 @@ describe('declared package details', () => {
 })
 
 describe('package audit status', () => {
+  it('places suppressed findings last with neutral styling, provenance and honest all-suppressed status', () => {
+    const suppressed = { name: 'ignored', severity: 'critical' as const, title: 'Accepted issue', suppression: { source: '.trivyignore', ids: ['CVE-2026-12345'], reason: 'Not reachable' } }
+    const active = { name: 'active', severity: 'low' as const, title: 'Active issue' }
+    const audit = { ...cleanReport, counts: { ...cleanReport.counts, low: 1 }, findings: [suppressed, active], warnings: ['Alias lookup unavailable'] }
+    const { rerender } = render(<ProjectPackages {...props} project={{ ...project, audit }} />)
+    const rows = screen.getAllByRole('listitem')
+    expect(rows[0].textContent).toContain('Active issue')
+    expect(rows[1].className).toBe('audit-finding-suppressed')
+    expect(within(rows[1]).getByText('Suppressed · critical').className).toContain('audit-color-neutral')
+    expect(rows[1].textContent).toContain('.trivyignore')
+    expect(rows[1].textContent).toContain('CVE-2026-12345')
+    expect(rows[1].textContent).toContain('Not reachable')
+    expect(screen.getByText('Alias lookup unavailable')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toContain('1 reported vulnerability')
+    rerender(<ProjectPackages {...props} project={{ ...project, audit: { ...cleanReport, findings: [suppressed] } }} />)
+    expect(screen.getByRole('status').textContent).toContain('No active vulnerabilities reported')
+    expect(screen.getByText(/1 suppressed finding/)).toBeTruthy()
+  })
+
   it('keeps focus on the same advisory when findings for one package are reordered', () => {
     const findings: PackageAudit['findings'] = [
       { name: 'shared-package', severity: 'high', title: 'First advisory', url: 'https://example.com/first' },

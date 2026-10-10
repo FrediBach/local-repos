@@ -47,15 +47,20 @@ export function ProjectPackages({ project, helper, demo, busy, onAction }: {
 function AuditReport({ report }: { report: PackageAudit }) {
   const { settings } = useSettings()
   const total = Object.values(report.counts).reduce((sum, count) => sum + count, 0)
+  const suppressed = report.findings.filter(finding => finding.suppression).length
+  const findings = [...report.findings].sort((a, b) => Number(!!a.suppression) - Number(!!b.suppression))
   return <>
-    <p className="audit-result" role="status">{total ? `${total} reported ${total === 1 ? 'vulnerability' : 'vulnerabilities'}` : 'No known vulnerabilities reported'}<span>Last scan · {new Date(report.scannedAt).toLocaleString()} · {report.manager}</span></p>
+    <p className="audit-result" role="status">{total ? `${total} reported ${total === 1 ? 'vulnerability' : 'vulnerabilities'}` : suppressed ? 'No active vulnerabilities reported' : 'No known vulnerabilities reported'}<span>Last scan · {new Date(report.scannedAt).toLocaleString()} · {report.manager}</span></p>
+    {!!suppressed && <p className="maintenance-hint">{suppressed} suppressed {suppressed === 1 ? 'finding' : 'findings'} · excluded from badges, alerts, and todos.</p>}
+    {report.warnings?.map(warning => <p className="audit-warning" key={warning}>{warning}</p>)}
     <div className="audit-counts">{severities.map(severity => <span key={severity} className={`severity severity-${severity} audit-color-${settings.auditColors[severity]}`}><b>{report.counts[severity]}</b> {severity}</span>)}</div>
-    {!!report.findings.length && <ul className="audit-findings">{report.findings.map(finding => <li key={JSON.stringify([finding.name, finding.severity, finding.title, finding.range, finding.url])}>
-      <div><strong>{finding.name}</strong><span className={`severity severity-${finding.severity} audit-color-${settings.auditColors[finding.severity]}`}>{finding.severity}</span></div>
+    {!!report.findings.length && <ul className="audit-findings">{findings.map(finding => <li className={finding.suppression ? 'audit-finding-suppressed' : undefined} key={JSON.stringify([finding.name, finding.severity, finding.title, finding.range, finding.url, !!finding.suppression])}>
+      <div><strong>{finding.name}</strong><span className={`severity severity-${finding.severity} audit-color-${finding.suppression ? 'neutral' : settings.auditColors[finding.severity]}`}>{finding.suppression ? `Suppressed · ${finding.severity}` : finding.severity}</span></div>
       <p>{finding.title}</p>
+      {finding.suppression && <p className="audit-suppression">Suppressed by <code>{finding.suppression.source}</code> · {finding.suppression.ids.join(', ')}{finding.suppression.reason && ` · ${finding.suppression.reason}`}</p>}
       <div className="finding-detail">{finding.range && <code>{finding.range}</code>}{finding.direct !== undefined && <span>{finding.direct ? 'Direct dependency' : 'Transitive dependency'}</span>}{finding.fixAvailable !== undefined && <span>{finding.fixAvailable ? 'Fix available' : 'No fix reported'}</span>}{advisoryUrl(finding.url) && <a href={advisoryUrl(finding.url)} target="_blank" rel="noreferrer">Advisory <ExternalLink size={11} /></a>}</div>
     </li>)}</ul>}
-    <p className="maintenance-hint">Saved result from the last successful scan. Scan again after dependency changes. Counts follow the package manager’s report.</p>
+    <p className="maintenance-hint">Saved result from the last successful scan. Scan again after dependency or ignore-file changes. Counts follow the package manager’s report, excluding matched suppressions. Summary counts without matching advisory details remain active.</p>
   </>
 }
 

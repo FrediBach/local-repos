@@ -15,8 +15,8 @@ export function criticalFindingKey(finding: AuditFinding): string {
 }
 
 export function newCriticalVulnerabilities(previous: PackageAudit | undefined, next: PackageAudit) {
-  const known = new Set(previous?.findings.filter(finding => finding.severity === 'critical').map(criticalFindingKey))
-  const unique = new Map(next.findings.filter(finding => finding.severity === 'critical').map(finding => [criticalFindingKey(finding), finding]))
+  const known = new Set(previous?.findings.filter(finding => !finding.suppression && finding.severity === 'critical').map(criticalFindingKey))
+  const unique = new Map(next.findings.filter(finding => !finding.suppression && finding.severity === 'critical').map(finding => [criticalFindingKey(finding), finding]))
   const findings = [...unique].filter(([key]) => !known.has(key)).map(([, finding]) => finding)
   // Some managers supply summary counts without complete advisory details.
   const additionalCount = Math.max(0, next.counts.critical - (previous?.counts.critical ?? 0) - findings.length)

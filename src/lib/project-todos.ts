@@ -33,7 +33,7 @@ export function projectTodos(projects: RepoProject[]): ProjectTodo[] {
     const base = { projectId: project.id }
     if (project.audit) {
       const report = project.audit
-      const findings = [...new Map(report.findings.filter(finding => finding.severity === 'critical' || finding.severity === 'high')
+      const findings = [...new Map(report.findings.filter(finding => !finding.suppression && (finding.severity === 'critical' || finding.severity === 'high'))
         .map(finding => [JSON.stringify([finding.severity, criticalFindingKey(finding)]), finding])).entries()]
       const critical = Math.max(report.counts.critical, findings.filter(([, finding]) => finding.severity === 'critical').length)
       const high = Math.max(report.counts.high, findings.filter(([, finding]) => finding.severity === 'high').length)

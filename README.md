@@ -138,7 +138,7 @@ The cog beside the top-right help icon opens **Settings**:
 
 **Save settings** applies changes immediately to cached project badges, package details, package-lag sorting, filter labels/counts, and batch lag totals. No rescan or helper restart is required. **Cancel** discards the draft; **Reset defaults** fills in the original values and takes effect when saved. Invalid values are highlighted and cannot be saved.
 
-Settings are stored in localStorage for this browser and app origin, independently of the connected directory, and changes synchronize between open tabs. If storage is unavailable, the dialog reports the failure and keeps the previously applied settings. Package lag measures version distance, not release age in days; vulnerability labels and counts continue to reflect the package manager's report.
+Settings are stored in localStorage for this browser and app origin, independently of the connected directory, and changes synchronize between open tabs. If storage is unavailable, the dialog reports the failure and keeps the previously applied settings. Package lag measures version distance, not release age in days; vulnerability labels and counts reflect the package manager's report after matched project ignore rules.
 
 The desktop sidebar shows up to 50 technologies by default. Only the technology list scrolls, keeping workspace navigation and directory/help controls visible. Adjust the limit in **Settings → Interface → Technologies in sidebar**. Saved preferences using the old seven-technology default expand to 50; other saved limits are preserved.
 
@@ -208,6 +208,21 @@ After measuring, **Delete node_modules** opens a confirmation for that project. 
 In **Packages → Scan for vulnerabilities**, the helper runs the detected package manager’s audit against the existing lockfile, including development dependencies. It supports npm, pnpm, Yarn Classic (1.16+), modern Yarn (2.4+), and Bun (1.2.15+). Bun requires a text `bun.lock`; binary-only `bun.lockb` projects receive an explanatory error. The package manager must already be installed. See the audit documentation for [npm](https://docs.npmjs.com/cli/v11/commands/npm-audit/), [pnpm](https://pnpm.io/cli/audit), [Yarn Classic](https://classic.yarnpkg.com/lang/en/docs/cli/audit/), [modern Yarn](https://yarnpkg.com/cli/npm/audit), and [Bun](https://bun.com/docs/pm/cli/audit). Audits do not install dependencies, run lifecycle scripts, or apply fixes. Modern Yarn’s temporary install-state cache is redirected outside the project and removed afterward.
 
 Audits contact the configured package registry and send dependency names and versions. Results show severity counts, affected packages, vulnerable ranges, available fix information, and advisory links where supplied. Counts follow each package manager’s reporting conventions and configured advisory exclusions. Network errors, unsupported output, missing lockfiles, and timeouts are reported as failures, never as clean scans. Audits are limited to 60 seconds per command and 8 MiB of output. Windows audits currently require Bun; npm, pnpm, and Yarn command shims are not supported by this helper’s shell-free execution.
+
+Project vulnerability exclusions are read from [Trivy-style `.trivyignore`](https://trivy.dev/docs/v0.56/configuration/filtering/) files (`.trivignore` is also accepted). Put one CVE or GHSA ID per line, optionally followed by `exp:YYYY-MM-DD` and an inline `# reason`. Blank lines and comments are accepted; expired rules stop applying at midnight UTC on the expiration date. YAML ignore files, path-scoped rules, and custom Trivy configuration are not supported.
+
+```text
+# This code path is not used by this project
+CVE-2026-12345 exp:2026-12-31 # Not reachable in our deployment
+GHSA-xxxx-yyyy-zzzz
+```
+
+Rules come from the audited lockfile directory: the project root for independent packages, or the declared workspace root for shared audits. A member's own ignore file does not suppress the whole workspace. Matching findings remain at the bottom of the list with neutral **Suppressed** labels and rule details, and are excluded from badges, severity filters, critical alerts, and security todos. Mixed packages retain their active advisories; npm dependency-only findings are suppressed only when all their reported causes are suppressed. Summary counts without matching advisory details remain active.
+
+When a report supplies GHSA IDs but the ignore file uses CVEs, the helper may query the [public GitHub advisory API](https://docs.github.com/en/rest/security-advisories/global-advisories) to verify aliases. Only public advisory IDs are sent, without credentials or project paths. Lookups are bounded to 40 advisories, four concurrent requests, and ten seconds per audit. Failed or limited lookups leave unmatched findings active and show a warning. Invalid rules also produce warnings; unreadable, linked, or oversized ignore files fail the audit and preserve the previous successful report.
+
+Run **Scan again** after changing ignore rules or to refresh expired suppressions. Package-change watching detects edits to both ignore filenames when vulnerability checks are enabled. Cached reports retain the suppression decisions from their scan time; ordinary metadata rescans do not reinterpret them.
+
 
 Disk measurements and successful package scan results are cached with timestamps, including across helper restarts. They describe the last measurement or scan: refresh disk usage or scan again after project changes. Failed scans keep the previous successful result visible.
 

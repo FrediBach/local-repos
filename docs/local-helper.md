@@ -86,7 +86,8 @@ previews and reports attached to the same object. Registration is additive;
 projects absent from a subsequent scan are not pruned from the registry.
 
 [`package-fingerprint.ts`](../server/package-fingerprint.ts) hashes stat metadata
-for a fixed list of manifests, lockfiles, and package configuration files. It
+for a fixed list of manifests, lockfiles, package configuration files, and
+`.trivyignore` / `.trivignore`. It
 does not hash file contents or traverse dependencies. Declared workspace members
 combine their fingerprint with their workspace parent's fingerprint.
 `/api/package-changes` computes fingerprints only for the latest registrations
@@ -122,6 +123,20 @@ Individual service modules handle command construction, validation, and parsing.
   selected manifest. [`react-doctor.ts`](../server/react-doctor.ts) runs this app's
   installed React Doctor on the selected project and validates its report version,
   project identity, completeness, and counts. These tools can load project config.
+  Audit suppression is handled by [`audit-ignore.ts`](../server/audit-ignore.ts)
+  and [`audit-suppressions.ts`](../server/audit-suppressions.ts). Regular ignore
+  files are read only from `workspaceDirectory ?? directory`, bounded to 64 KB
+  each with no-follow opens. CVE/GHSA IDs and optional UTC expiry dates are
+  matched against structured advisory identifiers. Missing CVE aliases can be
+  resolved through unauthenticated, redirect-free requests to GitHub's fixed
+  public advisory endpoint (40 IDs, four workers, ten seconds total, 256 KB per
+  response). Failures add report warnings and leave unmatched findings active.
+  npm package causes are retained internally to distinguish mixed advisories and
+  propagate full suppression only through proven dependency causes; unresolved
+  cycles and missing references remain active. Returned `counts` exclude matched
+  suppressions, `originalCounts` retains the manager summary when changed, and
+  findings retain suppression provenance. Unknown summary-only counts remain
+  active. Ignore decisions are dated audit snapshots, not metadata scan results.
 - **Package updates:** [`package-update.ts`](../server/package-update.ts) resolves
   eligible stable registry versions before installing minor or patch updates.
   It skips peer dependencies, ambiguous declarations, and unsupported ranges,

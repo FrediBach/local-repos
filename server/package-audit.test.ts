@@ -1,4 +1,4 @@
-import { lstat, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -30,7 +30,7 @@ beforeEach(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), 'local-repos-audit-test-'))
   await writeFile(path.join(directory, 'package.json'), '{"name":"test"}')
 })
-afterEach(async () => { vi.unstubAllEnvs(); await rm(directory, { recursive: true, force: true }) })
+afterEach(async () => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); await rm(directory, { recursive: true, force: true }) })
 
 async function entry(manager: RepoProject['packageManager'] = 'npm', lockfile?: string): Promise<RegisteredProject> {
   await writeFile(path.join(directory, lockfile ?? { npm: 'package-lock.json', pnpm: 'pnpm-lock.yaml', yarn: 'yarn.lock', bun: 'bun.lock' }[manager]), '{}')
@@ -41,6 +41,75 @@ async function entry(manager: RepoProject['packageManager'] = 'npm', lockfile?: 
 }
 
 describe('package auditing', () => {
+  it('matches a CVE-only rule to an npm GHSA URL and leaves failures active with a warning', async () => {
+    await writeFile(path.join(directory, '.trivyignore'), 'CVE-2026-12345')
+    const project = await entry()
+    const report = structuredClone(npmReport)
+    report.vulnerabilities['vulnerable-package'].via[0].url = 'https://github.com/advisories/GHSA-aaaa-bbbb-cccc'
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ghsa_id: 'GHSA-aaaa-bbbb-cccc', cve_id: 'CVE-2026-12345' }))
+    vi.stubGlobal('fetch', fetcher)
+    expect((await auditProject(project, runnerFor(report, 1))).counts).toEqual(zero)
+    fetcher.mockRejectedValue(new Error('offline'))
+    const unavailable = await auditProject(project, runnerFor(report, 1))
+    expect(unavailable.counts.high).toBe(2)
+    expect(unavailable.findings.every(finding => !finding.suppression)).toBe(true)
+    expect(unavailable.warnings?.[0]).toContain('Unmatched findings remain active')
+  })
+
+  it('suppresses a matching CVE and its inherited npm findings without changing the audit command', async () => {
+    const project = await entry()
+    await writeFile(path.join(directory, '.trivyignore'), 'CVE-2026-12345 # unreachable in this app')
+    const report = structuredClone(npmReport)
+    Object.assign(report.vulnerabilities['vulnerable-package'].via[0], { cves: ['CVE-2026-12345'] })
+    const result = await auditProject(project, runnerFor(report, 1))
+    expect(result.counts).toEqual(zero)
+    expect(result.originalCounts).toEqual({ ...zero, high: 2 })
+    expect(result.findings).toHaveLength(2)
+    expect(result.findings.every(finding => finding.suppression?.ids.includes('CVE-2026-12345'))).toBe(true)
+    expect(result.findings.some(finding => 'via' in finding || 'advisories' in finding)).toBe(false)
+  })
+
+  it('keeps other advisories on a mixed package active and moves suppressed details last', async () => {
+    await writeFile(path.join(directory, '.trivyignore'), 'GHSA-aaaa-bbbb-cccc')
+    const result = await auditProject(await entry(), runnerFor({
+      vulnerabilities: { parent: { severity: 'critical', via: ['mixed'] }, mixed: { severity: 'critical', via: [
+        { ...advisory, module_name: 'mixed', severity: 'critical', title: 'Ignored issue', url: 'https://github.com/advisories/GHSA-aaaa-bbbb-cccc' },
+        { ...advisory, module_name: 'mixed', severity: 'low', title: 'Active issue' },
+      ] } }, metadata: { vulnerabilities: { ...zero, critical: 2 } },
+    }, 1))
+    expect(result.counts).toEqual({ ...zero, low: 2 })
+    expect(result.findings.map(finding => [finding.title, !!finding.suppression])).toEqual([['Active issue', false], ['Depends on a vulnerable package', false], ['Ignored issue', true]])
+  })
+
+  it('uses only workspace-root rules for shared audits and only project rules for independent projects', async () => {
+    const project = await entry()
+    const child = path.join(directory, 'child')
+    await mkdir(child)
+    await writeFile(path.join(child, 'package.json'), '{}')
+    await writeFile(path.join(child, '.trivyignore'), 'CVE-2026-12345')
+    const report = { advisories: { 1: { ...advisory, cves: ['CVE-2026-12345'] } }, metadata: { vulnerabilities: { ...zero, high: 1 } } }
+    const shared = { ...project, directory: child, workspaceDirectory: directory }
+    expect((await auditProject(shared, runnerFor(report, 1))).counts.high).toBe(1)
+    await writeFile(path.join(directory, '.trivyignore'), 'CVE-2026-12345')
+    expect((await auditProject(shared, runnerFor(report, 1))).counts.high).toBe(0)
+    await rm(path.join(child, '.trivyignore'))
+    await writeFile(path.join(child, 'package-lock.json'), '{}')
+    expect((await auditProject({ ...shared, workspaceDirectory: undefined }, runnerFor(report, 1))).counts.high).toBe(1)
+  })
+
+  it('retains summary-only counts and unresolved dependency cycles', async () => {
+    await writeFile(path.join(directory, '.trivyignore'), 'CVE-2026-12345')
+    const result = await auditProject(await entry(), runnerFor({
+      vulnerabilities: {
+        ignored: { severity: 'high', via: [{ ...advisory, cves: ['CVE-2026-12345'] }] },
+        cycleA: { severity: 'high', via: ['cycleB'] }, cycleB: { severity: 'high', via: ['cycleA'] },
+        missing: { severity: 'high', via: ['unknown'] },
+      }, metadata: { vulnerabilities: { ...zero, high: 5 } },
+    }, 1))
+    expect(result.counts.high).toBe(4)
+    expect(result.findings.filter(finding => finding.suppression)).toHaveLength(1)
+  })
+
   it('reports the first unsafe lockfile when both npm candidates are linked', async () => {
     const project = await entry()
     await rm(path.join(directory, 'package-lock.json'))

@@ -9,6 +9,17 @@ beforeEach(async () => { directory = await realpath(await mkdtemp(path.join(os.t
 afterEach(async () => { await rm(directory, { recursive: true, force: true }) })
 
 describe('package input fingerprints', () => {
+  it.each(['.trivyignore', '.trivignore'])('detects changes to %s', async name => {
+    const before = await packageFingerprint(directory)
+    await writeFile(path.join(directory, name), 'CVE-2026-12345')
+    const created = await packageFingerprint(directory)
+    expect(created).not.toBe(before)
+    await writeFile(path.join(directory, name), 'CVE-2026-54321 # changed')
+    expect(await packageFingerprint(directory)).not.toBe(created)
+    await rm(path.join(directory, name))
+    expect(await packageFingerprint(directory)).toBe(before)
+  })
+
   it('detects manifest and lockfile creation, edits, atomic replacement, and deletion', async () => {
     const initial = await packageFingerprint(directory)
     await writeFile(path.join(directory, 'package.json'), '{"name":"first"}')

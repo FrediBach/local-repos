@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { lstat, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 
-const packageFiles = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', '.npmrc', '.yarnrc.yml']
+const packageFiles = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', '.npmrc', '.yarnrc.yml', '.trivyignore', '.trivignore']
 
 /** Stat only a fixed set of package inputs, never dependencies or symlink targets. */
 export async function packageFingerprint(directory: string): Promise<string> {

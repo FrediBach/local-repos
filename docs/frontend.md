@@ -246,3 +246,16 @@ No service-worker API-response cache is configured.
 GFM support and raw HTML skipped. Dialogs use shared Radix primitives. `App`
 restores focus to project/tag openers, and project tabs implement arrow/Home/End
 keyboard navigation. Preserve those behaviors when reorganizing UI flows.
+
+## Vulnerability suppressions
+
+Audit `counts` contain active vulnerabilities after helper-side ignore matching.
+Cards, severity filters and sorts use those counts. Findings optionally carry
+`suppression` provenance; older cached findings without it remain active.
+`ProjectPackages` places suppressed findings last with neutral styling and their
+source rules, distinguishes an all-suppressed report from a clean report, and
+shows alias/rule warnings. Critical alerts and security todos exclude suppressed
+findings, including from the previous-alert identity set so removing or expiring
+an ignore can produce a new critical alert after a fresh audit. Cached suppression
+state is preserved with the successful report and refreshed by auditing, not by
+ordinary metadata scans or the passage of time alone.

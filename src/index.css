@@ -277,6 +277,9 @@ svg { flex-shrink: 0; }
 .severity { display: inline-flex; gap: 5px; align-items: center; font-size: 0.875rem; padding: 4px 7px; border-radius: 4px; background: var(--surface-muted); color: var(--foreground); text-transform: capitalize; }
 .audit-findings { list-style: none; padding: 0; margin: 17px 0; }
 .audit-findings li { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.audit-findings li.audit-finding-suppressed { background: var(--surface-muted); padding: 14px 12px; border-bottom-style: dashed; }
+.audit-findings .audit-finding-suppressed strong { color: var(--muted-foreground); }
+.audit-warning { color: var(--foreground); border-left: 3px solid var(--border); padding-left: 12px; font-size: 0.875rem; }
 .audit-findings li > div:first-child { display: flex; align-items: center; gap: 8px; }
 .audit-findings strong { font-size: 0.9375rem; color: var(--foreground); overflow-wrap: anywhere; }
 .audit-findings p { font-size: 0.875rem; color: var(--muted-foreground); margin: 8px 0; line-height: 1.6; }

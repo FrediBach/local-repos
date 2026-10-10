@@ -6,6 +6,12 @@ const finding: AuditFinding = { name: 'example', severity: 'critical', title: 'R
 const report = (findings: AuditFinding[], critical = findings.filter(item => item.severity === 'critical').length): PackageAudit => ({ manager: 'npm', scannedAt: '', counts: { critical, high: 0, moderate: 0, low: 0, info: 0 }, findings })
 
 describe('new critical vulnerabilities', () => {
+  it('excludes suppressed issues and alerts when an ignore is removed or expires', () => {
+    const ignored = report([{ ...finding, suppression: { source: '.trivyignore', ids: ['CVE-2026-12345'] } }], 0)
+    expect(newCriticalVulnerabilities(undefined, ignored)).toEqual({ findings: [], additionalCount: 0 })
+    expect(newCriticalVulnerabilities(ignored, report([finding]))).toEqual({ findings: [finding], additionalCount: 0 })
+  })
+
   it('detects a first critical result and a severity escalation', () => {
     expect(newCriticalVulnerabilities(undefined, report([finding]))).toEqual({ findings: [finding], additionalCount: 0 })
     expect(newCriticalVulnerabilities(report([{ ...finding, severity: 'high' }]), report([finding])).findings).toEqual([finding])

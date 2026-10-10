@@ -4,6 +4,8 @@ import os from 'node:os'
 import path from 'node:path'
 import type { AuditFinding, AuditSeverity, PackageAudit, RepoProject } from '../src/types'
 import { HelperError, type RegisteredProject } from './scanner'
+import { advisoryIdentifiers, readAuditIgnores, resolveIgnoreAliases } from './audit-ignore'
+import { suppressAuditFindings, type ParsedAudit, type ParsedAuditFinding } from './audit-suppressions'
 
 type Manager = RepoProject['packageManager']
 type JsonObject = Record<string, unknown>
@@ -57,25 +59,25 @@ function advisoryFinding(value: unknown, fallbackName?: string): AuditFinding {
   const title = text(value.title)
   if (!name || !title) unsupportedReport()
   return {
-    name, title, severity: value.severity,
+    name, title, severity: value.severity, identifiers: advisoryIdentifiers(value),
     range: text(value.vulnerable_versions) ?? text(value.range),
     url: safeUrl(value.url),
     fixAvailable: value.patched_versions === null ? false : typeof value.patched_versions === 'string' ? !['<0.0.0', ''].includes(value.patched_versions) : undefined,
   }
 }
 
-function parseReport(stdout: string, format: 'npm' | 'pnpm' | 'yarn-classic' | 'yarn-modern' | 'bun'): Pick<PackageAudit, 'counts' | 'findings'> {
+function parseReport(stdout: string, format: 'npm' | 'pnpm' | 'yarn-classic' | 'yarn-modern' | 'bun'): ParsedAudit {
   let records: unknown[]
   try { records = [JSON.parse(stdout)] } catch {
     try { records = stdout.trim().split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)) } catch { unsupportedReport() }
   }
   if (!records.length) unsupportedReport()
-  const findings: AuditFinding[] = []
+  const findings: ParsedAuditFinding[] = []
   let counts: PackageAudit['counts'] | undefined
   let recognized = false
   const seen = new Set<string>()
-  const add = (finding: AuditFinding) => {
-    const key = JSON.stringify([finding.name, finding.severity, finding.title, finding.range, finding.url])
+  const add = (finding: ParsedAuditFinding) => {
+    const key = JSON.stringify([finding.name, finding.severity, finding.title, finding.range, finding.url, finding.identifiers])
     if (!seen.has(key)) { seen.add(key); findings.push(finding) }
   }
   for (const record of records) {
@@ -88,8 +90,12 @@ function parseReport(stdout: string, format: 'npm' | 'pnpm' | 'yarn-classic' | '
         if (!object(value) || !severity(value.severity) || !Array.isArray(value.via)) unsupportedReport()
         const advisories = value.via.filter(object)
         const titles = advisories.map(advisory => text(advisory.title)).filter(Boolean)
+        if (value.via.some(item => !object(item) && typeof item !== 'string')) unsupportedReport()
         add({
           name: text(value.name) ?? name, severity: value.severity,
+          identifiers: [...new Set(advisories.flatMap(advisoryIdentifiers))],
+          advisories: advisories.map(advisory => advisoryFinding(advisory, name)),
+          via: value.via.filter((item): item is string => typeof item === 'string'),
           title: titles.length ? titles.join('; ') : 'Depends on a vulnerable package',
           range: text(value.range), url: safeUrl(advisories.find(advisory => typeof advisory.url === 'string')?.url),
           direct: typeof value.isDirect === 'boolean' ? value.isDirect : undefined,
@@ -115,7 +121,7 @@ function parseReport(stdout: string, format: 'npm' | 'pnpm' | 'yarn-classic' | '
       const children = record.children
       add(advisoryFinding({
         name: record.value, title: children.Issue, severity: children.Severity,
-        vulnerable_versions: children['Vulnerable Versions'], url: children.URL,
+        vulnerable_versions: children['Vulnerable Versions'], url: children.URL, id: children.ID, cves: children.CVEs,
       }))
       recognized = true
     } else if (format === 'yarn-modern' && record.type === 'info' && record.data === 'No audit suggestions') {
@@ -167,6 +173,7 @@ async function requireLockfile(entry: RegisteredProject): Promise<void> {
 /** Runs only when explicitly requested; never installs dependencies or applies fixes. */
 export async function auditProject(entry: RegisteredProject, runner: AuditRunner = runAuditCommand): Promise<PackageAudit> {
   await requireLockfile(entry)
+  const { rules, warnings } = await readAuditIgnores(entry.workspaceDirectory ?? entry.directory)
   const manager = entry.project.packageManager
   if (process.platform === 'win32' && manager !== 'bun') {
     throw new HelperError(`Run the local helper in WSL to audit ${manager} projects. Windows .cmd package-manager launchers are not supported.`, 501)
@@ -233,7 +240,9 @@ export async function auditProject(entry: RegisteredProject, runner: AuditRunner
     const total = Object.values(result.counts).reduce((sum, count) => sum + count, 0)
     const validExit = output.exitCode === 0 || (total > 0 && (format === 'yarn-classic' ? output.exitCode >= 1 && output.exitCode <= 31 : output.exitCode === 1))
     if (!validExit) unsupportedReport()
-    return { manager, scannedAt: new Date().toISOString(), ...result }
+    await resolveIgnoreAliases(rules, result.findings.flatMap(finding => (finding.advisories ?? [finding])
+      .filter(item => !item.identifiers?.some(id => rules.has(id))).flatMap(item => item.identifiers ?? [])), warnings)
+    return { manager, scannedAt: new Date().toISOString(), ...suppressAuditFindings(result, rules), ...(warnings.length ? { warnings } : {}) }
   } catch (error) {
     if (error instanceof HelperError) throw error
     const failure = error as NodeJS.ErrnoException & { killed?: boolean; signal?: string }

@@ -86,12 +86,17 @@ export interface AuditFinding {
   url?: string
   fixAvailable?: boolean
   direct?: boolean
+  identifiers?: string[]
+  suppression?: { source: string; ids: string[]; reason?: string }
 }
 export interface PackageAudit {
   manager: RepoProject['packageManager']
   scannedAt: string
   counts: Record<AuditSeverity, number>
   findings: AuditFinding[]
+  /** Counts before project ignore rules; counts above contain active findings. */
+  originalCounts?: Record<AuditSeverity, number>
+  warnings?: string[]
 }
 
 export type OutdatedLevel = 'current' | 'low' | 'moderate' | 'high'

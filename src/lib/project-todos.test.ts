@@ -62,3 +62,10 @@ describe('important project todos', () => {
     expect(original.findingKeys.every(key => extra.findingKeys.includes(key))).toBe(true)
   })
 })
+
+it('does not create security todos for suppressed high or critical findings', () => {
+  const report = audit([high, { ...high, severity: 'critical' }].map(finding => ({ ...finding, suppression: { source: '.trivyignore', ids: ['CVE-2026-12345'] } })))
+  report.counts.high = 0
+  report.counts.critical = 0
+  expect(projectTodos([{ id: 'suppressed', audit: report } as RepoProject])).toEqual([])
+})
