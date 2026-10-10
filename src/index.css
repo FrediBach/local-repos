@@ -404,6 +404,7 @@ select:is(.search-scope, .preview-source-controls select, .filter-field select, 
 .filter-summary button { min-height: 36px; }
 .projects-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); gap: 24px; }
 .projects-grid .project-card { display: flex; flex-direction: column; }
+.projects-grid .project-card.is-subpackage { border-style: dashed; }
 .projects-grid .project-info { flex: 1; }
 .monorepo-group { grid-column: 1 / -1; min-width: 0; padding: 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--surface-muted); }
 .monorepo-group-header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 2px 14px; color: var(--muted-foreground); }
@@ -414,7 +415,6 @@ select:is(.search-scope, .preview-source-controls select, .filter-field select, 
 .monorepo-group-title > span { font-size: .6875rem; letter-spacing: .08em; text-transform: uppercase; }
 .monorepo-group-info > code { display: block; font-size: .75rem; overflow-wrap: anywhere; }
 .monorepo-group-count { font-size: .75rem; white-space: nowrap; }
-.monorepo-group-projects.projects-grid { gap: 16px; }
 .project-results.projects-list > .monorepo-group { margin-block: 6px; padding: 10px; }
 .project-results.projects-list > .monorepo-group:first-child { margin-top: 0; }
 .project-results.projects-list > .monorepo-group:last-child { margin-bottom: 0; }

@@ -12,6 +12,16 @@ export interface ProjectResultGroup {
   items: { project: RepoProject; index: number }[]
 }
 
+export function projectGridTitle(project: RepoProject, allProjects: RepoProject[]): string {
+  const { monorepo } = project
+  if (!monorepo) return project.name
+  const parent = allProjects.find(candidate => candidate.id === monorepo.id)
+  const parentDirectory = parent?.dirName
+    ?? monorepo.relativePath.split('/').filter(part => part && part !== '.').at(-1)
+    ?? monorepo.name
+  return `${parentDirectory}/${monorepo.packagePath}`
+}
+
 /** Keep related projects together at their first position in the selected sort. */
 export function groupProjectResults(projects: RepoProject[], allProjects = projects): ProjectResultGroup[] {
   const monorepos = new Map<string, MonorepoIdentity>()
