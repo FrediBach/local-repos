@@ -407,6 +407,9 @@ The manifest includes a stable app ID, root scope, language, categories, theme c
 
 ## Optional MCP access
 
+The in-app Help dialog includes **Connect an AI assistant with MCP**, a step-by-step
+guide to private configuration, helper startup, and HTTP or stdio client setup.
+
 The local helper can expose project discovery, bounded project context, cached
 reports, and local Git history to MCP clients without opening the browser UI.
 MCP is **disabled by default**. Optional fresh checks and preview capture require

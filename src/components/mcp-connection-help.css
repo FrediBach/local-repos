@@ -1,0 +1,14 @@
+.mcp-help { border: 1px solid var(--border); border-radius: 8px; margin: 20px 0; color: var(--foreground); }
+.mcp-help > summary { cursor: pointer; padding: 15px; font-size: .9375rem; font-weight: 600; }
+.mcp-help > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 8px; }
+.mcp-help-body { padding: 0 15px 15px; font-size: .9375rem; line-height: 1.7; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.mcp-help-body p { margin: 0 0 14px; }
+.mcp-help-body p:last-child { margin-bottom: 0; }
+.mcp-help-body ol { list-style: decimal; padding-left: 20px; margin: 20px 0; }
+.mcp-help-body li + li { margin-top: 24px; }
+.mcp-help-body h3 { color: var(--foreground); font-size: 1rem; font-weight: 600; margin: 0 0 10px; }
+.mcp-help-body code { font-size: .8125rem; color: var(--foreground); }
+.mcp-help-body pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-muted); margin: 12px 0; }
+.mcp-help-body dl { margin: 14px 0; }
+.mcp-help-body dt { color: var(--foreground); font-weight: 600; }
+.mcp-help-body dd { margin: 0 0 10px; }
