@@ -7,11 +7,16 @@ A local project library with README introductions, package search, vulnerability
 Requires **Node.js 22.12 or newer** and npm. Git must be on your `PATH` for the helper's Git metadata.
 
 ```sh
-npm install
-npm run dev
+npm ci
+npm run build
+npm run app
 ```
 
-Open **http://127.0.0.1:5180**. This starts the Vite app and its local helper together. The helper listens on `127.0.0.1:4318`; Vite proxies `/api` requests to it. Both ports must be available.
+Open **http://127.0.0.1:5180**. This serves the built app and starts its local helper together, without source-file watching or hot reload. The helper listens on `127.0.0.1:4318`; the app server proxies `/api` requests to it. Both ports must be available. Press **Ctrl+C** to stop both.
+
+For later daily use, run only `npm run app`. It requires an existing build and tells you to run `npm run build` if one is missing. After updating Local Repos, stop the app, run `npm ci` and `npm run build`, then start `npm run app` again. The helper runs from the current source; rebuilding refreshes the browser app. Automatic repository scans still follow **Settings → Watcher**.
+
+For development, use `npm run dev` for frontend file watching and hot reload; restart it after helper code changes. Both commands use the same browser address, keeping your saved workspace and preferences. Run one mode at a time. See the [development guide](docs/development.md) for commands and checks.
 
 Screenshot capture also needs Playwright's Chromium browser, installed once from this directory:
 
@@ -188,7 +193,7 @@ Package-change detection reads file metadata for package.json, npm/pnpm/Yarn/Bun
 
 The watcher runs while the app is open and online, waits for existing app actions, and avoids overlapping runs in the same tab. Browser background throttling or computer sleep can delay scans; this is not a system background service. Changing to manual mode stops queued checks after the current request finishes. Changing or forgetting the connected directory clears its schedule. The workspace watcher status beside the directory sync status shows activity and failures; hover it for the next scheduled scan or change check. Use a single tab for automatic scans.
 
-Browser directory connections support periodic metadata scans only. They never request folder permission automatically: use **Synced …** to restore expired permission. Vulnerabilities, outdated packages, disk usage, React Doctor, Lighthouse, and package-change watching require the local helper. Restart `npm run dev` after updating Local Repos to load the helper's watcher endpoint.
+Browser directory connections support periodic metadata scans only. They never request folder permission automatically: use **Synced …** to restore expired permission. Vulnerabilities, outdated packages, disk usage, React Doctor, Lighthouse, and package-change watching require the local helper. Rebuild with `npm run build` and rebuild with `npm run build` and restart `npm run app` after updating Local Repos to load the helper's watcher endpoint.
 
 ## Commit history
 
@@ -268,7 +273,7 @@ Commands use [npm install](https://docs.npmjs.com/cli/install/), [pnpm add](http
 
 ### React Doctor
 
-Use **Run checks → Scan React projects** above the project list to scan every React project in the connected workspace, including projects hidden by filters. Other projects are skipped. Open a React project's **React Doctor** tab to scan it individually. Global scans run sequentially, save each result immediately, and support **Stop after current**. These actions require the local helper; restart `npm run dev` after updating Local Repos to load the endpoint.
+Use **Run checks → Scan React projects** above the project list to scan every React project in the connected workspace, including projects hidden by filters. Other projects are skipped. Open a React project's **React Doctor** tab to scan it individually. Global scans run sequentially, save each result immediately, and support **Stop after current**. These actions require the local helper; rebuild with `npm run build` and restart `npm run app` after updating Local Repos to load the endpoint.
 
 Scanned React projects display a score badge on their cards, including healthy scores. Click the badge to open the findings tab. The tab shows the score out of 100, errors and warnings, affected files, and the last scan time. Search findings or filter by severity and category; expand a rule to read guidance and file locations. Reports remain available after rescans, helper restarts, and browser reloads. Failed scans retain the previous saved report. Scan again after changing source or configuration; package update attempts clear reports for the affected repository.
 
@@ -278,7 +283,7 @@ Source analysis runs locally. React Doctor sends diagnostic details to its scori
 
 ### Lighthouse
 
-Use **Run checks → Scan frontends with Lighthouse** above the project list to run [Lighthouse](https://github.com/GoogleChrome/lighthouse) on eligible frontend projects, including those hidden by filters. Scan one project from its **Actions** menu or **Lighthouse** tab. Workspace scans run sequentially, save each successful report, and offer **Stop after current**. Lighthouse requires the local helper and Playwright Chromium (`npx playwright install chromium`). Restart `npm run dev` after updating Local Repos.
+Use **Run checks → Scan frontends with Lighthouse** above the project list to run [Lighthouse](https://github.com/GoogleChrome/lighthouse) on eligible frontend projects, including those hidden by filters. Scan one project from its **Actions** menu or **Lighthouse** tab. Workspace scans run sequentially, save each successful report, and offer **Stop after current**. Lighthouse requires the local helper and Playwright Chromium (`npx playwright install chromium`). Rebuild with `npm run build` and rebuild with `npm run build` and restart `npm run app` after updating Local Repos.
 
 Eligibility uses the selected `dev`, `start`, or `serve` script, in that order. Recognized commands include Vite, Next.js, Astro, Nuxt, Angular, Vue CLI, webpack dev servers, Parcel, and Create React App. Build/watch commands, backend servers, native apps, and React libraries without a frontend server are skipped. Custom launchers and compound scripts can opt in by setting `localRepos.previewUrl` in `package.json` to the frontend's HTTP(S) URL. A dependency on React or a package homepage alone does not qualify. The helper rechecks the manifest and verifies that the page serves successful HTML before auditing it.
 
@@ -290,7 +295,7 @@ Successful dated reports survive rescans and reloads. Failed scans retain the pr
 
 ### Unused packages with Knip
 
-Open **Unused → Scan for unused packages** on a helper-connected project. Local Repos includes a pinned version of [Knip](https://knip.dev/), so the target project does not need its own Knip installation. Restart `npm run dev` after updating Local Repos to load the new endpoint.
+Open **Unused → Scan for unused packages** on a helper-connected project. Local Repos includes a pinned version of [Knip](https://knip.dev/), so the target project does not need its own Knip installation. Rebuild with `npm run build` and rebuild with `npm run build` and restart `npm run app` after updating Local Repos to load the new endpoint.
 
 The scan analyzes source files and tooling using the project's existing Knip configuration and reports potentially unused `dependencies` and `devDependencies`. Findings include the declared version, dependency type, and package.json line when available. Peer and optional dependencies are outside this report; Knip's referenced optional-peer findings are not unused packages.
 
@@ -360,7 +365,7 @@ Add these optional fields to a project's `package.json` to configure its deploye
 }
 ```
 
-URLs must be absolute HTTP(S) addresses without embedded credentials. Paths, query parameters, and hashes are preserved. Repository pages are not used as app previews. After updating Local Repos, restart `npm run dev` to load the new helper; use **Synced …** to rescan your projects and load their URL metadata. Rescan after later changes to those package fields too.
+URLs must be absolute HTTP(S) addresses without embedded credentials. Paths, query parameters, and hashes are preserved. Repository pages are not used as app previews. After updating Local Repos, rebuild with `npm run build` and restart `npm run app`; use **Synced …** to rescan your projects and load their URL metadata. Rescan after later changes to those package fields too.
 
 Capture opens a fresh, unsigned-in Chromium page at 1440 × 900. It waits for visible content, fonts, images, and layout changes to settle, then retries nearly uniform images instead of caching a blank white preview.
 
@@ -374,15 +379,10 @@ Fresh scans read local metadata only and make no website or GitHub requests. Cap
 
 ```sh
 npm run build
-npm run doctor
-npm run preview
+npm run app
 ```
 
-Open **http://127.0.0.1:4173**. For local actions, start the helper in another terminal:
-
-```sh
-npm run helper
-```
+Open **http://127.0.0.1:5180**. The helper starts with the app. For a separate build preview, `npm run preview` serves the same build at **http://127.0.0.1:4173**; start `npm run helper` separately if you need local actions there. The preview address has separate browser storage.
 
 The production build includes a web app manifest, icons, and a service worker that caches the app interface. Visit it online once, then use the browser's install action, or **Install Local Repos** when the browser exposes the installation prompt. PWA installation does not install or start the Node helper.
 
@@ -489,8 +489,8 @@ Start the helper with the configuration path in its environment:
 LOCAL_REPOS_MCP_CONFIG="$HOME/.config/local-repos/mcp.json" npm run helper
 ```
 
-Use the same environment variable with `npm run dev` to start the UI too. The
-endpoint is `http://127.0.0.1:4318/mcp`, with an `Authorization: Bearer <token>`
+Use the same environment variable with `npm run app` to start the built UI too
+(run `npm run build` first). The endpoint is `http://127.0.0.1:4318/mcp`, with an `Authorization: Bearer <token>`
 header on every request. Credentials are loaded at startup; restart after changing
 or revoking them. Keep configuration files out of repositories. The helper remains
 local and the static hosted app has no MCP endpoint.

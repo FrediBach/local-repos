@@ -13,7 +13,7 @@ flowchart LR
   UI <--> Cache[IndexedDB and browser preferences]
   UI --> BrowserScan[File System Access scanner]
   BrowserScan --> Granted[User-granted directory]
-  UI -->|same-origin /api| Vite[Vite dev or preview proxy]
+  UI -->|same-origin /api| Vite[Vite static preview or dev proxy]
   Vite --> Helper[Express helper on loopback]
   Helper --> Registry[Project registry and runtime]
   Registry --> Files[Registered local directories]
@@ -33,10 +33,18 @@ Demo is the absence of a connected workspace. A connected workspace has mode
 `browser` or `helper`; hosted deployment is a separate UI capability check in
 [deployment.ts](../src/lib/deployment.ts).
 
+For daily use, [scripts/app.mjs](../scripts/app.mjs) serves the existing `dist/`
+build through Vite preview at `127.0.0.1:5180` and starts the helper at
+`127.0.0.1:4318`, without source watching or hot reload. It requires
+`npm run build` first; updates require rebuilding the frontend and restarting.
+Both launchers share [scripts/start.mjs](../scripts/start.mjs), including child
+shutdown on signals or either child exiting. They use the same browser origin
+and storage and cannot run simultaneously.
+
 For local development, [scripts/dev.mjs](../scripts/dev.mjs) starts Vite at
 `127.0.0.1:5180` and the helper at `127.0.0.1:4318`. The browser always calls
 same-origin `/api` URLs; [vite.config.ts](../vite.config.ts) forwards them to the
-helper. Production preview uses port `4173` and the same proxy, but requires
+helper. Standalone `npm run preview` uses port `4173` and the same proxy, but requires
 starting the helper separately.
 
 ## Source map
@@ -55,7 +63,7 @@ starting the helper separately.
 | [server/runtime.ts](../server/runtime.ts) | Process lifecycle, previews, maintenance coordination, and application opening. |
 | [server](../server) feature modules | Git queries, package tools, storage, script validation, and preview rendering. |
 | [config/site.ts](../config/site.ts), [vite.config.ts](../vite.config.ts), [vercel.json](../vercel.json) | Build metadata, PWA, local proxy, and static hosting. |
-| [scripts](../scripts), [design](../design), [public](../public) | Development launcher, brand asset sources, and committed public assets. |
+| [scripts](../scripts), [design](../design), [public](../public) | App/development launchers, brand asset sources, and committed public assets. |
 
 ## Data and operation flow
 

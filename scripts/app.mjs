@@ -1,3 +1,3 @@
 import { start } from './start.mjs'
 
-start('dev')
+start('app')

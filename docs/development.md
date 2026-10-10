@@ -1,6 +1,6 @@
 # Development
 
-## Setup and local runtime
+## Setup and development runtime
 
 Use Node.js **22.12 or newer** and npm, as declared in
 [package.json](../package.json). This repository uses
@@ -29,11 +29,31 @@ features that invoke them. The helper runs through `tsx` without automatic
 server reload; restart it after changing server code. Vite handles frontend hot
 updates.
 
+## Daily use
+
+Run `npm run build` once, then `npm run app` to serve the built frontend and
+start the helper without source watching or hot reload. A missing build stops
+startup with build instructions. After updating Local Repos, stop the app,
+run `npm ci` and `npm run build`, then start it again. The helper still runs
+through `tsx` from the current source; only the frontend is built into `dist/`.
+Repository monitoring continues according to the app's Watcher settings.
+
+Daily use and development share `http://127.0.0.1:5180` and its browser storage;
+stop one before starting the other. Both launchers stop their children on Ctrl+C
+or when either child exits. `npm run preview` remains a separate build preview
+on port `4173` and does not start the helper.
+
+The built app registers a service worker. When switching to development on the
+same origin, if the browser keeps showing the built app, unregister the service
+worker in browser developer tools and reload. Leave IndexedDB and localStorage
+intact to preserve your workspace and preferences.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the UI and helper together. |
+| `npm run app` | Serve the existing production browser build and start the helper on ports `5180` and `4318`, without source watching. |
+| `npm run dev` | Start Vite with frontend hot reload and the helper for development. |
 | `npm run dev:browser` | Start only Vite on loopback port `5180`; an independently running helper is still reachable through its proxy. |
 | `npm run helper` | Start only the Node helper on loopback port `4318`. |
 | `npm test` | Run the full Vitest suite once. |
@@ -106,8 +126,8 @@ Helvetica, or Arial installed locally. Ordinary builds consume the committed
 images without regenerating them. Keep `dist/`, `node_modules/`, local `.env`
 files, and build caches out of commits.
 
-Use a production build and preview to verify service worker behavior: PWA
-service worker generation is not enabled for the development server. Deployment
+Use `npm run build` followed by `npm run app` (or a separate preview) to verify
+service worker behavior: PWA service worker generation is not enabled for the development server. Deployment
 and cache boundaries are described in [architecture.md](architecture.md); user
 installation instructions remain in the [README](../README.md).
 

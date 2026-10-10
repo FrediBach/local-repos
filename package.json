@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Bring your local repositories together. Browse READMEs, search packages, track Git activity, and pick up where you left off.",
   "scripts": {
+    "app": "node scripts/app.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:browser": "vite --host 127.0.0.1",
     "helper": "tsx server/index.ts",

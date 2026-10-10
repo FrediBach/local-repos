@@ -19,7 +19,9 @@ These instructions apply throughout this repository.
 
 - Use Node.js **22.12+** and npm. Install from `package-lock.json` with `npm ci`;
   update the lockfile alongside deliberate dependency changes.
-- `npm run dev` starts Vite at `127.0.0.1:5180` and the helper at
+- Daily use: `npm run build`, then `npm run app` serves the built UI and starts
+  the helper without source watching. Rebuild and restart after updates.
+- For development, `npm run dev` starts Vite at `127.0.0.1:5180` and the helper at
   `127.0.0.1:4318`. Restart the helper after server edits. `npm run dev:browser`
   starts only Vite. Screenshot capture needs `npx playwright install chromium`.
 - Run focused tests with `npm test -- <test-file>`. For application changes,

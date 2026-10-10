@@ -28,7 +28,7 @@ export function ConnectWorkspaceDialog({ open, busy, hosted, helper, path, error
         <form onSubmit={event => { event.preventDefault(); void onConnect('helper') }}>
           <div className="path-input"><Folder size={16} /><input id="directory-path" placeholder="/Users/you/Projects" value={path} onChange={event => onPathChange(event.target.value)} autoComplete="off" spellCheck={false} /></div>
           <p className="field-hint">Enter an absolute path. The helper enables previews, dev servers, disk cleanup, package scans, and editor shortcuts.</p>
-          {!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run dev</code>.</p>}
+          {!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run app</code>.</p>}
           <Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button>
         </form>
       </>}

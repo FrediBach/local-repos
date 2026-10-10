@@ -34,7 +34,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
           <h3>Start the helper with MCP enabled</h3>
           <p>From the Local Repos checkout, run:</p>
           <pre><code>{'LOCAL_REPOS_MCP_CONFIG="$HOME/.config/local-repos/mcp.json" npm run helper'}</code></pre>
-          <p>Use <code>npm run dev</code> instead of <code>npm run helper</code> in that command to start the browser app too. Stop an existing helper first to free port 4318. Restart the helper whenever you change or revoke client credentials.</p>
+          <p>Use <code>npm run app</code> instead of <code>npm run helper</code> in that command to start the browser app too, after building it with <code>npm run build</code>. Stop an existing helper first to free port 4318. Restart the helper whenever you change or revoke client credentials.</p>
         </li>
         <li>
           <h3>Connect your MCP client</h3>

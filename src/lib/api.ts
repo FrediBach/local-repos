@@ -71,7 +71,7 @@ export async function api<T>(path: string, body?: unknown, retry = true, onProgr
     if (response.ok && response.headers?.get('Content-Type')?.includes('application/x-ndjson')) data = await readProgress<T>(response, onProgress)
     else {
       const value = await response.json().catch(() => null)
-      if (!response.ok) throw new HelperError(value?.error || 'The local helper is unavailable. Start the app with npm run dev and try again.', response.status)
+      if (!response.ok) throw new HelperError(value?.error || 'The local helper is unavailable. Start the app with npm run app and try again.', response.status)
       data = value as T
     }
   } catch (error) {

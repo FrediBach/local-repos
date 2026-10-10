@@ -9,16 +9,19 @@ server-side `RegisteredProject` and `ProjectRuntime` state.
 
 ## Entry points and request flow
 
-[`scripts/dev.mjs`](../scripts/dev.mjs) starts Vite and the helper together and
-stops both when either exits. [`server/index.ts`](../server/index.ts) listens on
+[`scripts/app.mjs`](../scripts/app.mjs) serves the built browser app and starts
+the helper for daily use. [`scripts/dev.mjs`](../scripts/dev.mjs) starts Vite
+with hot reload and the helper for development. Both use
+[`scripts/start.mjs`](../scripts/start.mjs) to stop both children on shutdown
+or when either exits. [`server/index.ts`](../server/index.ts) listens on
 `127.0.0.1:4318`, handles startup errors, and calls `application.shutdown()` on SIGINT
 or SIGTERM. `npm run helper` starts only this process.
 
 [`createApp()`](../server/app.ts) creates a fresh Express app and shared helper application containing the registry,
 runtime, root index, operation coordinator, and workspace map. Returning these objects separately allows tests to
 exercise HTTP behavior without the production listener. The Vite development
-and preview servers proxy `/api` to the helper; their ports are 5180 and 4173
-respectively ([configuration](../vite.config.ts)).
+and daily-use servers proxy `/api` to the helper on port 5180; the standalone
+preview uses port 4173 ([configuration](../vite.config.ts)).
 
 The normal flow is:
 
