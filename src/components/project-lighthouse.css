@@ -2,10 +2,6 @@
 :is(.project-audit-badge, .project-outdated-badge, .project-react-doctor-badge) + .project-lighthouse-badge { margin-left: 0; }
 .project-lighthouse-badge:hover { box-shadow: 0 0 0 1px currentColor; }
 .projects-list .project-lighthouse-badge { min-height: 28px; }
-.projects-grid .project-title-row > .project-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.projects-grid .project-title-row:has(> .project-lighthouse-badge) { flex-wrap: wrap; justify-content: flex-start; }
-.projects-grid .project-title-row:has(> .project-lighthouse-badge) > .project-name { flex-basis: 100%; }
-.projects-grid .project-title-row:has(> .project-lighthouse-badge) > :is(.project-audit-badge, .project-outdated-badge, .project-react-doctor-badge, .project-lighthouse-badge) { margin-left: 0; }
 .detail-tabs.lighthouse-tabs { overflow-x: auto; }
 .detail-tabs.lighthouse-tabs button { flex-shrink: 0; white-space: nowrap; }
 .lighthouse-section > .maintenance-hint { margin-top: 10px; }

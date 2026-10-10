@@ -432,6 +432,9 @@ select:is(.search-scope, .preview-source-controls select, .filter-field select, 
 .projects-grid .project-card { display: flex; flex-direction: column; }
 .projects-grid .project-card.is-subpackage { border-style: dashed; }
 .projects-grid .project-info { flex: 1; }
+.projects-grid .project-title-row { flex-wrap: wrap; justify-content: flex-end; }
+.projects-grid .project-title-row > .project-name { display: flex; align-items: center; gap: 6px; min-width: 0; flex-basis: 100%; }
+.projects-grid .project-title-row > :is(.project-audit-badge, .project-outdated-badge, .project-react-doctor-badge, .project-lighthouse-badge) { margin-left: 0; }
 .monorepo-group { grid-column: 1 / -1; min-width: 0; padding: 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--surface-muted); }
 .monorepo-group-header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 2px 14px; color: var(--muted-foreground); }
 .monorepo-group-header > svg { color: var(--accent); }
