@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RepoProject } from '../types'
+import type { RepoProject, ScanProgress, ScanProgressReporter } from '../types'
 
 export interface AuditBatchProgress {
   status: 'running' | 'stopping' | 'completed' | 'stopped'
+  stage?: ScanProgress
+  stageStartedAt?: number
+  startedAt?: number
   total: number
   completed: number
   succeeded: number
@@ -12,7 +15,7 @@ export interface AuditBatchProgress {
   cacheWarnings: number
 }
 
-type Audit = (project: RepoProject, isCurrent: () => boolean) => Promise<{ cacheWarning?: boolean; vulnerable?: boolean } | void>
+type Audit = (project: RepoProject, isCurrent: () => boolean, reportProgress: ScanProgressReporter) => Promise<{ cacheWarning?: boolean; vulnerable?: boolean } | void>
 
 /** Audit every queued project sequentially and stop only after the active request. */
 export function useAuditBatch() {
@@ -28,13 +31,13 @@ export function useAuditBatch() {
     }
   }, [])
 
-  async function run(projects: RepoProject[], audit: Audit) {
-    if (!mounted.current || active.current || !projects.length) return
+  async function run(projects: RepoProject[], audit: Audit, isWorkspaceCurrent: () => boolean = () => true) {
+    if (!mounted.current || active.current || !isWorkspaceCurrent() || !projects.length) return
     const job = { stop: false }
     active.current = job
     const queue = [...projects]
-    let state: AuditBatchProgress = { status: 'running', total: queue.length, completed: 0, succeeded: 0, vulnerable: 0, failures: [], cacheWarnings: 0 }
-    const isCurrent = () => mounted.current && active.current === job
+    let state: AuditBatchProgress = { status: 'running', startedAt: Date.now(), total: queue.length, completed: 0, succeeded: 0, vulnerable: 0, failures: [], cacheWarnings: 0 }
+    const isCurrent = () => mounted.current && active.current === job && isWorkspaceCurrent()
     const publish = () => {
       if (isCurrent()) setProgress({ ...state, status: job.stop && state.status === 'running' ? 'stopping' : state.status })
     }
@@ -42,10 +45,16 @@ export function useAuditBatch() {
     try {
       for (const project of queue) {
         if (job.stop || !isCurrent()) break
-        state = { ...state, current: { id: project.id, name: project.name } }
+        state = { ...state, current: { id: project.id, name: project.name }, stage: { phase: 'Preparing scan' }, stageStartedAt: Date.now() }
+        const reportProgress: ScanProgressReporter = stage => {
+          if (!isCurrent() || state.current?.id !== project.id) return
+          state = { ...state, stage, stageStartedAt: stage.phase === state.stage?.phase ? state.stageStartedAt : Date.now() }
+          publish()
+        }
         publish()
         try {
-          const result = await audit(project, isCurrent)
+          const result = await audit(project, isCurrent, reportProgress)
+          if (!isCurrent()) break
           state = {
             ...state,
             succeeded: state.succeeded + 1,
@@ -60,9 +69,12 @@ export function useAuditBatch() {
         publish()
       }
     } finally {
-      state = { ...state, current: undefined, status: state.completed === state.total ? 'completed' : 'stopped' }
+      state = { ...state, current: undefined, stage: undefined, stageStartedAt: undefined, status: state.completed === state.total ? 'completed' : 'stopped' }
       publish()
-      if (active.current === job) active.current = null
+      if (active.current === job) {
+        active.current = null
+        if (mounted.current && !isWorkspaceCurrent()) setProgress(undefined)
+      }
     }
     return state
   }

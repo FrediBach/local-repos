@@ -236,6 +236,32 @@ persists the accumulated workspace. A later successful write saves earlier batch
 results too, so it clears accumulated cache-write warnings. Individual failures
 are recorded while remaining queued projects continue.
 
+All five batch panels share the current-step display in
+[`scan-progress-panel.tsx`](../src/components/scan-progress-panel.tsx), including
+the active project, helper-reported stage and details, time in that stage, and
+total elapsed time. Their progress bars count completed projects; stages do not
+imply an estimated percentage. Ordinary explanatory notes use neutral styling,
+while partial results, cache problems, and failures retain warning styling.
+Timers do not announce every second to assistive technology and the panels use
+the existing reduced-motion styles.
+The current-step block uses a fixed height with a larger allowance in narrow
+containers. Its keyboard-accessible content scrolls independently of the timer
+and returns to the top when the phase changes, keeping surrounding content stable.
+
+[`use-scan-progress.ts`](../src/hooks/use-scan-progress.ts) supplies the same live
+display for individual scans, automatic checks, connection, and metadata sync.
+Active project and connection dialogs also show the relevant progress. Stage
+updates use the existing workspace generation and batch guards, and callbacks
+from finished projects cannot overwrite a later project's progress. Stages and
+their clocks are never saved in IndexedDB. Browser directory scans report their
+own read-only discovery stages.
+
+The API adapter requests `application/x-ndjson` when a progress callback is
+provided. It incrementally reads progress, final-result, and error frames, keeps
+ordinary JSON responses compatible, and treats a stream without a final result
+as a failed request. The existing helper re-registration retry also applies to
+streamed errors. Saving the browser cache is a separate final client stage.
+
 The watcher supports manual, periodic, and package-change modes. Manual is the
 default. Periodic mode rescans the connected workspace; package-change mode polls
 the helper's `/package-changes` endpoint and compares fingerprints. Its baseline

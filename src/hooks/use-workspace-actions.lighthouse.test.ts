@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import type { LighthouseReport, RepoProject, Workspace } from '../types'
+import type { LighthouseReport, RepoProject, ScanProgressReporter, Workspace } from '../types'
 import { defaultSettings } from '../lib/settings'
 import { useWorkspaceActions } from './use-workspace-actions'
 
@@ -33,6 +33,25 @@ beforeEach(() => vi.resetAllMocks())
 afterEach(cleanup)
 
 describe('Lighthouse workspace coordination', () => {
+  it('shows individual scan phases until saving finishes and ignores later callbacks', async () => {
+    const pending = deferred<{ lighthouse: LighthouseReport }>()
+    const saving = deferred<boolean>()
+    api.projectAction.mockReturnValue(pending.promise)
+    const props = options()
+    props.persist.mockReturnValue(saving.promise)
+    const { result } = renderHook(() => useWorkspaceActions(props))
+    let job!: Promise<void>
+    act(() => { job = result.current.action(frontend, 'lighthouse') })
+    const reportProgress = api.projectAction.mock.calls[0][3] as ScanProgressReporter
+    act(() => { reportProgress({ phase: 'Collecting browser performance', detail: 'Measuring page load' }) })
+    expect(result.current.scanProgress).toMatchObject({ title: 'Running Lighthouse', projectId: frontend.id, stage: { phase: 'Collecting browser performance' } })
+    await act(async () => { pending.resolve({ lighthouse: report }); await pending.promise })
+    expect(result.current.scanProgress?.stage.phase).toBe('Saving results')
+    await act(async () => { saving.resolve(true); await job })
+    act(() => { reportProgress({ phase: 'Late progress' }) })
+    expect(result.current.scanProgress).toBeUndefined()
+  })
+
   it('blocks other batches, project actions, and watcher scans immediately while Lighthouse is active', async () => {
     const pending = deferred<{ lighthouse: LighthouseReport }>()
     api.projectAction.mockReturnValue(pending.promise)
@@ -48,7 +67,7 @@ describe('Lighthouse workspace coordination', () => {
       await result.current.action(frontend, 'start')
       await result.current.runAutomaticScan(undefined, () => true, vi.fn())
     })
-    expect(api.projectAction).toHaveBeenCalledExactlyOnceWith('frontend', 'lighthouse')
+    expect(api.projectAction).toHaveBeenCalledExactlyOnceWith('frontend', 'lighthouse', {}, expect.any(Function))
     expect(api.scanWithHelper).not.toHaveBeenCalled()
     expect(result.current.packageBusy(frontend)).toBe('frontend:lighthouse')
     act(() => { result.current.lighthouseBatch.stop() })

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import type { ReactDoctorReport, RepoProject } from '../types'
+import type { ReactDoctorReport, RepoProject, ScanProgressReporter } from '../types'
 import { useReactDoctorBatch } from './use-react-doctor-batch'
 
 afterEach(cleanup)
@@ -21,6 +21,32 @@ function deferred<T>() {
 }
 
 describe('workspace React Doctor scan queue', () => {
+  it('reports real phases while stopping and drops progress from previous projects and workspaces', async () => {
+    const pending = projects.map(() => deferred<{ report: ReactDoctorReport }>())
+    const reporters: ScanProgressReporter[] = []
+    const scan = vi.fn((project: RepoProject, _current: () => boolean, reportProgress: ScanProgressReporter) => {
+      reporters.push(reportProgress)
+      return pending[projects.indexOf(project)].promise
+    })
+    const { result } = renderHook(useReactDoctorBatch)
+    let current = true
+    let job!: ReturnType<typeof result.current.run>
+    act(() => { job = result.current.run(projects, scan, () => current) })
+    act(() => { reporters[0]({ phase: 'Analyzing source', detail: 'Linting React components' }) })
+    expect(result.current.progress).toMatchObject({ stage: { phase: 'Analyzing source' }, completed: 0 })
+    await act(async () => { pending[0].resolve({ report }); await pending[0].promise })
+    act(() => { reporters[0]({ phase: 'Late phase' }) })
+    expect(result.current.progress).toMatchObject({ current: { id: 'bravo' }, stage: { phase: 'Preparing scan' } })
+    act(() => { result.current.stop(); reporters[1]({ phase: 'Calculating score' }) })
+    expect(result.current.progress).toMatchObject({ status: 'stopping', stage: { phase: 'Calculating score' } })
+    current = false
+    act(() => { reporters[1]({ phase: 'Old workspace' }) })
+    expect(result.current.progress?.stage?.phase).toBe('Calculating score')
+    await act(async () => { pending[1].resolve({ report }); await job })
+    expect(scan).toHaveBeenCalledTimes(2)
+    expect(result.current.progress).toBeUndefined()
+  })
+
   it('scans only React projects sequentially and excludes unavailable scores from totals', async () => {
     const pending = projects.map(() => deferred<{ report: ReactDoctorReport }>())
     const scan = vi.fn((project: RepoProject) => pending[projects.indexOf(project)].promise)

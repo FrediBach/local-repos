@@ -2,7 +2,7 @@ import { execFile, type ExecFileOptionsWithStringEncoding } from 'node:child_pro
 import { lstat, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { AuditFinding, AuditSeverity, PackageAudit, RepoProject } from '../src/types'
+import type { AuditFinding, AuditSeverity, PackageAudit, RepoProject, ScanProgressReporter } from '../src/types'
 import { HelperError, type RegisteredProject } from './scanner'
 import { advisoryIdentifiers, readAuditIgnores, resolveIgnoreAliases } from './audit-ignore'
 import { suppressAuditFindings, type ParsedAudit, type ParsedAuditFinding } from './audit-suppressions'
@@ -171,8 +171,10 @@ async function requireLockfile(entry: RegisteredProject): Promise<void> {
 }
 
 /** Runs only when explicitly requested; never installs dependencies or applies fixes. */
-export async function auditProject(entry: RegisteredProject, runner: AuditRunner = runAuditCommand): Promise<PackageAudit> {
+export async function auditProject(entry: RegisteredProject, runner: AuditRunner = runAuditCommand, onProgress?: ScanProgressReporter): Promise<PackageAudit> {
+  onProgress?.({ phase: 'Checking the manifest and lockfile' })
   await requireLockfile(entry)
+  onProgress?.({ phase: 'Reading vulnerability ignore rules' })
   const { rules, warnings } = await readAuditIgnores(entry.workspaceDirectory ?? entry.directory)
   const manager = entry.project.packageManager
   if (process.platform === 'win32' && manager !== 'bun') {
@@ -209,6 +211,7 @@ export async function auditProject(entry: RegisteredProject, runner: AuditRunner
       }
     }
     if (manager === 'bun') {
+      onProgress?.({ phase: 'Checking the installed Bun version' })
       // Older Bun versions treat an unknown command as a package script. Check
       // the built-in command's minimum version before ever invoking "audit".
       const version = await runner(manager, ['--version'], { ...options, timeout: 10_000 })
@@ -218,6 +221,7 @@ export async function auditProject(entry: RegisteredProject, runner: AuditRunner
       }
     }
     if (manager === 'yarn') {
+      onProgress?.({ phase: 'Checking the installed Yarn version' })
       const version = await runner(manager, ['--version'], { ...options, timeout: 10_000 })
       const parts = versionParts(version.stdout)
       if (version.exitCode !== 0 || !parts || parts[0] < 1) throw new HelperError('Could not identify the installed Yarn version. Install Yarn before running an audit.', 502)
@@ -233,15 +237,19 @@ export async function auditProject(entry: RegisteredProject, runner: AuditRunner
         if (major >= 4) args.push('--no-deprecations')
       } else args.push('--non-interactive', '--ignore-scripts', '--production=false', '--groups', 'dependencies devDependencies optionalDependencies')
     }
+    onProgress?.({ phase: 'Querying the vulnerability registry', detail: `${manager} is checking locked dependencies` })
     const output = await runner(manager, args, options)
+    onProgress?.({ phase: 'Validating vulnerability findings' })
     // A partial or failed registry request must not appear as a clean report.
     if (/audit request failed|\bunaudited\b|\bskipped\b/i.test(output.stderr)) unsupportedReport()
     const result = parseReport(output.stdout, format)
     const total = Object.values(result.counts).reduce((sum, count) => sum + count, 0)
     const validExit = output.exitCode === 0 || (total > 0 && (format === 'yarn-classic' ? output.exitCode >= 1 && output.exitCode <= 31 : output.exitCode === 1))
     if (!validExit) unsupportedReport()
+    onProgress?.({ phase: 'Matching advisory aliases and ignore rules' })
     await resolveIgnoreAliases(rules, result.findings.flatMap(finding => (finding.advisories ?? [finding])
       .filter(item => !item.identifiers?.some(id => rules.has(id))).flatMap(item => item.identifiers ?? [])), warnings)
+    onProgress?.({ phase: 'Preparing the vulnerability report' })
     return { manager, scannedAt: new Date().toISOString(), ...suppressAuditFindings(result, rules), ...(warnings.length ? { warnings } : {}) }
   } catch (error) {
     if (error instanceof HelperError) throw error

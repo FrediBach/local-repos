@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PackageOutdated, RepoProject } from '../types'
+import type { PackageOutdated, RepoProject, ScanProgress, ScanProgressReporter } from '../types'
 
 export interface OutdatedBatchProgress {
   status: 'running' | 'stopping' | 'completed' | 'stopped'
+  stage?: ScanProgress
+  stageStartedAt?: number
+  startedAt?: number
   total: number
   completed: number
   succeeded: number
@@ -15,7 +18,7 @@ export interface OutdatedBatchProgress {
   cacheWarnings: number
 }
 
-type Scan = (project: RepoProject, isCurrent: () => boolean) => Promise<{ cacheWarning?: boolean; outdated?: boolean; score?: number; skipped?: number; report?: PackageOutdated } | void>
+type Scan = (project: RepoProject, isCurrent: () => boolean, reportProgress: ScanProgressReporter) => Promise<{ cacheWarning?: boolean; outdated?: boolean; score?: number; skipped?: number; report?: PackageOutdated } | void>
 
 /** Scan every queued project sequentially and stop only after the active request. */
 export function useOutdatedBatch() {
@@ -31,13 +34,13 @@ export function useOutdatedBatch() {
     }
   }, [])
 
-  async function run(projects: RepoProject[], scan: Scan) {
-    if (!mounted.current || active.current || !projects.length) return
+  async function run(projects: RepoProject[], scan: Scan, isWorkspaceCurrent: () => boolean = () => true) {
+    if (!mounted.current || active.current || !isWorkspaceCurrent() || !projects.length) return
     const job = { stop: false }
     active.current = job
     const queue = [...projects]
-    let state: OutdatedBatchProgress = { status: 'running', total: queue.length, completed: 0, succeeded: 0, outdated: 0, score: 0, reports: [], skipped: 0, failures: [], cacheWarnings: 0 }
-    const isCurrent = () => mounted.current && active.current === job
+    let state: OutdatedBatchProgress = { status: 'running', startedAt: Date.now(), total: queue.length, completed: 0, succeeded: 0, outdated: 0, score: 0, reports: [], skipped: 0, failures: [], cacheWarnings: 0 }
+    const isCurrent = () => mounted.current && active.current === job && isWorkspaceCurrent()
     const publish = () => {
       if (isCurrent()) setProgress({ ...state, status: job.stop && state.status === 'running' ? 'stopping' : state.status })
     }
@@ -45,10 +48,16 @@ export function useOutdatedBatch() {
     try {
       for (const project of queue) {
         if (job.stop || !isCurrent()) break
-        state = { ...state, current: { id: project.id, name: project.name } }
+        state = { ...state, current: { id: project.id, name: project.name }, stage: { phase: 'Preparing scan' }, stageStartedAt: Date.now() }
+        const reportProgress: ScanProgressReporter = stage => {
+          if (!isCurrent() || state.current?.id !== project.id) return
+          state = { ...state, stage, stageStartedAt: stage.phase === state.stage?.phase ? state.stageStartedAt : Date.now() }
+          publish()
+        }
         publish()
         try {
-          const result = await scan(project, isCurrent)
+          const result = await scan(project, isCurrent, reportProgress)
+          if (!isCurrent()) break
           state = {
             ...state,
             succeeded: state.succeeded + 1,
@@ -66,9 +75,12 @@ export function useOutdatedBatch() {
         publish()
       }
     } finally {
-      state = { ...state, current: undefined, status: state.completed === state.total ? 'completed' : 'stopped' }
+      state = { ...state, current: undefined, stage: undefined, stageStartedAt: undefined, status: state.completed === state.total ? 'completed' : 'stopped' }
       publish()
-      if (active.current === job) active.current = null
+      if (active.current === job) {
+        active.current = null
+        if (mounted.current && !isWorkspaceCurrent()) setProgress(undefined)
+      }
     }
     return state
   }

@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { ProjectRuntime } from './runtime'
 import { ProjectRegistry, scanDirectory } from './scanner'
 
@@ -27,7 +27,8 @@ it.skipIf(!existsSync(chromium.executablePath()))('audits a disposable frontend 
     await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'lighthouse-fixture', localRepos: { previewUrl: url } }))
     const { registered } = await scanDirectory(directory)
     registry.register(registered)
-    const report = await runtime.lighthouse(registered[0].project.id)
+    const progress = vi.fn()
+    const report = await runtime.lighthouse(registered[0].project.id, progress)
     expect(report).toMatchObject({ version: '12.8.2', requestedUrl: url, url, formFactor: 'desktop' })
     expect(report.categories.map(category => category.id)).toEqual(['performance', 'accessibility', 'best-practices', 'seo'])
     expect(report.categories.every(category => category.score !== null && category.score >= 0 && category.score <= 100)).toBe(true)
@@ -35,6 +36,11 @@ it.skipIf(!existsSync(chromium.executablePath()))('audits a disposable frontend 
     expect(report.audits.find(audit => audit.id === 'largest-contentful-paint')?.numericValue).toBeGreaterThan(0)
     expect(report.audits.some(audit => ['screenshot-thumbnails', 'final-screenshot'].includes(audit.id))).toBe(false)
     expect(registry.lookup(registered[0].project.id).project.lighthouse).toEqual(report)
+    const phases = progress.mock.calls.map(([value]) => value.phase)
+    expect(phases).toContain('Collecting browser performance and page data')
+    expect(phases).toContain('Evaluating Lighthouse audit checks')
+    expect(phases.indexOf('Evaluating Lighthouse audit checks')).toBeLessThan(phases.indexOf('Calculating Lighthouse category scores'))
+    expect(phases.indexOf('Calculating Lighthouse category scores')).toBeLessThan(phases.indexOf('Validating Lighthouse findings and scores'))
   } finally {
     await runtime.shutdown()
     await new Promise<void>(resolve => server.close(() => resolve()))

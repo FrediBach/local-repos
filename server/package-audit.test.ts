@@ -41,6 +41,25 @@ async function entry(manager: RepoProject['packageManager'] = 'npm', lockfile?: 
 }
 
 describe('package auditing', () => {
+  it('reports registry and suppression stages only after their prerequisites succeed', async () => {
+    const project = await entry()
+    const progress = vi.fn()
+    const runner = vi.fn<AuditRunner>().mockImplementation(async () => {
+      expect(progress.mock.lastCall?.[0].phase).toBe('Querying the vulnerability registry')
+      return { stdout: JSON.stringify(cleanReport), stderr: '', exitCode: 0 }
+    })
+    await auditProject(project, runner, progress)
+    expect(progress.mock.calls.map(([value]) => value.phase)).toEqual([
+      'Checking the manifest and lockfile', 'Reading vulnerability ignore rules',
+      'Querying the vulnerability registry', 'Validating vulnerability findings',
+      'Matching advisory aliases and ignore rules', 'Preparing the vulnerability report',
+    ])
+    progress.mockClear()
+    runner.mockRejectedValue({ killed: true })
+    await expect(auditProject(project, runner, progress)).rejects.toThrow('timed out')
+    expect(progress.mock.lastCall?.[0].phase).toBe('Querying the vulnerability registry')
+  })
+
   it('matches a CVE-only rule to an npm GHSA URL and leaves failures active with a warning', async () => {
     await writeFile(path.join(directory, '.trivyignore'), 'CVE-2026-12345')
     const project = await entry()

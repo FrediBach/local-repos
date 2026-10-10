@@ -17,6 +17,21 @@ async function entry(): Promise<RegisteredProject> {
 }
 
 describe('Knip reports', () => {
+  it('keeps source analysis visible while Knip runs and validates findings only after success', async () => {
+    const project = await entry()
+    const progress = vi.fn()
+    const runner = vi.fn<KnipRunner>().mockImplementation(async () => {
+      expect(progress.mock.lastCall?.[0].phase).toBe('Analyzing imports and dependency usage')
+      return { stdout: JSON.stringify({ issues: [] }), stderr: '', exitCode: 0 }
+    })
+    await unusedProject(project, runner, progress)
+    expect(progress.mock.lastCall?.[0].phase).toBe('Validating and matching unused dependencies')
+    progress.mockClear()
+    runner.mockRejectedValue({ killed: true })
+    await expect(unusedProject(project, runner, progress)).rejects.toThrow('two-minute')
+    expect(progress.mock.lastCall?.[0].phase).toBe('Analyzing imports and dependency usage')
+  })
+
   it('runs the bundled CLI with bounds and reports fresh declarations, not referenced optional peers', async () => {
     const project = await entry()
     const runner = runnerFor({ issues: [row()] })

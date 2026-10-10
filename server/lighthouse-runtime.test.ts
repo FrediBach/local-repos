@@ -58,7 +58,7 @@ describe('Lighthouse helper integration', () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ lighthouse: report })
     expect(lighthouse.validateLighthousePage).toHaveBeenCalledWith(browser, url)
-    expect(lighthouse.lighthouseProject).toHaveBeenCalledWith(url, expect.any(Number), expect.any(AbortSignal))
+    expect(lighthouse.lighthouseProject).toHaveBeenCalledWith(url, expect.any(Number), expect.any(AbortSignal), undefined, expect.any(Function))
     expect(browser.close).toHaveBeenCalledOnce()
     expect((await (await post('/api/scan', { path: directory })).json()).projects[0].lighthouse).toEqual(report)
     vi.mocked(lighthouse.lighthouseProject).mockRejectedValueOnce(new Error('Scan failed'))

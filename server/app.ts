@@ -6,6 +6,7 @@ import { readGitDay } from './git-daily-summary'
 import { readGitPushStatus } from './git-push-status'
 import { packageFingerprint, repositoryFingerprint } from './package-fingerprint'
 import type { RegisteredProject } from './scanner'
+import { respondWithScan, scanError } from './scan-progress'
 
 export const HELPER_PORT = 4318
 
@@ -49,11 +50,13 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   app.use(express.json({ limit: '16kb' }))
   app.get('/api/health', (_request, response) => response.json({ ok: true, platform: process.platform }))
   app.post('/api/scan', async (request, response) => {
-    const { result, registered } = await scanDirectory(request.body?.path)
-    registry.register(registered)
-    workspaces.set(result.rootPath!, registered)
-    result.projects = registered.map((entry) => entry.project)
-    response.json(result)
+    await respondWithScan(request, response, async onProgress => {
+      const { result, registered } = await scanDirectory(request.body?.path, onProgress)
+      registry.register(registered)
+      workspaces.set(result.rootPath!, registered)
+      result.projects = registered.map((entry) => entry.project)
+      return result
+    })
   })
   app.post('/api/package-changes', async (request, response) => {
     const entries = workspaces.get(request.body?.path)
@@ -89,19 +92,21 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   })
   app.post('/api/projects/:id/start', async (request, response) => response.json({ dev: await runtime.start(request.params.id) }))
   app.post('/api/projects/:id/stop', async (request, response) => response.json({ dev: await runtime.stop(request.params.id) }))
-  app.post('/api/projects/:id/storage', async (request, response) => response.json({ storage: await runtime.storage(request.params.id) }))
+  app.post('/api/projects/:id/storage', async (request, response) => respondWithScan(request, response, async onProgress => ({ storage: await runtime.storage(request.params.id, onProgress) })))
   app.post('/api/projects/:id/delete-node-modules', async (request, response) => response.json({ storage: await runtime.deleteNodeModules(request.params.id, request.body?.confirm) }))
-  app.post('/api/projects/:id/audit', async (request, response) => response.json({ audit: await runtime.audit(request.params.id) }))
+  app.post('/api/projects/:id/audit', async (request, response) => respondWithScan(request, response, async onProgress => ({ audit: await runtime.audit(request.params.id, onProgress) })))
   app.post('/api/projects/:id/update-packages', async (request, response) => response.json({ packageUpdate: await runtime.updatePackages(request.params.id, request.body?.level) }))
-  app.post('/api/projects/:id/outdated', async (request, response) => response.json({ outdated: await runtime.outdated(request.params.id) }))
-  app.post('/api/projects/:id/unused', async (request, response) => response.json({ unused: await runtime.unused(request.params.id) }))
-  app.post('/api/projects/:id/react-doctor', async (request, response) => response.json({ reactDoctor: await runtime.reactDoctor(request.params.id) }))
-  app.post('/api/projects/:id/lighthouse', async (request, response) => response.json({ lighthouse: await runtime.lighthouse(request.params.id) }))
+  app.post('/api/projects/:id/outdated', async (request, response) => respondWithScan(request, response, async onProgress => ({ outdated: await runtime.outdated(request.params.id, onProgress) })))
+  app.post('/api/projects/:id/unused', async (request, response) => respondWithScan(request, response, async onProgress => ({ unused: await runtime.unused(request.params.id, onProgress) })))
+  app.post('/api/projects/:id/react-doctor', async (request, response) => respondWithScan(request, response, async onProgress => ({ reactDoctor: await runtime.reactDoctor(request.params.id, onProgress) })))
+  app.post('/api/projects/:id/lighthouse', async (request, response) => respondWithScan(request, response, async onProgress => ({ lighthouse: await runtime.lighthouse(request.params.id, onProgress) })))
   app.post('/api/projects/:id/screenshot', async (request, response) => {
     const source = request.body?.source ?? 'auto'
     if (source !== 'auto' && source !== 'local' && source !== 'website') throw new HelperError('Choose automatic, local, or website preview capture.')
-    const screenshot = await runtime.screenshot(request.params.id, source)
-    response.json({ screenshot, preview: registry.lookup(request.params.id).project.preview, dev: await runtime.status(request.params.id) })
+    await respondWithScan(request, response, async onProgress => {
+      const screenshot = await runtime.screenshot(request.params.id, source, onProgress)
+      return { screenshot, preview: registry.lookup(request.params.id).project.preview, dev: await runtime.status(request.params.id) }
+    })
   })
   app.post('/api/projects/:id/open', async (request, response) => {
     await runtime.open(request.params.id, request.body?.app)
@@ -118,16 +123,8 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   })
   app.use((_request, response) => response.status(404).json({ error: 'Unknown local helper endpoint.' }))
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
-    if (error instanceof HelperError) {
-      response.status(error.status).json({ error: error.message })
-      return
-    }
-    if (error instanceof SyntaxError) {
-      response.status(400).json({ error: 'The request body must be valid JSON.' })
-      return
-    }
-    console.error('[local-repos]', error)
-    response.status(500).json({ error: 'The local helper could not complete this action. Check its terminal for details.' })
+    const failure = scanError(error)
+    response.status(failure.status).json({ error: failure.error })
   })
   return { app, registry, runtime }
 }

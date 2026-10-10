@@ -28,6 +28,17 @@ function directory(name: string, tree: Tree): FileSystemDirectoryHandle {
 }
 
 describe('read-only folder scan', () => {
+  it('reports the current metadata operation and folder during discovery', async () => {
+    const progress = vi.fn()
+    const root = directory('Projects', { web: { 'package.json': '{"name":"web"}', 'README.md': '# Web', '.git': { HEAD: 'ref: refs/heads/main\n' } } })
+    const result = await scanDirectory(root, progress)
+    expect(result.projects.map(project => project.name)).toEqual(['web'])
+    expect(progress).toHaveBeenCalledWith({ phase: 'Reading package metadata', detail: 'web' })
+    expect(progress).toHaveBeenCalledWith({ phase: 'Reading README', detail: 'web' })
+    expect(progress).toHaveBeenCalledWith({ phase: 'Reading Git metadata', detail: 'web' })
+    expect(progress).toHaveBeenLastCalledWith({ phase: 'Organizing discovered projects', detail: '1 project found in 2 folders' })
+  })
+
   it.each(['AGENTS.md', 'AGENTS.m', 'CLAUDE.md'])('detects a root %s file without reading its content', async filename => {
     const root = directory('assisted', { 'package.json': '{}', [filename]: '' })
     const marker = await root.getFileHandle(filename)

@@ -51,7 +51,7 @@ describe('automatic quality scans', () => {
     const { result } = renderHook(() => useWorkspaceActions(props))
     let scanned: Workspace | undefined
     await act(async () => { scanned = await result.current.runAutomaticScan(undefined, () => true, progress) })
-    expect(api.projectAction.mock.calls).toEqual(expected)
+    expect(api.projectAction.mock.calls.map(([id, action]) => [id, action])).toEqual(expected)
     expect(progress.mock.calls.map(([message]) => message)).toEqual(expected.map(([id, action]) => `Running ${action === 'react-doctor' ? 'React Doctor' : 'Lighthouse'} · ${projects.find(project => project.id === id)!.name}`))
     expect(scanned?.projects.map(project => [project.id, project.reactDoctor, project.lighthouse])).toEqual([
       ['react-library', watcherReactDoctor ? reactDoctor : undefined, undefined],
@@ -70,7 +70,7 @@ describe('automatic quality scans', () => {
     const props = options()
     const { result } = renderHook(() => useWorkspaceActions(props))
     await act(async () => { await result.current.runAutomaticScan(['react-library'], () => true, vi.fn()) })
-    expect(api.projectAction.mock.calls).toEqual([['react-library', 'react-doctor'], ['new-app', 'react-doctor'], ['new-app', 'lighthouse']])
+    expect(api.projectAction.mock.calls.map(([id, action]) => [id, action])).toEqual([['react-library', 'react-doctor'], ['new-app', 'react-doctor'], ['new-app', 'lighthouse']])
   })
 
   it.each([
@@ -111,7 +111,7 @@ describe('automatic quality scans', () => {
     const { result } = renderHook(() => useWorkspaceActions(props))
     await act(async () => { await result.current.runAutomaticScan(undefined, () => true, vi.fn()) })
     expect(filesystem.canReadDirectory).toHaveBeenCalledExactlyOnceWith(handle)
-    expect(filesystem.scanDirectory).toHaveBeenCalledExactlyOnceWith(handle)
+    expect(filesystem.scanDirectory).toHaveBeenCalledExactlyOnceWith(handle, expect.any(Function))
     expect(api.scanWithHelper).not.toHaveBeenCalled()
     expect(api.projectAction).not.toHaveBeenCalled()
     expect(props.setConnectOpen).not.toHaveBeenCalled()

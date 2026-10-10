@@ -1,7 +1,7 @@
 import { lstat, opendir, realpath, rm } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
 import path from 'node:path'
-import type { ProjectStorage } from '../src/types'
+import type { ProjectStorage, ScanProgressReporter } from '../src/types'
 import { HelperError } from './scanner'
 
 const MAX_ENTRIES = 250_000
@@ -40,7 +40,8 @@ async function projectDirectory(directory: string): Promise<Stats> {
 }
 
 /** Allocated bytes, with symlink targets excluded and hard links counted once. */
-export async function measureProjectStorage(directory: string): Promise<ProjectStorage> {
+export async function measureProjectStorage(directory: string, onProgress?: ScanProgressReporter): Promise<ProjectStorage> {
+  onProgress?.({ phase: 'Checking the project directory' })
   const rootInfo = await projectDirectory(directory)
   const result: ProjectStorage = {
     totalBytes: 0,
@@ -53,6 +54,9 @@ export async function measureProjectStorage(directory: string): Promise<ProjectS
   const counted = new Set<string>()
   const countedModules = new Set<string>()
   let entries = 0
+  let lastProgress = 0
+  let phase = 'Measuring node_modules'
+  const reportEntries = () => onProgress?.({ phase, detail: `${entries.toLocaleString('en-US')} filesystem entries checked` })
   const count = (info: Stats, modules: boolean) => {
     const key = `${info.dev}:${info.ino}`
     if (!counted.has(key)) {
@@ -68,6 +72,10 @@ export async function measureProjectStorage(directory: string): Promise<ProjectS
   const walk = async (filename: string, depth: number, modules: boolean, known?: Stats): Promise<void> => {
     if (exhausted()) { result.partial = true; return }
     entries += 1
+    if (onProgress && Date.now() - lastProgress >= 250) {
+      lastProgress = Date.now()
+      reportEntries()
+    }
     let info: Stats
     try { info = known ?? await lstat(filename) }
     catch { result.partial = true; return }
@@ -95,6 +103,7 @@ export async function measureProjectStorage(directory: string): Promise<ProjectS
   // Measure the actionable root folder first, so a large source tree does not
   // consume the scan budget before dependencies can be measured.
   const modulesPath = path.join(directory, 'node_modules')
+  reportEntries()
   try {
     const modulesInfo = await lstat(modulesPath)
     result.hasNodeModules = true
@@ -102,7 +111,11 @@ export async function measureProjectStorage(directory: string): Promise<ProjectS
   } catch (error) {
     if (!missing(error)) result.partial = true
   }
+  phase = 'Measuring project files and build output'
+  reportEntries()
   await walk(directory, 0, false, rootInfo)
+  phase = 'Preparing the storage report'
+  reportEntries()
   result.measuredAt = new Date().toISOString()
   return result
 }

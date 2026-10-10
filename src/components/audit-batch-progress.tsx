@@ -9,7 +9,7 @@ export function AuditBatchProgress({ progress, onStop, onDismiss }: { progress: 
       icon={active ? <LoaderCircle size={17} className="spinning" /> : progress.status === 'completed' && !progress.failures.length && !progress.vulnerable ? <Check size={17} /> : <ShieldAlert size={17} />} action="Scanning" dismissLabel="Dismiss audit progress" onStop={onStop} onDismiss={onDismiss} />
     <BatchProgressTrack progress={progress} label="Vulnerability scan progress" action="scanning" />
     <div className="capture-progress-counts"><span>{progress.completed} of {progress.total} processed</span><span>{progress.succeeded} scanned</span><span className={progress.vulnerable ? 'capture-failure-count' : ''}>{progress.vulnerable} vulnerable</span><span className={progress.failures.length ? 'capture-failure-count' : ''}>{progress.failures.length} failed</span></div>
-    <p className="capture-cache-warning">Package names and versions are sent to each project’s configured registry.</p>
+    <p className="capture-progress-note">Package names and versions are sent to each project’s configured registry.</p>
     <BatchCacheWarning count={progress.cacheWarnings} />
     <BatchFailures failures={progress.failures}>Previous vulnerability results are kept when a scan fails.</BatchFailures>
   </section>

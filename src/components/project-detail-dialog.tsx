@@ -1,3 +1,5 @@
+import { ScanProgressPanel } from './scan-progress-panel'
+import type { ActiveScanProgress } from '@/hooks/use-scan-progress'
 import { Code2, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, Star, Tag } from 'lucide-react'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
@@ -21,6 +23,7 @@ import type { GitHistory, OpenProjectRequest, RepoProject } from '@/types'
 import { desktopAppName } from '@/lib/desktop-apps'
 
 interface Props {
+  scanProgress?: ActiveScanProgress
   onActivity?: (id: string, data: GitHistory, author?: string) => void
   selected?: RepoProject; helper: boolean; demo: boolean; busy: string; packageBusy: string; detailTab: ProjectTab; logs?: string
   tagsReady: boolean; selectedTags: Set<string>; favorite: boolean
@@ -29,12 +32,13 @@ interface Props {
   onAction: (project: RepoProject, action: string, body?: unknown) => void
 }
 
-export function ProjectDetailDialog({ selected, helper, demo, busy, packageBusy, detailTab, logs, tagsReady, selectedTags, favorite, onTabChange, onClose, onCloseAutoFocus, onTagFilter, onEditTags, onToggleFavorite, onAction, onActivity }: Props) {
+export function ProjectDetailDialog({ selected, helper, demo, busy, packageBusy, detailTab, logs, tagsReady, selectedTags, favorite, scanProgress, onTabChange, onClose, onCloseAutoFocus, onTagFilter, onEditTags, onToggleFavorite, onAction, onActivity }: Props) {
   const { settings } = useSettings()
   const hasReact = !!selected && isReactProject(selected)
   const hasFrontend = !!selected && (isLighthouseProject(selected) || !!selected.lighthouse)
   const activeTab = (detailTab === 'react-doctor' && !hasReact) || (detailTab === 'lighthouse' && !hasFrontend) ? 'overview' : detailTab
   return <Dialog open={!!selected} onOpenChange={value => { if (!value) onClose() }}><DialogContent className="project-dialog" onCloseAutoFocus={onCloseAutoFocus}>{selected && <><DetailHeader project={selected} demo={demo} tagsReady={tagsReady} selectedTags={selectedTags} onTagFilter={tag => { onTagFilter(tag); onClose() }} onEditTags={onEditTags} />
+    {scanProgress && <ScanProgressPanel progress={scanProgress} />}
     <ProjectTabs value={activeTab} onChange={onTabChange} react={hasReact} frontend={hasFrontend}>{activeTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'react-doctor' ? <ProjectReactDoctor key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'lighthouse' ? <ProjectLighthouse key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <DetailOverview onActivity={onActivity} project={selected} helper={helper} demo={demo} busy={busy} logs={logs} onAction={onAction} />}</ProjectTabs>
     <div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => onAction(selected, 'open', { app: settings.editor } satisfies OpenProjectRequest)}><Code2 size={15} />{desktopAppName(settings.editor)}</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => onAction(selected, 'open', { app: settings.gitClient } satisfies OpenProjectRequest)}><GitBranch size={15} />{desktopAppName(settings.gitClient)}</Button><Button variant="ghost" size="sm" aria-pressed={favorite} onClick={() => onToggleFavorite(selected.id)}><Star size={15} fill={favorite ? 'currentColor' : 'none'} />{favorite ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
 }

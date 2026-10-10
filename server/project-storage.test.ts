@@ -25,6 +25,16 @@ async function allocated(filename: string): Promise<number> {
 }
 
 describe('project disk usage', () => {
+  it('distinguishes dependency traversal from project traversal and reports observed entry counts', async () => {
+    await mkdir(path.join(project, 'node_modules'))
+    await writeFile(path.join(project, 'node_modules', 'package.js'), 'export default true')
+    const progress = vi.fn()
+    await measureProjectStorage(project, progress)
+    const phases = progress.mock.calls.map(([value]) => value.phase)
+    expect(phases.indexOf('Measuring node_modules')).toBeLessThan(phases.indexOf('Measuring project files and build output'))
+    expect(progress.mock.lastCall?.[0]).toEqual({ phase: 'Preparing the storage report', detail: '4 filesystem entries checked' })
+  })
+
   it('includes hidden files and dependencies, deduplicates hard links, and never follows symlinks', async () => {
     const modules = path.join(project, 'node_modules')
     const git = path.join(project, '.git')

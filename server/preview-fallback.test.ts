@@ -63,7 +63,7 @@ describe('preview capture fallbacks', () => {
     expect(response.status).toBe(200)
     const captured = await response.json()
     expect(captured).toMatchObject({ preview: { url: 'https://example.com/app/#/home', source: 'package' }, dev: { status: 'stopped' } })
-    expect(renderer.capturePage).toHaveBeenCalledWith(browser, 'https://example.com/app/#/home')
+    expect(renderer.capturePage).toHaveBeenCalledWith(browser, 'https://example.com/app/#/home', expect.any(Function))
     expect(sources.resolveGithubHomepage).not.toHaveBeenCalled()
     expect(assets.discoverPreviewAssets).not.toHaveBeenCalled()
     const image = await fetch(`${address}${captured.screenshot}`)
@@ -98,7 +98,7 @@ describe('preview capture fallbacks', () => {
     expect(captured).toMatchObject({ preview: { url: 'https://example.com/deployed', source: 'package' }, dev: { status: 'stopped' } })
     const localUrl = vi.mocked(renderer.capturePage).mock.calls[0][1]
     expect(localUrl).toMatch(/^http:\/\/127\.0\.0\.1:/)
-    expect(renderer.capturePage).toHaveBeenNthCalledWith(2, browser, 'https://example.com/deployed')
+    expect(renderer.capturePage).toHaveBeenNthCalledWith(2, browser, 'https://example.com/deployed', expect.any(Function))
     expect(assetRenderer.renderPreviewAsset).not.toHaveBeenCalled()
     await expect(fetch(localUrl, { signal: AbortSignal.timeout(1000) })).rejects.toThrow()
   }, 15_000)
@@ -110,7 +110,7 @@ describe('preview capture fallbacks', () => {
     const response = await post(`/api/projects/${repo.id}/screenshot`)
     expect(response.status).toBe(200)
     expect(sources.resolveGithubHomepage).toHaveBeenCalledWith('https://github.com/example/project')
-    expect(renderer.capturePage).toHaveBeenCalledWith(browser, 'https://project.example/app/')
+    expect(renderer.capturePage).toHaveBeenCalledWith(browser, 'https://project.example/app/', expect.any(Function))
     expect((await response.json()).preview.source).toBe('github')
   })
 

@@ -22,6 +22,21 @@ async function entry(): Promise<RegisteredProject> {
 }
 
 describe('React Doctor scanning', () => {
+  it('reports validation around the tool and does not imply later stages ran after a failure', async () => {
+    const project = await entry()
+    const progress = vi.fn()
+    const runner = vi.fn<ReactDoctorRunner>().mockImplementation(async () => {
+      expect(progress.mock.lastCall?.[0].phase).toBe('Loading React Doctor configuration and source files')
+      return { stdout: JSON.stringify(reportFor(directory)), stderr: '', exitCode: 0 }
+    })
+    await reactDoctorProject(project, runner, progress)
+    expect(progress.mock.lastCall?.[0].phase).toBe('Validating React Doctor findings and score')
+    progress.mockClear()
+    runner.mockRejectedValue({ killed: true })
+    await expect(reactDoctorProject(project, runner, progress)).rejects.toThrow('two-minute')
+    expect(progress.mock.calls.map(([value]) => value.phase)).not.toContain('Validating React Doctor findings and score')
+  })
+
   it('runs the installed CLI with full-project scope, bounded output and selected workspace', async () => {
     const project = await entry()
     const runner = runnerFor(reportFor(directory))
@@ -108,9 +123,15 @@ it('scans only the selected workspace package using the real CLI and respects pr
     await writeFile(path.join(directory, `packages/${name}/package.json`), JSON.stringify({ name, dependencies: { react: '^19.0.0' } }))
     await writeFile(path.join(directory, `packages/${name}/App.jsx`), 'export default function App() { return <img src="/x.png" /> }')
   }
-  const report = await reactDoctorProject({ ...project, directory: path.join(directory, 'packages/member'), workspaceDirectory: directory })
+  const progress = vi.fn()
+  const report = await reactDoctorProject({ ...project, directory: path.join(directory, 'packages/member'), workspaceDirectory: directory }, undefined, progress)
   expect(report.findings.some(item => item.rule === 'alt-text')).toBe(true)
   expect(report.findings.every(item => !item.filePath.includes('sibling'))).toBe(true)
   expect(report.score).toBeNull()
   expect(report.warning).not.toContain('incomplete')
+  const phases = progress.mock.calls.map(([value]) => value.phase)
+  expect(phases).toContain('Running React lint and code analysis')
+  expect(phases).not.toContain('Requesting the React health score')
+  expect(phases.at(-1)).toBe('Validating React Doctor findings and score')
+  expect(report.warning).not.toContain('LOCAL_REPOS_SCAN_PHASE')
 }, 30_000)

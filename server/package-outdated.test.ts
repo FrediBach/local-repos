@@ -59,14 +59,21 @@ describe('outdated scanning', () => {
       await mkdir(path.join(directory, 'node_modules', name), { recursive: true })
       await writeFile(path.join(directory, 'node_modules', name, 'package.json'), JSON.stringify({ name, version: '1.0.0' }))
     }
+    const progress = vi.fn()
     const runner = vi.fn<OutdatedRunner>().mockImplementation(async (_command, args) => args[0] === 'outdated' ? output({}) : output('3.0.0'))
-    expect(await outdatedProject(project, runner)).toMatchObject({ score: 40, level: 'moderate' })
+    expect(await outdatedProject(project, runner, progress)).toMatchObject({ score: 40, level: 'moderate' })
+    expect(progress.mock.calls.map(([value]) => value).filter(value => value.total !== undefined)).toEqual([
+      { phase: 'Verifying dependencies omitted by npm', detail: '0 of 2 checked', completed: 0, total: 2 },
+      { phase: 'Verifying dependencies omitted by npm', detail: '2 of 2 checked', completed: 2, total: 2 },
+    ])
     expect(runner).toHaveBeenCalledTimes(3)
     expect(runner.mock.calls[0][1]).not.toContain('--workspaces=false')
     expect(runner.mock.calls[0][1]).not.toContain('alpha')
     expect(runner).toHaveBeenCalledWith('npm', ['view', 'alpha@latest', 'version', '--json', '--ignore-scripts', '--global=false'], expect.any(Object))
     runner.mockImplementation(async (_command, args) => args[0] === 'outdated' ? output({}) : output({ error: { code: 'E404' } }, 1))
-    await expect(outdatedProject(project, runner)).rejects.toThrow('complete, supported outdated report')
+    progress.mockClear()
+    await expect(outdatedProject(project, runner, progress)).rejects.toThrow('complete, supported outdated report')
+    expect(progress.mock.lastCall?.[0]).toMatchObject({ phase: 'Verifying dependencies omitted by npm', completed: 0, total: 2 })
   })
 
   it('compares locked npm versions after node_modules cleanup and excludes workspace findings', async () => {

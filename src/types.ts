@@ -250,6 +250,15 @@ export interface RepoProject {
   dev?: { status: 'stopped' | 'starting' | 'running' | 'error'; url?: string; error?: string }
 }
 
+export interface ScanProgress {
+  phase: string
+  detail?: string
+  completed?: number
+  total?: number
+}
+
+export type ScanProgressReporter = (progress: ScanProgress) => void
+
 export interface ScanResult {
   rootName: string
   rootPath?: string

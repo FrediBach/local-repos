@@ -6,12 +6,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { stripVTControlCharacters } from 'node:util'
 import type { Browser } from 'playwright'
-import type { LighthouseAudit, LighthouseCategoryId, LighthouseReport } from '../src/types'
+import type { LighthouseAudit, LighthouseCategoryId, LighthouseReport, ScanProgressReporter } from '../src/types'
 import { isLighthouseProject } from '../src/lib/lighthouse'
 import { selectDevScript } from '../src/lib/dev-script'
 import { normalizePreviewUrl, parsePackageJson } from '../src/lib/metadata'
 import { HelperError, type RegisteredProject } from './scanner'
 import { settlePage } from './preview-renderer'
+import { observeScanProgress, withoutScanProgress } from './scan-worker-progress'
 
 const require = createRequire(import.meta.url)
 const lighthouseVersion: string = require('lighthouse/package.json').version
@@ -23,12 +24,14 @@ const score = (value: unknown): value is number | null => value === null || (typ
 
 interface LighthouseOutput { stdout: string; stderr: string; exitCode: number }
 export type LighthouseRunner = (command: string, args: string[], options: ExecFileOptionsWithStringEncoding) => Promise<LighthouseOutput>
-const runLighthouse: LighthouseRunner = (command, args, options) => new Promise((resolve, reject) => {
-  execFile(command, args, options, (error, stdout, stderr) => {
+const createLighthouseRunner = (onProgress?: ScanProgressReporter): LighthouseRunner => (command, args, options) => new Promise((resolve, reject) => {
+  const child = execFile(command, args, options, (error, stdout, stderr) => {
     if (error && (typeof error.code !== 'number' || error.killed || error.signal)) { reject(error); return }
-    resolve({ stdout, stderr, exitCode: error?.code as number | undefined ?? 0 })
+    resolve({ stdout, stderr: withoutScanProgress(stderr), exitCode: error?.code as number | undefined ?? 0 })
   })
+  if (onProgress) observeScanProgress(child.stderr, onProgress)
 })
+const runLighthouse = createLighthouseRunner()
 
 /** Re-read bounded metadata without following a replaced manifest symlink. */
 export async function validateLighthouseProject(entry: RegisteredProject): Promise<string | undefined> {
@@ -137,9 +140,11 @@ export function parseLighthouseReport(value: unknown, requestedUrl: string): Lig
   return { scannedAt: new Date().toISOString(), version: lighthouseVersion, requestedUrl, url, formFactor: 'desktop', categories, audits, warnings }
 }
 
-export async function lighthouseProject(url: string, port: number, signal: AbortSignal, runner: LighthouseRunner = runLighthouse): Promise<LighthouseReport> {
+export async function lighthouseProject(url: string, port: number, signal: AbortSignal, runner: LighthouseRunner = runLighthouse, onProgress?: ScanProgressReporter): Promise<LighthouseReport> {
+  if (onProgress && runner === runLighthouse) runner = createLighthouseRunner(onProgress)
   let output: LighthouseOutput
   try {
+    onProgress?.({ phase: 'Starting Lighthouse browser analysis' })
     output = await runner(process.execPath, [worker, url, String(port)], {
       cwd: path.dirname(worker), encoding: 'utf8', shell: false, timeout: 120_000, maxBuffer: 16 * 1024 * 1024,
       signal, killSignal: 'SIGKILL', env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
@@ -152,6 +157,7 @@ export async function lighthouseProject(url: string, port: number, signal: Abort
     throw new HelperError(`Could not start Lighthouse. Reinstall Local Repos dependencies and try again. ${text(failure.message)}`, 502)
   }
   if (output.exitCode !== 0) throw new HelperError(`Lighthouse could not complete the scan. ${text(output.stderr || output.stdout)}`, 502)
+  onProgress?.({ phase: 'Validating Lighthouse findings and scores' })
   let value: unknown
   try { value = JSON.parse(output.stdout) } catch { invalidReport() }
   return parseLighthouseReport(value, url)

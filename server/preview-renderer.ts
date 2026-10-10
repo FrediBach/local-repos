@@ -1,5 +1,6 @@
 import { PNG } from 'pngjs'
 import type { Browser, Page } from 'playwright'
+import type { ScanProgressReporter } from '../src/types'
 import { HelperError } from './scanner'
 
 const CAPTURE_TIMEOUT = 25_000
@@ -111,7 +112,7 @@ export async function settlePage(page: Page, timeout: number): Promise<void> {
 }
 
 /** Capture a fresh, unsigned-in page, returning only a visibly rendered PNG. */
-export async function capturePage(browser: Browser, input: string): Promise<Buffer> {
+export async function capturePage(browser: Browser, input: string, onProgress?: ScanProgressReporter): Promise<Buffer> {
   let url: URL
   try {
     url = new URL(input)
@@ -140,18 +141,23 @@ export async function capturePage(browser: Browser, input: string): Promise<Buff
       page.on('console', (message) => {
         if (message.type() === 'error' && !/favicon|net::ERR_ABORTED/i.test(message.text())) record(message.text())
       })
+      onProgress?.({ phase: 'Loading the preview page', detail: url.href })
       const response = await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: Math.min(18_000, remaining()) })
       if (response && response.status() >= 400) throw new HelperError(`The preview page returned HTTP ${response.status()}.${detail()}`)
+      onProgress?.({ phase: 'Waiting for visible page content', detail: url.href })
       await waitForContent(page, Math.min(12_000, Math.max(1, remaining() - 4500)))
+      onProgress?.({ phase: 'Waiting for fonts, images, and layout', detail: url.href })
       await settlePage(page, Math.max(1, Math.min(2000, remaining() - 2000)))
 
       while (remaining() > 1) {
         const overlay = await page.locator('vite-error-overlay, #webpack-dev-server-client-overlay').count()
         if (overlay) throw new HelperError(`The development server displayed a build error. Check the project logs.${detail()}`)
+        onProgress?.({ phase: 'Capturing and checking the preview image', detail: url.href })
         const png = await page.screenshot({ fullPage: false, animations: 'disabled', timeout: Math.min(4000, remaining()) })
         if (!isBlankPreview(png)) return png
         // Canvas drawing and lazy hydration may happen after visible DOM exists.
         if (remaining() < 1200) break
+        onProgress?.({ phase: 'Waiting for the blank page to finish rendering', detail: url.href })
         await page.waitForTimeout(600)
       }
       throw new HelperError(`No visible content rendered at ${url.href}. The page remained blank.${detail()}`)

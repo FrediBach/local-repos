@@ -58,6 +58,35 @@ are logged by the helper and returned as a generic 500 response. Invalid JSON
 gets a 400 response; JSON bodies are limited to 16 KB. Keep response types in
 [`src/types.ts`](../src/types.ts) aligned with service and client changes.
 
+## Live scan progress
+
+Discovery, storage, audit, outdated, unused, React Doctor, Lighthouse, and preview
+requests accept `Accept: application/x-ndjson` for optional progress streaming.
+[`scan-progress.ts`](../server/scan-progress.ts) sends newline-delimited
+`progress` frames carrying `ScanProgress`, then a `result` frame containing the
+original response envelope. Errors after streaming starts use an `error` frame
+with the message and HTTP status; errors before the first frame retain their
+normal HTTP response. Clients that do not opt in continue receiving JSON.
+Existing origin, host, header, and registered-project checks apply to both.
+
+Runtime's deduplicated operation promises share the latest stage and subsequent
+updates with subscribers. The operation is reserved before asynchronous work;
+subscriptions are released on completion. A slow reader can miss intermediate
+updates, and disconnecting a client does not cancel shared work or its cleanup.
+There is no persistent job store or polling endpoint.
+
+Services report actual preparation, registry, analysis, validation, and cleanup
+milestones. React Doctor's JSON mode suppresses terminal progress, so the helper
+adds a child-only observer for recognized worker starts and the scoring request.
+Its fixed tokens distinguish code analysis and score retrieval without changing
+the report or exposing raw output. Concurrent lint and code analysis are labeled
+accordingly; unrecognized future worker names do not invent progress.
+Lighthouse maps its own status events to page loading, data collection, audits,
+and scores. The bounded parser in
+[`scan-worker-progress.ts`](../server/scan-worker-progress.ts) accepts only known
+tokens and removes them from report diagnostics. Metadata and disk traversal
+report the current work while retaining their existing discovery limits.
+
 ## Discovery, registration, and fingerprints
 
 [`server/scanner.ts`](../server/scanner.ts) recognizes Git checkouts, JavaScript

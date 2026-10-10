@@ -13,7 +13,7 @@ export function OutdatedBatchProgress({ progress, onStop, onDismiss }: { progres
       icon={active ? <LoaderCircle size={17} className="spinning" /> : progress.status === 'completed' && !progress.failures.length && !progress.outdated && !progress.skipped ? <Check size={17} /> : <Package size={17} />} action="Scanning" dismissLabel="Dismiss outdated scan progress" onStop={onStop} onDismiss={onDismiss} />
     <BatchProgressTrack progress={progress} label="Outdated-package scan progress" action="scanning" />
     <div className="capture-progress-counts"><span>{progress.completed} of {progress.total} processed</span><span>{progress.succeeded} scanned</span><span>{progress.outdated} with outdated packages</span><span>{formatOutdatedScore(score)} total lag points</span><span className={progress.failures.length ? 'capture-failure-count' : ''}>{progress.failures.length} failed</span></div>
-    <p className="capture-cache-warning">Total lag points sum successful results from this scan. Package registries are contacted; no packages are changed.</p>
+    <p className="capture-progress-note">Total lag points sum successful results from this scan. Package registries are contacted; no packages are changed.</p>
     {progress.skipped > 0 && <p className="capture-cache-warning">{progress.skipped} {progress.skipped === 1 ? 'package was' : 'packages were'} skipped. Open the project’s Packages tab for details; the score covers compared versions only.</p>}
     <BatchCacheWarning count={progress.cacheWarnings} />
     <BatchFailures failures={progress.failures}>Previous outdated-package results are kept when a scan fails.</BatchFailures>

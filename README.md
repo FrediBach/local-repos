@@ -293,6 +293,27 @@ Scans run only when requested, with a two-minute timeout and an 8 MiB output lim
 
 Results and their timestamps are saved for cached browsing and survive metadata rescans and helper restarts. A failed scan retains the last successful report and displays the error; an unscanned project is never presented as having no unused packages. Scan again after source, configuration, or dependency changes. Package update attempts clear saved unused-package results for the related repository. Browser-only connections need the local helper for this feature.
 
+## Following scan progress
+
+Scan panels show the active project and the **current step**, with time spent in
+that step and total elapsed time. This applies to workspace batches, individual
+scans, automatic checks, directory connection and sync, and preview capture.
+Progress is also visible inside an open project or connection dialog.
+The current-step block keeps a consistent height as steps change; longer details
+scroll within it, with extra vertical space in narrow panels.
+
+Steps follow the work actually being performed: for example, registry queries,
+React code analysis and score retrieval, Lighthouse page loading and audits,
+development-server startup, and saving results. Some tools perform several
+checks together; their combined stage remains visible until the next reported
+step. The batch progress bar counts finished projects, including failures, and
+does not estimate how far through the active project a tool is.
+
+**Stop after current** lets the active project and its cleanup finish before
+stopping the batch. Successful results and failure details remain available.
+Restart the local helper after updating Local Repos to enable live step details;
+an older helper can still return results without reporting intermediate steps.
+
 ## Frontend project scripts
 
 Open a project’s overview to find **Project scripts**, grouped into development, Storybook, tests, checks and formatting, builds, previews, scaffolding/code generation, and documentation. All variants remain available, such as `test:watch`, `test:e2e`, `lint:fix`, and `generate:component`. Unrecognized commands appear under **Other scripts**. The primary development server keeps its existing start, stop, and log controls.

@@ -6,7 +6,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import type { Browser } from 'playwright'
-import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, LighthouseReport, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, LighthouseReport, PreviewMode, ProjectStorage, RepoProject, ScanProgressReporter } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -25,6 +25,7 @@ import { measureProjectStorage, removeProjectNodeModules } from './project-stora
 import { openScriptTerminal, validateProjectScript } from './project-scripts'
 import { isDesktopAppId, isTerminalId } from '../src/lib/desktop-apps'
 import { openDesktopApp } from './desktop-apps'
+import { createProgressTask, followProgress, type ProgressTask } from './scan-progress'
 
 export { devCommand } from './dev-server'
 
@@ -81,13 +82,13 @@ const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(reso
 export class ProjectRuntime {
   private readonly running = new Map<string, RunningServer>()
   private readonly starts = new Map<string, Promise<DevState>>()
-  private readonly captures = new Map<string, Promise<string>>()
-  private readonly storageScans = new Map<string, Promise<ProjectStorage>>()
-  private readonly audits = new Map<string, Promise<PackageAudit>>()
-  private readonly outdatedScans = new Map<string, Promise<PackageOutdated>>()
-  private readonly unusedScans = new Map<string, Promise<PackageUnused>>()
-  private readonly reactDoctorScans = new Map<string, Promise<ReactDoctorReport>>()
-  private readonly lighthouseScans = new Map<string, Promise<LighthouseReport>>()
+  private readonly captures = new Map<string, ProgressTask<string>>()
+  private readonly storageScans = new Map<string, ProgressTask<ProjectStorage>>()
+  private readonly audits = new Map<string, ProgressTask<PackageAudit>>()
+  private readonly outdatedScans = new Map<string, ProgressTask<PackageOutdated>>()
+  private readonly unusedScans = new Map<string, ProgressTask<PackageUnused>>()
+  private readonly reactDoctorScans = new Map<string, ProgressTask<ReactDoctorReport>>()
+  private readonly lighthouseScans = new Map<string, ProgressTask<LighthouseReport>>()
   private readonly lighthouseControllers = new Set<AbortController>()
   private readonly updates = new Map<string, Promise<PackageUpdate>>()
   private readonly removals = new Map<string, Promise<ProjectStorage>>()
@@ -119,111 +120,114 @@ export class ProjectRuntime {
     if (this.registry.related(id).some(entry => this.maintenance.has(entry.project.id))) throw new HelperError('Dependencies are being changed in this repository. Wait until maintenance finishes before taking another action.', 409)
   }
 
-  async storage(id: string): Promise<ProjectStorage> {
+  async storage(id: string, onProgress?: ScanProgressReporter): Promise<ProjectStorage> {
     this.available(id)
     const pending = this.storageScans.get(id)
-    if (pending) return pending
-    const promise = (async () => {
+    if (pending) return followProgress(pending, onProgress)
+    const promise = createProgressTask(async report => {
       const entry = await this.registry.get(id)
-      const storage = await measureProjectStorage(entry.directory)
+      const storage = await measureProjectStorage(entry.directory, report)
       entry.project.storage = storage
       return storage
-    })()
+    })
     this.storageScans.set(id, promise)
-    try { return await promise }
+    try { return await followProgress(promise, onProgress) }
     finally { this.storageScans.delete(id) }
   }
 
-  async audit(id: string): Promise<PackageAudit> {
+  async audit(id: string, onProgress?: ScanProgressReporter): Promise<PackageAudit> {
     this.available(id)
     const pending = this.audits.get(id)
-    if (pending) return pending
-    const promise = (async () => {
+    if (pending) return followProgress(pending, onProgress)
+    const promise = createProgressTask(async report => {
       const entry = await this.registry.get(id)
-      const audit = await auditProject(entry)
+      const audit = await auditProject(entry, undefined, report)
       entry.project.audit = audit
       return audit
-    })()
+    })
     this.audits.set(id, promise)
-    try { return await promise }
+    try { return await followProgress(promise, onProgress) }
     finally { this.audits.delete(id) }
   }
 
-  async outdated(id: string): Promise<PackageOutdated> {
+  async outdated(id: string, onProgress?: ScanProgressReporter): Promise<PackageOutdated> {
     this.available(id)
     const pending = this.outdatedScans.get(id)
-    if (pending) return pending
-    const promise = (async () => {
+    if (pending) return followProgress(pending, onProgress)
+    const promise = createProgressTask(async report => {
       const entry = await this.registry.get(id)
-      const outdated = await outdatedProject(entry)
+      const outdated = await outdatedProject(entry, undefined, report)
       entry.project.outdated = outdated
       return outdated
-    })()
+    })
     this.outdatedScans.set(id, promise)
-    try { return await promise }
+    try { return await followProgress(promise, onProgress) }
     finally { this.outdatedScans.delete(id) }
   }
 
-  async unused(id: string): Promise<PackageUnused> {
+  async unused(id: string, onProgress?: ScanProgressReporter): Promise<PackageUnused> {
     this.available(id)
     const pending = this.unusedScans.get(id)
-    if (pending) return pending
-    const promise = (async () => {
+    if (pending) return followProgress(pending, onProgress)
+    const promise = createProgressTask(async report => {
       const entry = await this.registry.get(id)
-      const unused = await unusedProject(entry)
+      const unused = await unusedProject(entry, undefined, report)
       entry.project.unused = unused
       return unused
-    })()
+    })
     this.unusedScans.set(id, promise)
-    try { return await promise }
+    try { return await followProgress(promise, onProgress) }
     finally { this.unusedScans.delete(id) }
   }
 
-  async reactDoctor(id: string): Promise<ReactDoctorReport> {
+  async reactDoctor(id: string, onProgress?: ScanProgressReporter): Promise<ReactDoctorReport> {
     this.available(id)
     const pending = this.reactDoctorScans.get(id)
-    if (pending) return pending
-    const promise = (async () => {
+    if (pending) return followProgress(pending, onProgress)
+    const promise = createProgressTask(async report => {
       const entry = await this.registry.get(id)
-      const reactDoctor = await reactDoctorProject(entry)
+      const reactDoctor = await reactDoctorProject(entry, undefined, report)
       entry.project.reactDoctor = reactDoctor
       return reactDoctor
-    })()
+    })
     this.reactDoctorScans.set(id, promise)
-    try { return await promise }
+    try { return await followProgress(promise, onProgress) }
     finally { this.reactDoctorScans.delete(id) }
   }
 
-  async lighthouse(id: string): Promise<LighthouseReport> {
+  async lighthouse(id: string, onProgress?: ScanProgressReporter): Promise<LighthouseReport> {
     this.available(id)
     const pending = this.lighthouseScans.get(id)
-    if (pending) return pending
+    if (pending) return followProgress(pending, onProgress)
     if (this.registry.related(id).some(entry => this.captures.has(entry.project.id) || this.lighthouseScans.has(entry.project.id))) {
       throw new HelperError('Wait for preview capture and Lighthouse scans in this workspace to finish.', 409)
     }
     const controller = new AbortController()
     this.lighthouseControllers.add(controller)
-    const promise = this.lighthouseOnce(id, controller.signal)
+    const promise = createProgressTask(report => this.lighthouseOnce(id, controller.signal, report))
     // Reserve before validation awaits, including the remote-URL-only case.
     this.lighthouseScans.set(id, promise)
-    try { return await promise }
+    try { return await followProgress(promise, onProgress) }
     finally { this.lighthouseScans.delete(id); this.lighthouseControllers.delete(controller) }
   }
 
-  private async lighthouseOnce(id: string, signal: AbortSignal): Promise<LighthouseReport> {
+  private async lighthouseOnce(id: string, signal: AbortSignal, report: ScanProgressReporter): Promise<LighthouseReport> {
     const entry = await this.registry.get(id)
     let auditedServer: RunningServer | undefined
     let browser: Browser | undefined
     try {
+      report({ phase: 'Checking frontend configuration' })
       let url = await validateLighthouseProject(entry)
       if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
       if (!url) {
+        report({ phase: 'Waiting for the development server', detail: 'Starting the frontend and checking when it is ready (up to 45 seconds).' })
         const dev = await this.start(id, false)
         auditedServer = this.running.get(id)
         if (dev.status !== 'running' || !dev.url) throw new HelperError(dev.error ?? 'The frontend did not start. Check its dependencies and development server logs.', 422)
         url = dev.url
       }
       if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      report({ phase: 'Launching the Lighthouse browser' })
       const port = await freePort()
       const { chromium } = await import('playwright')
       if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
@@ -234,13 +238,15 @@ export class ProjectRuntime {
         throw new HelperError(`Lighthouse browser is unavailable. Run npx playwright install chromium in the Local Repos folder, then try again. ${error instanceof Error ? error.message.split('\n')[0] : ''}`, 503)
       }
       if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      report({ phase: 'Loading and validating the frontend', detail: url })
       await validateLighthousePage(browser, url)
       if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
-      const report = await lighthouseProject(url, port, signal)
+      const lighthouse = await lighthouseProject(url, port, signal, undefined, report)
       if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
-      entry.project.lighthouse = report
-      return report
+      entry.project.lighthouse = lighthouse
+      return lighthouse
     } finally {
+      report({ phase: 'Closing the audit browser and temporary server' })
       if (browser) { await browser.close().catch(() => undefined); this.browsers.delete(browser) }
       // Reuse persistent user servers, and honor explicit starts during a scan.
       if (auditedServer && this.running.get(id) === auditedServer && !this.keepAlive.has(id)) await this.stop(id).catch(() => undefined)
@@ -428,21 +434,21 @@ export class ProjectRuntime {
     return entry.project.dev
   }
 
-  async screenshot(id: string, source: PreviewMode = 'auto'): Promise<string> {
+  async screenshot(id: string, source: PreviewMode = 'auto', onProgress?: ScanProgressReporter): Promise<string> {
     this.available(id)
     if (this.registry.related(id).some(entry => this.lighthouseScans.has(entry.project.id))) throw new HelperError('Wait for Lighthouse to finish before capturing a preview in this workspace.', 409)
     const pending = this.captures.get(id)
-    if (pending) return pending
-    const promise = this.captureOnce(id, source)
+    if (pending) return followProgress(pending, onProgress)
+    const promise = createProgressTask(report => this.captureOnce(id, source, report))
     this.captures.set(id, promise)
     try {
-      return await promise
+      return await followProgress(promise, onProgress)
     } finally {
       this.captures.delete(id)
     }
   }
 
-  private async captureOnce(id: string, source: PreviewMode): Promise<string> {
+  private async captureOnce(id: string, source: PreviewMode, report: ScanProgressReporter): Promise<string> {
     const entry = await this.registry.get(id)
     let capturedServer: RunningServer | undefined
     let browser: Browser | undefined
@@ -451,10 +457,12 @@ export class ProjectRuntime {
       const attempted = new Set<string>()
       const attemptedTargets: CaptureTarget[] = []
       const localAssets: PreviewAssetCandidate[] = []
+      report({ phase: 'Finding preview sources' })
       const targets = getPackagePreviewTargets(entry.project)
       const ensureBrowser = async (): Promise<Browser> => {
         if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
         if (!browser) {
+          report({ phase: 'Launching the preview browser' })
           const { chromium } = await import('playwright')
           try {
             browser = await chromium.launch({ headless: true, timeout: 15_000 })
@@ -468,6 +476,7 @@ export class ProjectRuntime {
       }
       const save = async (png: Buffer, details: PreviewDetails): Promise<string> => {
         if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+        report({ phase: 'Saving the preview image' })
         this.screenshotDirectory ??= mkdtemp(path.join(os.tmpdir(), 'local-repos-previews-'))
         const filename = path.join(await this.screenshotDirectory, `${id}.png`)
         await writeFile(filename, png)
@@ -483,7 +492,7 @@ export class ProjectRuntime {
         attemptedTargets.push(target)
         const activeBrowser = await ensureBrowser()
         try {
-          const png = await capturePage(activeBrowser, target.url)
+          const png = await capturePage(activeBrowser, target.url, report)
           return await save(png, { ...target, kind: 'screenshot' })
         } catch (error) {
           if (this.closed) throw error
@@ -498,6 +507,7 @@ export class ProjectRuntime {
         // but prefer any successful website screenshot over these images.
         const deadline = Date.now() + 8_000
         try {
+          report({ phase: 'Looking for local preview images', detail: target.url })
           const assets = await discoverPreviewAssets(await ensureBrowser(), undefined, [target])
           for (const asset of assets.slice(0, 10)) {
             if (this.closed || Date.now() >= deadline) break
@@ -520,8 +530,10 @@ export class ProjectRuntime {
       if (source !== 'website') {
         if (selectDevScript(entry.project)) {
           let dev: DevState | undefined
-          try { dev = await this.start(id, false) }
-          catch (error) { failures.push(error instanceof Error ? error.message : 'The local server could not start.') }
+          try {
+            report({ phase: 'Waiting for the development server', detail: 'Starting the frontend and checking when it is ready (up to 45 seconds).' })
+            dev = await this.start(id, false)
+          } catch (error) { failures.push(error instanceof Error ? error.message : 'The local server could not start.') }
           if (dev?.status === 'running' && dev.url) {
             capturedServer = this.running.get(id)
             const result = await capture({ url: dev.url, source: 'local' })
@@ -538,6 +550,7 @@ export class ProjectRuntime {
           const result = await capture(target)
           if (result) return result
         }
+        report({ phase: 'Looking up the project website on GitHub' })
         const github = await resolveGithubHomepage(entry.project.git?.origin)
         if (github) {
           const result = await capture(github)
@@ -551,6 +564,7 @@ export class ProjectRuntime {
       try {
         const fallbackDeadline = Date.now() + 25_000
         const activeBrowser = await ensureBrowser()
+        report({ phase: 'Looking for a social image, logo, or icon' })
         const discovered = await discoverPreviewAssets(activeBrowser, source === 'website' ? undefined : entry.directory, attemptedTargets.filter(target => target.source !== 'local'))
         const kindOrder = { 'og-image': 0, logo: 1, favicon: 2 }
         const sourceOrder = { configured: 0, local: 1, package: 2, github: 3, repository: 4 }
@@ -565,6 +579,7 @@ export class ProjectRuntime {
           if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
           if (Date.now() >= fallbackDeadline) break
           try {
+            report({ phase: 'Rendering a fallback preview', detail: asset.assetPath ?? asset.assetUrl })
             const image = await asset.load()
             if (!image || this.closed || Date.now() >= fallbackDeadline) continue
             const png = await renderPreviewAsset(activeBrowser, image, asset.kind)
@@ -581,6 +596,7 @@ export class ProjectRuntime {
       }
       throw new HelperError(`Could not capture a preview. ${failures.join(' ')} Set package.json homepage or localRepos.previewUrl to the application URL or route to use.`, 422)
     } finally {
+      report({ phase: 'Closing the preview browser and temporary server' })
       await browser?.close().catch(() => undefined)
       if (browser) this.browsers.delete(browser)
       // A capture owns only the temporary server it started. An explicit start

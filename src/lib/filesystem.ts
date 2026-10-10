@@ -1,5 +1,5 @@
 import { matchesWorkspace, workspacePatterns } from './monorepo'
-import type { RepoProject, ScanResult } from '../types'
+import type { RepoProject, ScanProgressReporter, ScanResult } from '../types'
 import { aiInstructionFileNames, extractReadmeIntro, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
 
 const ignoredDirectories = new Set(['node_modules', 'vendor', 'dist', 'build', 'coverage', 'target', 'venv', '__pycache__'])
@@ -92,7 +92,8 @@ async function readGit(directory: FileSystemDirectoryHandle, entries: Map<string
 }
 
 /** Read selected folders only. No scripts, subprocesses or filesystem writes. */
-export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<ScanResult> {
+export async function scanDirectory(handle: FileSystemDirectoryHandle, onProgress?: ScanProgressReporter): Promise<ScanResult> {
+  onProgress?.({ phase: 'Checking folder access', detail: handle.name })
   if (!await canReadDirectory(handle)) throw new Error('Folder access has expired. Reconnect this folder to sync it again.')
   const projects: RepoProject[] = []
   const warnings: string[] = []
@@ -109,6 +110,8 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
       return
     }
     inspected += 1
+    const folderName = relativePath === '.' ? handle.name : relativePath
+    onProgress?.({ phase: 'Discovering projects', detail: folderName, completed: inspected })
     let entries: Map<string, FileSystemHandle>
     try {
       entries = new Map()
@@ -124,6 +127,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
     const declaredWorkspace = !!workspace && matchesWorkspace(memberPath, workspace.patterns)
     const ownsGit = entries.has('.git')
     if (workspace ? (entries.has('package.json') && (directChild || declaredWorkspace)) || (directChild && ownsGit) : isProject) {
+      onProgress?.({ phase: 'Reading package metadata', detail: folderName })
       let pkg: ReturnType<typeof parsePackageJson> | undefined
       let modifiedAt = 0
       try {
@@ -133,6 +137,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
       const readmeName = [...entries.keys()].find((name) => /^readme(?:\.(?:md|markdown|txt|rst))?$/i.test(name))
       let readme: string | undefined
       if (readmeName) {
+        onProgress?.({ phase: 'Reading README', detail: folderName })
         try {
           const readmeFile = await readFile(directory, readmeName)
           readme = readmeFile?.text
@@ -145,6 +150,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
       const packageManager = entries.has('bun.lockb') || entries.has('bun.lock') ? 'bun'
         : entries.has('pnpm-lock.yaml') ? 'pnpm'
           : entries.has('yarn.lock') ? 'yarn' : pkg?.packageManager ?? 'npm'
+      onProgress?.({ phase: 'Reading Git metadata', detail: folderName })
       const git = await readGit(directory, entries, (message) => warn(`${relativePath}: ${message}`))
       const project: RepoProject = {
         id: `browser:${handle.name}/${relativePath}`,
@@ -172,6 +178,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
       projects.push(project)
       if (workspace && ownsGit) return
       if (!workspace || declaredWorkspace) {
+        onProgress?.({ phase: 'Reading workspace declarations', detail: folderName })
         let patterns: string[] = []
         try {
           patterns = workspacePatterns((await readFile(directory, 'package.json'))?.text, (await readFile(directory, 'pnpm-workspace.yaml'))?.text)
@@ -193,6 +200,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle): Promise<
   }
 
   await visit(handle, '.', 0)
+  onProgress?.({ phase: 'Organizing discovered projects', detail: `${projects.length} project${projects.length === 1 ? '' : 's'} found in ${inspected} folder${inspected === 1 ? '' : 's'}` })
   for (const project of projects) {
     const count = projects.filter(child => child.monorepo?.id === project.id).length
     if (count) project.workspacePackageCount = count

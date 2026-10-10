@@ -4,10 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from './app'
+import { HelperError } from './scanner'
 import { devCommand } from './runtime'
 import { desktopApps } from '../src/lib/desktop-apps'
 import * as desktopLaunch from './desktop-apps'
-import type { PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, ProjectStorage, RepoProject, ScanProgressReporter } from '../src/types'
 import * as packageAudit from './package-audit'
 import * as packageOutdated from './package-outdated'
 import * as packageUnused from './package-unused'
@@ -50,6 +51,123 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
   expect(response.status).toBe(200)
   return (await response.json()).projects[0] as RepoProject
 }
+
+describe('request-scoped scan progress', () => {
+  const headers = { Accept: 'application/x-ndjson' }
+  const report: PackageAudit = {
+    manager: 'npm', scannedAt: '2026-10-10T12:00:00Z',
+    counts: { info: 0, low: 0, moderate: 0, high: 0, critical: 0 }, findings: [],
+  }
+
+  it('streams real discovery stages and preserves the original result envelope', async () => {
+    const project = await createProject()
+    const response = await post('/api/scan', { path: directory }, headers)
+    expect(response.headers.get('content-type')).toContain('application/x-ndjson')
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const events = (await response.text()).trim().split('\n').map(line => JSON.parse(line))
+    expect(events).toContainEqual({ type: 'progress', progress: { phase: 'Reading package metadata and lockfiles', detail: 'project' } })
+    expect(events.at(-1)).toMatchObject({ type: 'result', result: { projects: [{ id: project.id }] } })
+    expect(events.filter(event => event.type === 'result')).toHaveLength(1)
+  })
+
+  it('delivers stages before a slow service finishes and returns the dated report', async () => {
+    const project = await createProject()
+    let finish!: (value: PackageAudit) => void
+    vi.spyOn(packageAudit, 'auditProject').mockImplementation((_entry, _runner, onProgress) => {
+      onProgress?.({ phase: 'Contacting the vulnerability registry', detail: 'npm audit' })
+      return new Promise(resolve => { finish = resolve })
+    })
+    const response = await post(`/api/projects/${project.id}/audit`, {}, headers)
+    const reader = response.body!.getReader()
+    try {
+      const first = await reader.read()
+      expect(new TextDecoder().decode(first.value)).toContain('Contacting the vulnerability registry')
+    } finally {
+      finish(report)
+    }
+    let remaining = ''
+    while (true) {
+      const part = await reader.read()
+      if (part.done) break
+      remaining += new TextDecoder().decode(part.value)
+    }
+    expect(JSON.parse(remaining.trim())).toEqual({ type: 'result', result: { audit: report } })
+    expect(helper.registry.lookup(project.id).project.audit).toEqual(report)
+  })
+
+  it('keeps validation and security failures as ordinary HTTP errors before progress', async () => {
+    expect((await post('/api/projects/unknown/audit', {}, headers)).status).toBe(404)
+    const invalid = await post('/api/scan', { path: './relative' }, headers)
+    expect(invalid.status).toBe(400)
+    expect(invalid.headers.get('content-type')).toContain('application/json')
+    expect((await post('/api/scan', { path: directory }, { ...headers, Origin: 'https://untrusted.example' })).status).toBe(403)
+    expect((await fetch(`${address}/api/scan`, { method: 'POST', headers })).status).toBe(403)
+    const project = await createProject()
+    expect((await post(`/api/projects/${project.id}/screenshot`, { source: 'invalid' }, headers)).status).toBe(400)
+  })
+
+  it('streams late errors without discarding a previous successful report and releases the scan guard', async () => {
+    const project = await createProject()
+    helper.registry.lookup(project.id).project.audit = report
+    const audit = vi.spyOn(packageAudit, 'auditProject').mockImplementationOnce(async (_entry, _runner, onProgress) => {
+      onProgress?.({ phase: 'Checking vulnerability advisories' })
+      throw new HelperError('The package registry is unavailable.', 503)
+    })
+    const response = await post(`/api/projects/${project.id}/audit`, {}, headers)
+    const events = (await response.text()).trim().split('\n').map(line => JSON.parse(line))
+    expect(events.at(-1)).toEqual({ type: 'error', error: 'The package registry is unavailable.', status: 503 })
+    expect(events.some(event => event.type === 'result')).toBe(false)
+    expect(helper.registry.lookup(project.id).project.audit).toEqual(report)
+    audit.mockResolvedValueOnce(report)
+    expect(await helper.runtime.audit(project.id)).toEqual(report)
+  })
+
+  it('replays the current phase to duplicate callers and forwards later progress without rerunning work', async () => {
+    const project = await createProject()
+    let progress!: ScanProgressReporter
+    let finish!: (value: PackageAudit) => void
+    const audit = vi.spyOn(packageAudit, 'auditProject').mockImplementation((_entry, _runner, onProgress) => {
+      progress = onProgress!
+      progress({ phase: 'Checking advisories' })
+      return new Promise(resolve => { finish = resolve })
+    })
+    const firstProgress = vi.fn()
+    const secondProgress = vi.fn()
+    const first = helper.runtime.audit(project.id, firstProgress)
+    await vi.waitFor(() => expect(firstProgress).toHaveBeenCalledOnce())
+    const second = helper.runtime.audit(project.id, secondProgress)
+    expect(secondProgress).toHaveBeenCalledExactlyOnceWith({ phase: 'Checking advisories' })
+    progress({ phase: 'Applying audit ignore rules' })
+    finish(report)
+    expect(await first).toEqual(report)
+    expect(await second).toEqual(report)
+    expect(firstProgress.mock.calls).toEqual(secondProgress.mock.calls)
+    expect(audit).toHaveBeenCalledOnce()
+    progress({ phase: 'Late discarded update' })
+    expect(firstProgress).toHaveBeenCalledTimes(2)
+    expect(secondProgress).toHaveBeenCalledTimes(2)
+  })
+
+  it('lets a scan finish for another caller after a streaming client disconnects', async () => {
+    const project = await createProject()
+    let progress!: ScanProgressReporter
+    let finish!: (value: PackageAudit) => void
+    const audit = vi.spyOn(packageAudit, 'auditProject').mockImplementation((_entry, _runner, onProgress) => {
+      progress = onProgress!
+      progress({ phase: 'Checking advisories' })
+      return new Promise(resolve => { finish = resolve })
+    })
+    const response = await post(`/api/projects/${project.id}/audit`, {}, headers)
+    await response.body!.cancel()
+    const joinedProgress = vi.fn()
+    const joined = helper.runtime.audit(project.id, joinedProgress)
+    progress({ phase: 'Applying audit ignore rules' })
+    finish(report)
+    expect(await joined).toEqual(report)
+    expect(joinedProgress).toHaveBeenLastCalledWith({ phase: 'Applying audit ignore rules' })
+    expect(audit).toHaveBeenCalledOnce()
+  })
+})
 
 describe('local helper API security', () => {
   it('opens only the registered directory in the selected app and revalidates it on each request', async () => {
@@ -273,7 +391,7 @@ describe('project storage and package actions', () => {
     const response = await post(endpoint)
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ reactDoctor: reactDoctorResult })
-    expect(scan).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect(scan).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect((await (await post('/api/scan', { path: directory })).json()).projects[0].reactDoctor).toEqual(reactDoctorResult)
     scan.mockRejectedValueOnce(new Error('Configuration failed'))
     await expect(helper.runtime.reactDoctor(project.id)).rejects.toThrow('Configuration failed')
@@ -329,7 +447,7 @@ describe('project storage and package actions', () => {
     const response = await post(endpoint)
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ unused: unusedResult })
-    expect(unused).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect(unused).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect((await (await post('/api/scan', { path: directory })).json()).projects[0].unused).toEqual(unusedResult)
     unused.mockRejectedValueOnce(new Error('Configuration failed'))
     await expect(helper.runtime.unused(project.id)).rejects.toThrow('Configuration failed')
@@ -398,7 +516,7 @@ describe('project storage and package actions', () => {
     const response = await post(`/api/projects/${project.id}/audit`)
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ audit: auditResult })
-    expect(audit).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect(audit).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect(helper.registry.lookup(project.id).project.audit).toEqual(auditResult)
   })
 
@@ -408,7 +526,7 @@ describe('project storage and package actions', () => {
     const response = await post(`/api/projects/${project.id}/outdated`)
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ outdated: outdatedResult })
-    expect(outdated).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id))
+    expect(outdated).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), undefined, expect.any(Function))
     expect(helper.registry.lookup(project.id).project.outdated).toEqual(outdatedResult)
     const rescan = await (await post('/api/scan', { path: directory })).json()
     expect(rescan.projects[0].outdated).toEqual(outdatedResult)

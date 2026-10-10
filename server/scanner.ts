@@ -5,7 +5,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { aiInstructionFileNames, extractReadmeIntro, normalizeGitOrigin, parsePackageJson } from '../src/lib/metadata'
 import { matchesWorkspace, workspacePatterns } from '../src/lib/monorepo'
-import type { RepoProject, ScanResult } from '../src/types'
+import type { RepoProject, ScanProgress, ScanProgressReporter, ScanResult } from '../src/types'
 import { packageFingerprint, repositoryFingerprint } from './package-fingerprint'
 
 const execFileAsync = promisify(execFile)
@@ -86,8 +86,10 @@ async function readGit(directory: string): Promise<RepoProject['git']> {
   return { branch: branch || (commit ? 'Detached HEAD' : undefined), commit, message, committedAt, origin: origin ? normalizeGitOrigin(origin) : undefined, dirty: status === undefined ? undefined : status.length > 0 }
 }
 
-async function inspectProject(directory: string, root: string, names: string[], warnings: string[]): Promise<RegisteredProject> {
+async function inspectProject(directory: string, root: string, names: string[], warnings: string[], onProgress?: ScanProgressReporter): Promise<RegisteredProject> {
   const filenames = new Set(names)
+  const detail = path.relative(root, directory) || path.basename(directory)
+  onProgress?.({ phase: 'Reading package metadata and lockfiles', detail })
   const fingerprint = await packageFingerprint(directory)
   const packageText = filenames.has('package.json') ? await readBounded(directory, 'package.json') : undefined
   let metadata: ReturnType<typeof parsePackageJson> | undefined
@@ -99,8 +101,11 @@ async function inspectProject(directory: string, root: string, names: string[], 
     }
   }
   const readmeName = names.find((name) => /^readme(?:\.(?:md|mdx|markdown|txt))?$/i.test(name))
+  onProgress?.({ phase: 'Reading the project README', detail })
   const readme = readmeName ? await readBounded(directory, readmeName) : undefined
+  if (filenames.has('.git')) onProgress?.({ phase: 'Reading Git branch, commit, and working-tree status', detail })
   const gitInfo = filenames.has('.git') ? await readGit(directory) : undefined
+  onProgress?.({ phase: 'Checking project instruction files', detail })
   const aiInstructionFiles: string[] = []
   for (const name of aiInstructionFileNames) {
     if (!filenames.has(name)) continue
@@ -147,7 +152,7 @@ function looksLikeProject(names: string[]): boolean {
   return filenames.has('.git') || filenames.has('package.json') || Object.keys(markerStack).some((name) => filenames.has(name))
 }
 
-export async function scanDirectory(input: unknown): Promise<{ result: ScanResult; registered: RegisteredProject[] }> {
+export async function scanDirectory(input: unknown, onProgress?: ScanProgressReporter): Promise<{ result: ScanResult; registered: RegisteredProject[] }> {
   if (typeof input !== 'string' || !input.trim() || input.length > 4096 || input.includes('\0')) {
     throw new HelperError('Enter the absolute path to your local repositories folder.')
   }
@@ -160,6 +165,7 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
     throw new HelperError('This folder does not exist or cannot be read. Check its path and permissions.')
   }
   const warnings: string[] = []
+  onProgress?.({ phase: 'Discovering project folders', detail: path.basename(root) || root, completed: 0 })
   let entries
   try {
     entries = await readdir(root, { withFileTypes: true })
@@ -178,71 +184,89 @@ export async function scanDirectory(input: unknown): Promise<{ result: ScanResul
     // a project; deeper traversal is restricted to declared workspaces.
     const batch = queue.splice(0, Math.min(8, 500 - inspectedFolders))
     inspectedFolders += batch.length
+    const activeFolders = new Map<string, ScanProgress>()
     const inspected = await Promise.all(batch.map(async ({ directory, entries: currentEntries, depth, workspace }) => {
-      const names = currentEntries.map((entry) => entry.name)
-      let project: RegisteredProject | undefined
-      const memberPath = workspace ? path.relative(workspace.entry.directory, directory).split(path.sep).join('/') : ''
-      const directChild = workspace?.automatic && depth === workspace.depth + 1
-      const declaredWorkspace = !!workspace && matchesWorkspace(memberPath, workspace.patterns)
-      if (workspace ? (names.includes('package.json') && (directChild || declaredWorkspace)) || (directChild && names.includes('.git')) : looksLikeProject(names)) {
-        try {
-          project = await inspectProject(directory, root, names, warnings)
-          if (workspace && !names.includes('.git')) {
-            project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath, declaredWorkspace }
-            project.project.git ??= workspace.entry.project.git
-            if (project.project.git?.committedAt) project.project.updatedAt = project.project.git.committedAt
-            if (declaredWorkspace) {
-              project.workspaceDirectory = workspace.entry.directory
-              project.project.packageManager = workspace.entry.project.packageManager
-              project.project.packageFingerprint = repositoryFingerprint(project.project.packageFingerprint!, workspace.entry.project.packageFingerprint)
+      const reportFolder = onProgress ? (progress: ScanProgress) => {
+        activeFolders.set(directory, progress)
+        // Keep the oldest unfinished folder visible. A quick sibling must not
+        // conceal a long Git read, and completed siblings must never look busy.
+        if (activeFolders.keys().next().value === directory) onProgress(progress)
+      } : undefined
+      reportFolder?.({ phase: 'Inspecting project folders', detail: path.relative(root, directory) || path.basename(directory) })
+      try {
+        const names = currentEntries.map((entry) => entry.name)
+        let project: RegisteredProject | undefined
+        const memberPath = workspace ? path.relative(workspace.entry.directory, directory).split(path.sep).join('/') : ''
+        const directChild = workspace?.automatic && depth === workspace.depth + 1
+        const declaredWorkspace = !!workspace && matchesWorkspace(memberPath, workspace.patterns)
+        if (workspace ? (names.includes('package.json') && (directChild || declaredWorkspace)) || (directChild && names.includes('.git')) : looksLikeProject(names)) {
+          try {
+            project = await inspectProject(directory, root, names, warnings, reportFolder)
+            if (workspace && !names.includes('.git')) {
+              project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath, declaredWorkspace }
+              project.project.git ??= workspace.entry.project.git
+              if (project.project.git?.committedAt) project.project.updatedAt = project.project.git.committedAt
+              if (declaredWorkspace) {
+                project.workspaceDirectory = workspace.entry.directory
+                project.project.packageManager = workspace.entry.project.packageManager
+                project.project.packageFingerprint = repositoryFingerprint(project.project.packageFingerprint!, workspace.entry.project.packageFingerprint)
+              }
             }
-          }
-          // A nested Git checkout is a separate repository, not a package of its parent.
-          if (workspace && names.includes('.git')) return project
-          if (!workspace || declaredWorkspace) {
-            let patterns: string[] = []
-            try {
-              patterns = workspacePatterns(await readBounded(directory, 'package.json'), await readBounded(directory, 'pnpm-workspace.yaml'))
-            } catch {
-              warnings.push(`${path.relative(root, directory) || path.basename(directory)}: workspace declarations could not be read.`)
+            // A nested Git checkout is a separate repository, not a package of its parent.
+            if (workspace && names.includes('.git')) return project
+            if (!workspace || declaredWorkspace) {
+              let patterns: string[] = []
+              try {
+                reportFolder?.({ phase: 'Checking workspace declarations', detail: project.project.relativePath })
+                patterns = workspacePatterns(await readBounded(directory, 'package.json'), await readBounded(directory, 'pnpm-workspace.yaml'))
+              } catch {
+                warnings.push(`${path.relative(root, directory) || path.basename(directory)}: workspace declarations could not be read.`)
+              }
+              // Declared members may declare nested workspaces, but must not restart
+              // automatic discovery at every package boundary.
+              if (workspace && !patterns.length) return project
+              workspace = { entry: project, patterns, depth, automatic: !workspace }
             }
-            // Declared members may declare nested workspaces, but must not restart
-            // automatic discovery at every package boundary.
-            if (workspace && !patterns.length) return project
-            workspace = { entry: project, patterns, depth, automatic: !workspace }
+            // Undeclared packages do not expand discovery. Keep the outer context
+            // so they cannot hide deeper members declared by the repository root.
+          } catch {
+            warnings.push(`${path.relative(root, directory)}: this folder could not be read.`)
+            return project
           }
-          // Undeclared packages do not expand discovery. Keep the outer context
-          // so they cannot hide deeper members declared by the repository root.
-        } catch {
-          warnings.push(`${path.relative(root, directory)}: this folder could not be read.`)
-          return project
         }
+        if (workspace ? depth - workspace.depth >= 8 : depth >= 2) return project
+        const candidates = currentEntries.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name))
+        for (const child of candidates) {
+          if (workspace && !(workspace.automatic && depth === workspace.depth) && !matchesWorkspace(path.relative(workspace.entry.directory, path.join(directory, child.name)).split(path.sep).join('/'), workspace.patterns, true)) continue
+          // Reserve before awaiting filesystem access so concurrent groups cannot
+          // all claim the same remaining budget or silently drop overflow.
+          if (scheduledFolders >= 500) {
+            truncated = true
+            break
+          }
+          scheduledFolders += 1
+          try {
+            const childDirectory = await realpath(path.join(directory, child.name))
+            if (!isWithin(root, childDirectory)) continue
+            queue.push({ directory: childDirectory, entries: await readdir(childDirectory, { withFileTypes: true }), depth: depth + 1, workspace })
+          } catch {
+            warnings.push(`${child.name}: this folder could not be read.`)
+          }
+        }
+        return project
+      } finally {
+        const wasVisible = activeFolders.keys().next().value === directory
+        activeFolders.delete(directory)
+        const next = activeFolders.values().next().value
+        if (wasVisible && next) onProgress?.(next)
       }
-      if (workspace ? depth - workspace.depth >= 8 : depth >= 2) return project
-      const candidates = currentEntries.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name))
-      for (const child of candidates) {
-        if (workspace && !(workspace.automatic && depth === workspace.depth) && !matchesWorkspace(path.relative(workspace.entry.directory, path.join(directory, child.name)).split(path.sep).join('/'), workspace.patterns, true)) continue
-        // Reserve before awaiting filesystem access so concurrent groups cannot
-        // all claim the same remaining budget or silently drop overflow.
-        if (scheduledFolders >= 500) {
-          truncated = true
-          break
-        }
-        scheduledFolders += 1
-        try {
-          const childDirectory = await realpath(path.join(directory, child.name))
-          if (!isWithin(root, childDirectory)) continue
-          queue.push({ directory: childDirectory, entries: await readdir(childDirectory, { withFileTypes: true }), depth: depth + 1, workspace })
-        } catch {
-          warnings.push(`${child.name}: this folder could not be read.`)
-        }
-      }
-      return project
     }))
     for (const project of inspected) if (project && registered.length < MAX_PROJECTS) registered.push(project)
+    onProgress?.({ phase: 'Discovering project folders', detail: `${inspectedFolders} folders checked · ${registered.length} projects found`, completed: inspectedFolders })
   }
   if (truncated || queue.length || registered.length >= MAX_PROJECTS) warnings.push(`Scan limited to 500 folders and ${MAX_PROJECTS} projects. Choose a smaller collection to see the rest.`)
   registered.sort((a, b) => a.project.name.localeCompare(b.project.name))
+  onProgress?.({ phase: 'Organizing projects and workspace packages', detail: `${registered.length} projects found` })
   for (const entry of registered) {
     const count = registered.filter(child => child.project.monorepo?.id === entry.project.id).length
     if (count) entry.project.workspacePackageCount = count

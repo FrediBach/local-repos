@@ -3,7 +3,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
-import type { PackageUnused, ProjectDependency } from '../src/types'
+import type { PackageUnused, ProjectDependency, ScanProgressReporter } from '../src/types'
 import { HelperError, type RegisteredProject } from './scanner'
 
 const require = createRequire(import.meta.url)
@@ -49,7 +49,8 @@ function invalidReport(): never {
 }
 
 /** Run the helper's pinned CLI, without installing tools or applying fixes. */
-export async function unusedProject(entry: RegisteredProject, runner: KnipRunner = runKnip): Promise<PackageUnused> {
+export async function unusedProject(entry: RegisteredProject, runner: KnipRunner = runKnip, onProgress?: ScanProgressReporter): Promise<PackageUnused> {
+  onProgress?.({ phase: 'Reading dependency declarations' })
   const dependencies = await readDependencies(entry.directory)
   // Analyze the whole repository so sibling usage and shared tooling are visible.
   // Report only declarations belonging to the selected project, including at root.
@@ -57,6 +58,7 @@ export async function unusedProject(entry: RegisteredProject, runner: KnipRunner
   const manifestPath = path.join(entry.directory, 'package.json')
   let output: KnipOutput
   try {
+    onProgress?.({ phase: 'Analyzing imports and dependency usage', detail: 'Knip is checking source files, entry points and workspace configuration' })
     output = await runner(process.execPath, [path.join(knipDirectory, 'bin/knip.js'), '--include', 'dependencies', '--reporter', 'json', '--no-progress', '--no-config-hints', '--no-exit-code'], {
       cwd, encoding: 'utf8', shell: false, timeout: 120_000, maxBuffer: 8 * 1024 * 1024,
       env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
@@ -71,6 +73,7 @@ export async function unusedProject(entry: RegisteredProject, runner: KnipRunner
     const detail = diagnostic(output.stderr || output.stdout)
     throw new HelperError(`Knip could not complete the scan. Check that project dependencies are installed and its configuration loads.${detail ? `\n${detail}` : ''}`, 502)
   }
+  onProgress?.({ phase: 'Validating and matching unused dependencies', detail: 'Keeping findings for the selected package' })
   let report: unknown
   try { report = JSON.parse(output.stdout) } catch { invalidReport() }
   if (!object(report) || !Array.isArray(report.issues)) invalidReport()

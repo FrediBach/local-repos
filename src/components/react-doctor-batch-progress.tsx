@@ -30,7 +30,7 @@ function ReactDoctorScanSummary({ progress }: { progress: Progress }) {
   const average = progress.scored ? Math.round(progress.scoreTotal / progress.scored * 10) / 10 : undefined
   return <>
     <div className="capture-progress-counts"><span>{progress.completed} of {progress.total} React projects processed</span><span>{progress.succeeded} scanned</span><span>{progress.findings} findings across {progress.withFindings} {progress.withFindings === 1 ? 'project' : 'projects'}</span><span>{average === undefined ? 'No scores available' : `${average}/100 average score`}</span><span className={progress.failures.length ? 'capture-failure-count' : ''}>{progress.failures.length} failed</span></div>
-    {progress.scored > 0 && <p className="capture-cache-warning">Average uses {progress.scored} available {progress.scored === 1 ? 'score' : 'scores'} from this scan. Higher scores indicate better React health.</p>}
+    {progress.scored > 0 && <p className="capture-progress-note">Average uses {progress.scored} available {progress.scored === 1 ? 'score' : 'scores'} from this scan. Higher scores indicate better React health.</p>}
     {progress.limited > 0 && <p className="capture-cache-warning">{progress.limited} {progress.limited === 1 ? 'project has' : 'projects have'} limited results. Open the project’s React Doctor tab for details; missing scores are excluded from the average.</p>}
   </>
 }

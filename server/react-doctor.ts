@@ -2,9 +2,11 @@ import { execFile, type ExecFileOptionsWithStringEncoding } from 'node:child_pro
 import { lstat, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { stripVTControlCharacters } from 'node:util'
-import type { ReactDoctorFinding, ReactDoctorReport } from '../src/types'
+import type { ReactDoctorFinding, ReactDoctorReport, ScanProgressReporter } from '../src/types'
 import { HelperError, type RegisteredProject } from './scanner'
+import { observeScanProgress, withoutScanProgress } from './scan-worker-progress'
 
 const require = createRequire(import.meta.url)
 const doctorDirectory = path.resolve(path.dirname(require.resolve('react-doctor')), '..')
@@ -15,12 +17,15 @@ const reactDependencies = new Set(['react', 'react-dom', 'react-native', 'next',
 
 interface ReactDoctorOutput { stdout: string; stderr: string; exitCode: number }
 export type ReactDoctorRunner = (command: string, args: string[], options: ExecFileOptionsWithStringEncoding) => Promise<ReactDoctorOutput>
-const runReactDoctor: ReactDoctorRunner = (command, args, options) => new Promise((resolve, reject) => {
-  execFile(command, args, options, (error, stdout, stderr) => {
+const progressObserver = fileURLToPath(new URL('./react-doctor-progress.mjs', import.meta.url))
+const createReactDoctorRunner = (onProgress?: ScanProgressReporter): ReactDoctorRunner => (command, args, options) => new Promise((resolve, reject) => {
+  const child = execFile(command, onProgress ? ['--import', progressObserver, ...args] : args, options, (error, stdout, stderr) => {
     if (error && (typeof error.code !== 'number' || error.killed || error.signal)) { reject(error); return }
-    resolve({ stdout, stderr, exitCode: error?.code as number | undefined ?? 0 })
+    resolve({ stdout, stderr: withoutScanProgress(stderr), exitCode: error?.code as number | undefined ?? 0 })
   })
+  if (onProgress) observeScanProgress(child.stderr, onProgress)
 })
+const runReactDoctor = createReactDoctorRunner()
 
 async function requireReactProject(directory: string): Promise<void> {
   let manifest: unknown
@@ -61,10 +66,13 @@ function parseFinding(value: unknown): ReactDoctorFinding {
 }
 
 /** Use the installed CLI, force a full scan, and select only this card's project. */
-export async function reactDoctorProject(entry: RegisteredProject, runner: ReactDoctorRunner = runReactDoctor): Promise<ReactDoctorReport> {
+export async function reactDoctorProject(entry: RegisteredProject, runner: ReactDoctorRunner = runReactDoctor, onProgress?: ScanProgressReporter): Promise<ReactDoctorReport> {
+  onProgress?.({ phase: 'Checking the React project manifest' })
   await requireReactProject(entry.directory)
+  if (onProgress && runner === runReactDoctor) runner = createReactDoctorRunner(onProgress)
   let output: ReactDoctorOutput
   try {
+    onProgress?.({ phase: 'Loading React Doctor configuration and source files' })
     output = await runner(process.execPath, [path.join(doctorDirectory, 'bin/react-doctor.js'), entry.directory,
       '--project', '.', '--json', '--json-compact', '--scope', 'full', '--lint', '--dead-code', '--warnings',
       '--blocking', 'none', '--no-supply-chain', '--no-cache', '--yes'], {
@@ -81,6 +89,7 @@ export async function reactDoctorProject(entry: RegisteredProject, runner: React
     const detail = diagnostic(output.stderr || output.stdout)
     throw new HelperError(`React Doctor could not complete the scan. Check that project dependencies are installed and its configuration loads.${detail ? `\n${detail}` : ''}`, 502)
   }
+  onProgress?.({ phase: 'Validating React Doctor findings and score' })
   let report: unknown
   try { report = JSON.parse(output.stdout) } catch { invalidReport() }
   if (!object(report) || report.schemaVersion !== 3 || report.mode !== 'full' || report.ok !== true || report.error !== null

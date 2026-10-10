@@ -3,7 +3,7 @@ import { lstat, mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { outdatedLevel, scoreVersionGap, sumOutdatedScore } from '../src/lib/outdated'
-import type { OutdatedFinding, PackageOutdated, ProjectDependency, RepoProject } from '../src/types'
+import type { OutdatedFinding, PackageOutdated, ProjectDependency, RepoProject, ScanProgressReporter } from '../src/types'
 import { HelperError, type RegisteredProject } from './scanner'
 
 type Manager = RepoProject['packageManager']
@@ -130,8 +130,9 @@ function verifyOutput(output: OutdatedOutput, allowOutdatedExit: boolean): void 
   if ((output.exitCode !== 0 && !(allowOutdatedExit && output.exitCode === 1)) || /\b(?:error|failed|skipped|unauthorized|forbidden|ECONN\w*|ENOTFOUND|ETIMEDOUT)\b/i.test(output.stderr)) unsupportedReport()
 }
 
-async function modernYarnRows(names: string[], runner: OutdatedRunner, options: ExecFileOptionsWithStringEncoding): Promise<{ rows: VersionRow[]; missing: string[] }> {
+async function modernYarnRows(names: string[], runner: OutdatedRunner, options: ExecFileOptionsWithStringEncoding, onProgress?: ScanProgressReporter): Promise<{ rows: VersionRow[]; missing: string[] }> {
   const requestedNames = new Set(names)
+  onProgress?.({ phase: 'Reading the installed Yarn dependency tree' })
   const installed = await runner('yarn', ['info', '--json', ...names], options)
   verifyOutput(installed, false)
   const current = new Map<string, string>()
@@ -144,6 +145,7 @@ async function modernYarnRows(names: string[], runner: OutdatedRunner, options: 
   }
   const resolved = names.filter(name => current.has(name))
   if (!resolved.length) unsupportedReport()
+  onProgress?.({ phase: 'Querying latest registry versions', detail: `${resolved.length} resolved dependencies` })
   const latest = await runner('yarn', ['npm', 'info', '--json', '--fields', 'name,version', ...resolved.map(name => `${name}@latest`)], options)
   verifyOutput(latest, false)
   const rows: VersionRow[] = []
@@ -158,10 +160,11 @@ async function modernYarnRows(names: string[], runner: OutdatedRunner, options: 
   return { rows, missing: names.filter(name => !current.has(name)) }
 }
 
-async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: NonNullable<PackageOutdated['skipped']>, runner: OutdatedRunner, options: ExecFileOptionsWithStringEncoding, entry: RegisteredProject): Promise<void> {
+async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: NonNullable<PackageOutdated['skipped']>, runner: OutdatedRunner, options: ExecFileOptionsWithStringEncoding, entry: RegisteredProject, onProgress?: ScanProgressReporter): Promise<void> {
   // npm silently omits 404s, unmatched ranges and missing dev/optional packages.
   // An empty outdated object therefore isn't proof that every dependency is current.
   const locked = new Map<string, string>()
+  onProgress?.({ phase: 'Checking locked and omitted dependency versions' })
   for (const filename of ['npm-shrinkwrap.json', 'package-lock.json']) {
     try {
       const lockPath = path.join(entry.workspaceDirectory ?? entry.directory, filename)
@@ -180,6 +183,7 @@ async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: 
   for (const row of rows) if (!row.current && locked.has(row.name)) row.current = locked.get(row.name)
   const omitted = names.filter(name => !rows.some(row => row.name === name))
   for (let index = 0; index < omitted.length; index += 4) {
+    onProgress?.({ phase: 'Verifying dependencies omitted by npm', detail: `${index} of ${omitted.length} checked`, completed: index, total: omitted.length })
     const results = await Promise.allSettled(omitted.slice(index, index + 4).map(async name => {
       let current: string | undefined
       try {
@@ -203,11 +207,14 @@ async function verifyNpmOmissions(names: string[], rows: VersionRow[], skipped: 
     }))
     const failure = results.find(result => result.status === 'rejected')
     if (failure?.status === 'rejected') throw failure.reason
+    const completed = Math.min(index + 4, omitted.length)
+    onProgress?.({ phase: 'Verifying dependencies omitted by npm', detail: `${completed} of ${omitted.length} checked`, completed, total: omitted.length })
   }
 }
 
 /** Explicit, bounded registry lookups only. Never installs or updates packages. */
-export async function outdatedProject(entry: RegisteredProject, runner: OutdatedRunner = runOutdatedCommand): Promise<PackageOutdated> {
+export async function outdatedProject(entry: RegisteredProject, runner: OutdatedRunner = runOutdatedCommand, onProgress?: ScanProgressReporter): Promise<PackageOutdated> {
+  onProgress?.({ phase: 'Reading dependency declarations' })
   const { dependencies } = await readProjectManifest(entry)
   const manager = entry.project.packageManager
   const skipped: NonNullable<PackageOutdated['skipped']> = []
@@ -219,6 +226,7 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
   }
   const finish = (findings: OutdatedFinding[]): PackageOutdated => ({ manager, scannedAt: new Date().toISOString(), findings, score: sumOutdatedScore(findings), level: outdatedLevel(findings), ...(skipped.length ? { skipped } : {}) })
   if (!names.length) return finish([])
+  onProgress?.({ phase: 'Checking the package lockfile' })
   await requireLockfile(entry)
   if (process.platform === 'win32' && manager !== 'bun') throw new HelperError(`Run the local helper in WSL to scan outdated ${manager} packages. Windows .cmd package-manager launchers are not supported.`, 501)
   const env: NodeJS.ProcessEnv = {
@@ -253,6 +261,7 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
     let rows: VersionRow[]
     let modernYarn = false
     if (manager === 'yarn' || manager === 'bun') {
+      onProgress?.({ phase: `Checking the installed ${manager} version` })
       const version = await runner(manager, ['--version'], { ...options, timeout: 10_000 })
       const parts = /^(\d+)\.(\d+)\.(\d+)(?:[-+][\w.-]+)?$/.exec(version.stdout.trim())?.slice(1).map(Number)
       if (version.exitCode || !parts || parts[0] < 1) throw new HelperError(`Could not identify the installed ${manager} version.`, 502)
@@ -261,7 +270,7 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
       modernYarn = manager === 'yarn' && parts[0] >= 2
     }
     if (modernYarn) {
-      const result = await modernYarnRows(names, runner, options)
+      const result = await modernYarnRows(names, runner, options, onProgress)
       rows = result.rows
       skipped.push(...result.missing.map(name => ({ name, reason: 'No resolved version was found in the Yarn dependency tree.' })))
     } else {
@@ -272,6 +281,7 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
         bun: ['outdated', '--no-save', '--ignore-scripts', '--no-progress', '--cache-dir', path.join(temporary, 'bun-cache'), ...names],
       }
       if (manager === 'npm' && entry.workspaceDirectory) args.npm.push('--workspace', entry.project.monorepo!.packagePath)
+      onProgress?.({ phase: 'Querying latest registry versions', detail: `${manager} is checking ${names.length} dependencies` })
       const output = await runner(manager, args[manager], manager === 'npm' && entry.workspaceDirectory ? { ...options, cwd: entry.workspaceDirectory } : options)
       verifyOutput(output, manager !== 'bun')
       rows = manager === 'yarn' ? parseYarnRows(output.stdout) : manager === 'bun' ? parseBunRows(output.stdout, output.stderr) : parseJsonRows(output.stdout)
@@ -281,10 +291,11 @@ export async function outdatedProject(entry: RegisteredProject, runner: Outdated
       // --workspaces=false incorrectly filters the root out in some npm versions.
       // Keep only root entries from --long output instead of using that selector.
       rows = rows.filter(row => row.dependentLocation === undefined || (entry.workspaceDirectory ? row.dependentLocation === entry.project.monorepo?.packagePath : row.dependentLocation === '' || row.dependentLocation === '.'))
-      await verifyNpmOmissions(names, rows, skipped, runner, options, entry)
+      await verifyNpmOmissions(names, rows, skipped, runner, options, entry, onProgress)
     }
     // Classic Yarn includes child workspace reports even without recursion.
     if (manager === 'yarn' && !modernYarn) rows = rows.filter(row => row.dependentLocation === undefined || row.dependentLocation === '' || (entry.workspaceDirectory && row.dependentLocation === entry.project.name))
+    onProgress?.({ phase: 'Comparing versions and calculating update scores' })
     const findings = new Map<string, OutdatedFinding>()
     const requestedNames = new Set(names)
     for (const row of rows) {

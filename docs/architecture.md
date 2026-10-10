@@ -71,6 +71,11 @@ results and saves the workspace. Restarting the helper loses its registrations
 and runtime resources; the [API client](../src/lib/api.ts) can re-register the
 cached helper workspace on demand before retrying an action.
 
+Scan requests can opt into a response stream of live stage updates followed by
+the same final result. Progress comes from the scanner, analysis services, and
+process lifecycle; it is temporary UI state, separate from cached reports. The
+frontend keeps completed-project counts distinct from the active scan stage.
+
 Project identities differ by connection method: browser IDs use the chosen
 folder name and relative path, while helper IDs hash the canonical absolute
 project path. Favorites, tags, report preservation, and project matching depend

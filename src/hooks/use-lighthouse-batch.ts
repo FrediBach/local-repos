@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { isLighthouseProject, lighthousePerformanceScore } from '../lib/lighthouse'
-import type { LighthouseReport, RepoProject } from '../types'
+import type { LighthouseReport, RepoProject, ScanProgress, ScanProgressReporter } from '../types'
 
 export interface LighthouseBatchProgress {
   status: 'running' | 'stopping' | 'completed' | 'stopped'
+  stage?: ScanProgress
+  stageStartedAt?: number
+  startedAt?: number
   total: number
   completed: number
   succeeded: number
@@ -17,7 +20,7 @@ export interface LighthouseBatchProgress {
   cacheWarnings: number
 }
 
-type Scan = (project: RepoProject, isCurrent: () => boolean) => Promise<{ cacheWarning?: boolean; report: LighthouseReport } | void>
+type Scan = (project: RepoProject, isCurrent: () => boolean, reportProgress: ScanProgressReporter) => Promise<{ cacheWarning?: boolean; report: LighthouseReport } | void>
 
 /** Scan frontend projects sequentially and stop only after the active request. */
 export function useLighthouseBatch() {
@@ -39,7 +42,7 @@ export function useLighthouseBatch() {
     if (!queue.length) return
     const job = { stop: false }
     active.current = job
-    let state: LighthouseBatchProgress = { status: 'running', total: queue.length, completed: 0, succeeded: 0, withFindings: 0, findings: 0, scoreTotal: 0, scored: 0, limited: 0, failures: [], cacheWarnings: 0 }
+    let state: LighthouseBatchProgress = { status: 'running', startedAt: Date.now(), total: queue.length, completed: 0, succeeded: 0, withFindings: 0, findings: 0, scoreTotal: 0, scored: 0, limited: 0, failures: [], cacheWarnings: 0 }
     const isCurrent = () => mounted.current && active.current === job && isWorkspaceCurrent()
     const publish = () => {
       if (isCurrent()) setProgress({ ...state, status: job.stop && state.status === 'running' ? 'stopping' : state.status })
@@ -48,10 +51,15 @@ export function useLighthouseBatch() {
     try {
       for (const project of queue) {
         if (job.stop || !isCurrent()) break
-        state = { ...state, current: { id: project.id, name: project.name } }
+        state = { ...state, current: { id: project.id, name: project.name }, stage: { phase: 'Preparing scan' }, stageStartedAt: Date.now() }
+        const reportProgress: ScanProgressReporter = stage => {
+          if (!isCurrent() || state.current?.id !== project.id) return
+          state = { ...state, stage, stageStartedAt: stage.phase === state.stage?.phase ? state.stageStartedAt : Date.now() }
+          publish()
+        }
         publish()
         try {
-          const result = await scan(project, isCurrent)
+          const result = await scan(project, isCurrent, reportProgress)
           if (!isCurrent()) break
           if (!result?.report) throw new Error('The helper did not return a Lighthouse report.')
           const { report } = result
@@ -76,7 +84,7 @@ export function useLighthouseBatch() {
         publish()
       }
     } finally {
-      state = { ...state, current: undefined, status: state.completed === state.total ? 'completed' : 'stopped' }
+      state = { ...state, current: undefined, stage: undefined, stageStartedAt: undefined, status: state.completed === state.total ? 'completed' : 'stopped' }
       publish()
       if (active.current === job) {
         active.current = null

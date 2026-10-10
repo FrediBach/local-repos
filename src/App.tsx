@@ -31,6 +31,8 @@ import type { WorkspaceCommandId } from '@/lib/project-search'
 import { useProjectFiltering } from '@/hooks/use-project-filtering'
 import { PreviewBatchProgress } from '@/components/preview-batch-progress'
 import { useWorkspaceActions } from '@/hooks/use-workspace-actions'
+import { useScanProgress, type ActiveScanProgress } from '@/hooks/use-scan-progress'
+import { ScanProgressPanel } from '@/components/scan-progress-panel'
 import { AuditBatchProgress } from '@/components/audit-batch-progress'
 import { useWorkspaceWatcher } from '@/hooks/use-workspace-watcher'
 import { CriticalVulnerabilityDialog } from '@/components/critical-vulnerability-dialog'
@@ -85,7 +87,8 @@ function WorkspaceApp() {
   const projectOpener = useRef<HTMLElement | null>(null)
   const workspaceVersion = useRef(0)
   const favoritesVersion = useRef(0)
-  const { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews } = useWorkspaceActions({
+  const metadataProgress = useScanProgress()
+  const { action, packageBusy, runAutomaticScan, scanProgress, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews } = useWorkspaceActions({
     workspace, busy, workspaceVersion, setBusy, setLogs, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
   })
   const rawProjects = workspace?.projects ?? demoProjects
@@ -94,6 +97,19 @@ function WorkspaceApp() {
   const tagProject = projects.find(p => p.id === tagProjectId)
   const availableTags = useMemo(() => normalizeTags(projects.flatMap(project => project.tags)), [projects])
   const selected = projects.find(p => p.id === selectedId)
+  const selectedBatch = [
+    { title: 'Scanning vulnerabilities', progress: auditBatch.progress },
+    { title: 'Checking outdated packages', progress: outdatedBatch.progress },
+    { title: 'Running React Doctor', progress: reactDoctorBatch.progress },
+    { title: 'Running Lighthouse', progress: lighthouseBatch.progress },
+    { title: 'Capturing preview', progress: previewBatch.progress },
+  ].find(batch => batch.progress?.current?.id === selectedId && batch.progress?.stage)
+  const activeScanProgress = metadataProgress.progress ?? scanProgress
+  const selectedScanProgress: ActiveScanProgress | undefined = scanProgress?.projectId === selectedId ? scanProgress
+    : selectedBatch?.progress?.stage && selectedBatch.progress.stageStartedAt !== undefined && selectedBatch.progress.startedAt !== undefined ? {
+      title: selectedBatch.title, projectId: selectedId, projectName: selected?.name, stage: selectedBatch.progress.stage,
+      stageStartedAt: selectedBatch.progress.stageStartedAt, startedAt: selectedBatch.progress.startedAt,
+    } : undefined
   const isDemo = !workspace
   const running = projects.filter(isRunning).length
   const favoriteIds = useMemo(() => new Set(favorites), [favorites])
@@ -248,43 +264,47 @@ function WorkspaceApp() {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     const version = ++workspaceVersion.current
     setBusy('connect'); setConnectError('')
+    const scan = metadataProgress.begin('Connecting directory', () => version === workspaceVersion.current)
     try {
       let next: Workspace
       if (mode === 'browser') {
         const handle = await chooseDirectory()
-        next = { ...await scanDirectory(handle), mode, handle }
+        next = { ...await scanDirectory(handle, scan.report), mode, handle }
       } else {
         if (!path.trim()) throw new Error('Enter the absolute path to your projects directory.')
-        next = { ...await scanWithHelper(path.trim()), mode }
+        next = { ...await scanWithHelper(path.trim(), scan.report), mode }
         setHelper(true)
       }
       if (version !== workspaceVersion.current) return
       if (workspace?.mode === 'helper' && (next.mode !== 'helper' || next.rootPath !== workspace.rootPath)) await stopWorkspaceServers(workspace)
       auditHistory.current.clear(); setCriticalAlerts([])
       next = preservePreviews(next, workspace)
+      scan.report({ phase: 'Saving project metadata' })
       const cached = await persist(next, true, true); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); lighthouseBatch.dismiss(); navigate('all'); setConnectOpen(false)
       if (cached) setNotice({ text: `Connected ${next.rootName}. Found ${next.projects.length} project${next.projects.length === 1 ? '' : 's'}.${next.warnings?.length ? ` ${next.warnings.length} scan note(s) — see workspace info.` : ''}` })
     } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setConnectError(error instanceof Error ? error.message : 'Unable to connect to this directory.') }
-    finally { setBusy('') }
+    finally { scan.finish(); if (version === workspaceVersion.current) setBusy('') }
   }
   async function resync() {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (!workspace) { setConnectOpen(true); return }
     const version = ++workspaceVersion.current
     setBusy('sync')
+    const scan = metadataProgress.begin('Syncing project metadata', () => version === workspaceVersion.current)
     try {
       let next: Workspace
-      if (workspace.mode === 'helper' && workspace.rootPath) next = { ...await scanWithHelper(workspace.rootPath), mode: 'helper' }
+      if (workspace.mode === 'helper' && workspace.rootPath) next = { ...await scanWithHelper(workspace.rootPath, scan.report), mode: 'helper' }
       else if (workspace.handle) {
         if (!await canReadDirectory(workspace.handle, true)) throw new Error('Folder permission is needed to resync. Please allow read access and try again.')
-        next = { ...await scanDirectory(workspace.handle), mode: 'browser', handle: workspace.handle }
+        next = { ...await scanDirectory(workspace.handle, scan.report), mode: 'browser', handle: workspace.handle }
       } else throw new Error('Reconnect the directory to restore folder access.')
       if (version !== workspaceVersion.current) return
       next = preservePreviews(next, workspace)
+      scan.report({ phase: 'Saving project metadata' })
       const cached = await persist(next, true, true)
       if (cached) setNotice({ text: `Up to date. ${next.projects.length} projects synced.${next.warnings?.length ? ' Some folders could not be read; see workspace info.' : ''}` })
     } catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Sync failed. Your cached projects are still available.', error: true }) }
-    finally { setBusy('') }
+    finally { scan.finish(); if (version === workspaceVersion.current) setBusy('') }
   }
   async function forgetWorkspace() {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
@@ -313,6 +333,7 @@ function WorkspaceApp() {
         connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
+        {activeScanProgress && <ScanProgressPanel progress={activeScanProgress} />}
         <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
           onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />
         {page === 'todos' ? <>
@@ -346,10 +367,10 @@ function WorkspaceApp() {
       </div>
     </main>
 
-    <ConnectWorkspaceDialog open={connectOpen} busy={busy} hosted={hosted} helper={helper} path={path} error={connectError}
+    <ConnectWorkspaceDialog scanProgress={metadataProgress.progress} open={connectOpen} busy={busy} hosted={hosted} helper={helper} path={path} error={connectError}
       onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }} onPathChange={setPath} onConnect={connect} />
 
-    <ProjectDetailDialog onActivity={commitActivity.remember} selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
+    <ProjectDetailDialog scanProgress={selectedScanProgress} onActivity={commitActivity.remember} selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
       packageBusy={packageBusy(selected)}
       detailTab={detailTab} onTabChange={setDetailTab} logs={logs} tagsReady={tagsReady} selectedTags={selectedTags} favorite={!!selected && favoriteIds.has(selected.id)}
       onClose={() => setSelectedId(undefined)} onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}

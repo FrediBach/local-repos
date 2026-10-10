@@ -1,14 +1,17 @@
+import { ScanProgressPanel } from './scan-progress-panel'
+import type { ActiveScanProgress } from '@/hooks/use-scan-progress'
 import { ArrowRight, ArrowUpRight, Folder, FolderOpen, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { installationUrl } from '@/lib/deployment'
 
 interface Props {
+  scanProgress?: ActiveScanProgress
   open: boolean; busy: string; hosted: boolean; helper: boolean; path: string; error: string
   onOpenChange: (open: boolean) => void; onPathChange: (path: string) => void; onConnect: (mode: 'browser' | 'helper') => void
 }
 
-export function ConnectWorkspaceDialog({ open, busy, hosted, helper, path, error, onOpenChange, onPathChange, onConnect }: Props) {
+export function ConnectWorkspaceDialog({ open, busy, hosted, helper, path, error, scanProgress, onOpenChange, onPathChange, onConnect }: Props) {
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="connect-dialog">
       <div className="dialog-symbol"><FolderOpen size={24} /></div><span className="eyebrow">A PLACE TO START</span>
       <DialogTitle>Bring your projects together.</DialogTitle>
@@ -29,6 +32,7 @@ export function ConnectWorkspaceDialog({ open, busy, hosted, helper, path, error
           <Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button>
         </form>
       </>}
+      {scanProgress && <ScanProgressPanel progress={scanProgress} />}
       {error && <p className="inline-error" role="alert">{error}</p>}
       <div className="dialog-privacy"><ShieldCheck size={14} />{hosted ? 'Read-only access. Your workspace stays in this browser.' : 'Local workspace. Package scans contact your package registry.'}</div>
     </DialogContent></Dialog>
