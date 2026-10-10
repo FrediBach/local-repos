@@ -155,6 +155,25 @@ describe('workspace watcher scheduling', () => {
     expect(props.run).toHaveBeenCalledOnce()
   })
 
+  it.each(['watcherReactDoctor', 'watcherLighthouse'] as const)('cancels an active scan when %s changes and schedules the updated selection', async key => {
+    const props = options()
+    let finish!: (value: Workspace) => void
+    props.run.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const { result, rerender } = renderHook(useWorkspaceWatcher, { initialProps: props })
+    await advance(60_000)
+    const isCurrent = props.run.mock.calls[0][1] as () => boolean
+    expect(isCurrent()).toBe(true)
+    rerender({ ...props, settings: { ...props.settings, [key]: !props.settings[key] } })
+    expect(isCurrent()).toBe(false)
+    await act(async () => { finish(workspace) })
+    expect(result.current.message).not.toContain('Last automatic scan')
+    await advance(59_999)
+    expect(props.run).toHaveBeenCalledOnce()
+    await advance(1)
+    expect(props.run).toHaveBeenCalledTimes(2)
+    expect((props.run.mock.calls[1][1] as () => boolean)()).toBe(true)
+  })
+
   it('drops an in-flight change check when switching directories and uses the new baseline', async () => {
     const props = { ...options(), settings: { ...defaultSettings, watcherMode: 'changes' as const } }
     let finish!: (value: unknown) => void

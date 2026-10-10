@@ -53,6 +53,8 @@ export type AppSettings = Record<NumericSettingKey, number> & {
   watcherAudit: boolean
   watcherOutdated: boolean
   watcherStorage: boolean
+  watcherReactDoctor: boolean
+  watcherLighthouse: boolean
 }
 export const defaultSettings: AppSettings = {
   commitActivityAuthor: '',
@@ -69,6 +71,8 @@ export const defaultSettings: AppSettings = {
   watcherAudit: true,
   watcherOutdated: true,
   watcherStorage: false,
+  watcherReactDoctor: false,
+  watcherLighthouse: false,
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -92,7 +96,7 @@ export function normalizeSettings(value: unknown): AppSettings {
   }
   if (typeof value.majorUpdatesAreOrange === 'boolean') result.majorUpdatesAreOrange = value.majorUpdatesAreOrange
   if (['manual', 'periodic', 'changes'].includes(value.watcherMode as string)) result.watcherMode = value.watcherMode as WatcherMode
-  for (const key of ['watcherAudit', 'watcherOutdated', 'watcherStorage', 'pushReminderEnabled'] as const) {
+  for (const key of ['watcherAudit', 'watcherOutdated', 'watcherStorage', 'watcherReactDoctor', 'watcherLighthouse', 'pushReminderEnabled'] as const) {
     if (typeof value[key] === 'boolean') result[key] = value[key]
   }
   if (isRecord(value.auditColors)) for (const severity of auditSeverities) {

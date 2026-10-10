@@ -20,6 +20,16 @@ const project = (id: string, relativePath = id, origin?: string, packagePath?: s
 const exportConfig = (projects: RepoProject[], favorites = projects.map(p => p.id), tags = {}) => createConfigBackup({ ...defaultSettings, colorScheme: 'ocean' }, 'dark', projects, favorites, tags)
 
 describe('portable configuration', () => {
+  it('preserves opt-in automatic quality scans and defaults them off in older backups', () => {
+    const backup = createConfigBackup({ ...defaultSettings, watcherMode: 'periodic', watcherReactDoctor: true, watcherLighthouse: true }, 'system', [], [], {})
+    expect(parseConfigBackup(JSON.stringify(backup)).settings).toMatchObject({ watcherMode: 'periodic', watcherReactDoctor: true, watcherLighthouse: true })
+    const { watcherReactDoctor: _reactDoctor, watcherLighthouse: _lighthouse, ...legacy } = backup.settings
+    expect(parseConfigBackup(JSON.stringify({ ...backup, settings: legacy })).settings).toMatchObject({ watcherMode: 'periodic', watcherReactDoctor: false, watcherLighthouse: false })
+    for (const key of ['watcherReactDoctor', 'watcherLighthouse']) {
+      expect(() => parseConfigBackup(JSON.stringify({ ...backup, settings: { ...backup.settings, [key]: 'true' } }))).toThrow(`invalid setting: ${key}`)
+    }
+  })
+
   it('round-trips all settings, theme, favorites and normalized tags without project data or credentials', () => {
     const source = { ...project('local', 'app', 'https://user:secret@github.com/team/app.git?token=secret'), scripts: { dev: 'secret command' }, screenshot: 'large image', readme: 'readme content' }
     const backup = exportConfig([source], ['local', 'absent'], { local: ['Work', 'work', ' Private '], absent: ['saved'] })

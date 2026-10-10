@@ -22,7 +22,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
   const [error, setError] = useState(false)
   const [nextRun, setNextRun] = useState<number>()
   const { workspace, settings, online } = options
-  const { watcherMode: mode, watcherIntervalMinutes: minutes, watcherPollSeconds: seconds, watcherAudit, watcherOutdated, watcherStorage } = settings
+  const { watcherMode: mode, watcherIntervalMinutes: minutes, watcherPollSeconds: seconds, watcherAudit, watcherOutdated, watcherStorage, watcherReactDoctor, watcherLighthouse } = settings
 
   useEffect(() => {
     // A metadata refresh must not restart the timer or replace its baseline.
@@ -83,7 +83,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
     }
     schedule(mode === 'changes' ? 0 : delay)
     return () => { active = false; clearTimeout(timer) }
-  }, [workspace?.mode, workspace?.rootPath, workspace?.handle, mode, minutes, seconds, watcherAudit, watcherOutdated, watcherStorage, online])
+  }, [workspace?.mode, workspace?.rootPath, workspace?.handle, mode, minutes, seconds, watcherAudit, watcherOutdated, watcherStorage, watcherReactDoctor, watcherLighthouse, online])
 
   return { message: watcherMessage(workspace, mode, minutes, online, status), error, nextRun }
 }

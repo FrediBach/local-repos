@@ -193,19 +193,26 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
         const queue = next.projects.filter(project => !changed || changed.has(project.id) || !previousProjects.has(project.id))
         for (const project of queue) {
           const hasPackages = project.hasPackageJson ?? !!project.dependencies?.length
-          const checks = [settings.watcherAudit && hasPackages && 'audit', settings.watcherOutdated && hasPackages && 'outdated', settings.watcherStorage && 'storage'].filter((check): check is string => !!check)
+          const checks = [
+            { enabled: settings.watcherAudit && hasPackages, action: 'audit', report: 'audit', label: 'Scanning vulnerabilities' },
+            { enabled: settings.watcherOutdated && hasPackages, action: 'outdated', report: 'outdated', label: 'Checking outdated packages' },
+            { enabled: settings.watcherStorage, action: 'storage', report: 'storage', label: 'Measuring disk usage' },
+            { enabled: settings.watcherReactDoctor && isReactProject(project), action: 'react-doctor', report: 'reactDoctor', label: 'Running React Doctor' },
+            { enabled: settings.watcherLighthouse && isLighthouseProject(project), action: 'lighthouse', report: 'lighthouse', label: 'Running Lighthouse' },
+          ] as const
           for (const check of checks) {
+            if (!check.enabled) continue
             if (!current()) return
-            progress(`${check === 'audit' ? 'Scanning vulnerabilities' : check === 'outdated' ? 'Checking outdated packages' : 'Measuring disk usage'} · ${project.name}`)
+            progress(`${check.label} · ${project.name}`)
             try {
-              const update = await projectAction<Partial<RepoProject>>(project.id, check)
+              const update = await projectAction<Partial<RepoProject>>(project.id, check.action)
               if (!current()) return
-              if (!update[check as 'audit' | 'outdated' | 'storage']) throw new Error('The helper returned no report.')
-              if (check === 'audit' && update.audit) reportCriticalVulnerabilities({ ...project, audit: previousProjects.get(project.id)?.audit }, update.audit)
+              if (!update[check.report]) throw new Error('The helper returned no report.')
+              if (check.action === 'audit' && update.audit) reportCriticalVulnerabilities({ ...project, audit: previousProjects.get(project.id)?.audit }, update.audit)
               next = { ...next, projects: next.projects.map(item => item.id === project.id ? { ...item, ...update } : item) }
               cacheFailed = !await persist(next, false)
             } catch (error) {
-              failures.push(`${project.name} (${check}): ${error instanceof Error ? error.message : 'Scan failed.'}`)
+              failures.push(`${project.name} (${check.action}): ${error instanceof Error ? error.message : 'Scan failed.'}`)
             }
           }
         }

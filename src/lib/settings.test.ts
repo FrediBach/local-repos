@@ -66,6 +66,16 @@ describe('workspace settings', () => {
     expect(validateSettings({ ...defaultSettings, watcherIntervalMinutes: 0, watcherPollSeconds: NaN })).toEqual({})
   })
 
+  it('keeps automatic quality scans opt-in for older settings and normalizes each choice independently', () => {
+    expect(defaultSettings).toMatchObject({ watcherReactDoctor: false, watcherLighthouse: false })
+    expect(normalizeSettings({ watcherMode: 'periodic' })).toMatchObject({ watcherMode: 'periodic', watcherReactDoctor: false, watcherLighthouse: false })
+    expect(normalizeSettings({ watcherReactDoctor: true, watcherLighthouse: false })).toMatchObject({ watcherReactDoctor: true, watcherLighthouse: false })
+    expect(normalizeSettings({ watcherReactDoctor: false, watcherLighthouse: true })).toMatchObject({ watcherReactDoctor: false, watcherLighthouse: true })
+    for (const value of [undefined, null, 'true', 1, [], {}]) {
+      expect(normalizeSettings({ watcherReactDoctor: value, watcherLighthouse: value })).toMatchObject({ watcherReactDoctor: false, watcherLighthouse: false })
+    }
+  })
+
   it('restores defaults for missing, invalid, and unsupported stored values', () => {
     expect(normalizeSettings(null)).toEqual(defaultSettings)
     expect(normalizeSettings([])).toEqual(defaultSettings)

@@ -213,10 +213,15 @@ describe('workspace settings dialog', () => {
   })
 
   it('saves watcher mode, cadence and selected checks, validates intervals, and restores the draft', async () => {
-    const { user } = await setup()
+    const { user, unmount } = await setup()
     await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
     await user.click(screen.getByRole('tab', { name: 'Watcher' }))
     expect((screen.getByRole('combobox', { name: 'Scan mode' }) as HTMLSelectElement).value).toBe('manual')
+    for (const name of ['React Doctor', 'Lighthouse']) {
+      const checkbox = screen.getByRole('checkbox', { name, exact: true }) as HTMLInputElement
+      expect(checkbox.checked).toBe(false)
+      expect(checkbox.disabled).toBe(true)
+    }
     await user.selectOptions(screen.getByRole('combobox', { name: 'Scan mode' }), 'periodic')
     await user.clear(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }))
     await user.type(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }), '0')
@@ -227,15 +232,27 @@ describe('workspace settings dialog', () => {
     await user.clear(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }))
     await user.type(screen.getByRole('spinbutton', { name: 'Scan interval (minutes)' }), '30')
     await user.click(screen.getByRole('checkbox', { name: 'Outdated packages', exact: true }))
+    await user.click(screen.getByRole('checkbox', { name: 'React Doctor', exact: true }))
+    await user.click(screen.getByRole('checkbox', { name: 'Lighthouse', exact: true }))
     await user.click(screen.getByRole('button', { name: 'Save settings' }))
-    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ watcherMode: 'periodic', watcherIntervalMinutes: 30, watcherOutdated: false })
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ watcherMode: 'periodic', watcherIntervalMinutes: 30, watcherOutdated: false, watcherReactDoctor: true, watcherLighthouse: true })
+    unmount()
+    await setup()
     await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
     await user.click(screen.getByRole('tab', { name: 'Watcher' }))
     expect((screen.getByRole('combobox', { name: 'Scan mode' }) as HTMLSelectElement).value).toBe('periodic')
+    for (const name of ['React Doctor', 'Lighthouse']) expect((screen.getByRole('checkbox', { name, exact: true }) as HTMLInputElement).checked).toBe(true)
     await user.selectOptions(screen.getByRole('combobox', { name: 'Scan mode' }), 'changes')
     expect(screen.getByRole('spinbutton', { name: 'Check for package changes (seconds)' })).toBeTruthy()
+    await user.click(screen.getByRole('checkbox', { name: 'Lighthouse', exact: true }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toHaveProperty('watcherMode', 'periodic')
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ watcherMode: 'periodic', watcherReactDoctor: true, watcherLighthouse: true })
+    await user.click(screen.getByRole('button', { name: 'Settings', exact: true }))
+    await user.click(screen.getByRole('tab', { name: 'Watcher' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Scan mode' }), 'changes')
+    await user.click(screen.getByRole('checkbox', { name: 'Lighthouse', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(JSON.parse(preferences.get(SETTINGS_STORAGE_KEY)!)).toMatchObject({ watcherMode: 'changes', watcherReactDoctor: true, watcherLighthouse: false })
   })
 
   it('keeps batch totals and package badges in sync when score weights change', async () => {

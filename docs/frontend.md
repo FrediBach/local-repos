@@ -245,9 +245,21 @@ watching. A second busy check after the change request prevents it from taking
 over a newly started manual operation.
 
 An automatic run first rescans metadata, then optionally performs audit, outdated,
-and storage checks. Change-triggered runs select affected and newly discovered
-projects; periodic runs select all projects. Change detection expands to siblings
-that share a declared package workspace.
+storage, React Doctor, and Lighthouse checks. `watcherReactDoctor` and
+`watcherLighthouse` default to false, including when older saved settings or
+configuration backups omit them. The additional checks reuse `isReactProject`
+and `isLighthouseProject` eligibility. Check descriptors distinguish helper action
+names from response fields (`react-doctor` returns `reactDoctor`) and supply
+progress labels. Missing reports count as failed checks and leave dated results
+intact. Browser-directory scans only refresh metadata.
+
+Change-triggered runs select affected and newly discovered projects; periodic
+runs select all projects. Change detection expands to siblings that share a
+declared package workspace; it does not watch source files. Changing either new
+setting invalidates the active watcher generation and resets its schedule, just
+like the existing check options. Pending requests can finish, but their stale
+results and remaining checks are discarded. Automatic Lighthouse scans use the
+helper's normal browser and temporary development-server lifecycle.
 
 [`packageWorkspaceId`](../src/lib/workspace.ts) defines this shared maintenance
 scope: declared workspace members use their workspace ID; merely grouped

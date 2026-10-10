@@ -132,7 +132,7 @@ The cog beside the top-right help icon opens **Settings**:
 
 - **Badges & scores:** assign red, orange, blue, or neutral to each vulnerability severity; set orange/red package-lag thresholds, the major-version requirement for red, and whether any major update is orange. Expand **Score weights** to adjust major, minor, patch, and prerelease points and per-package caps. A preview shows the resulting colors and scores.
 - **Filter thresholds:** set recent/active/inactive windows in days and large-project/node_modules size thresholds.
-- **Watcher:** choose manual-only, periodic, or package-change scans; set the interval and select vulnerability, outdated-package, and optional disk-usage checks.
+- **Watcher:** choose manual-only, periodic, or package-change scans; set the interval and select vulnerability, outdated-package, disk-usage, React Doctor, and Lighthouse checks.
 - **Interface:** choose a color scheme, sidebar technology, project tag, and package-match limits; configure the end-of-day push reminder, running-server polling, and success-notification duration. A notification duration of 0 keeps it visible until dismissed; errors always remain visible.
 - **Applications:** choose your code editor and Git client. Project action menus and detail buttons use these choices; defaults remain VS Code and Sourcetree.
 
@@ -175,7 +175,9 @@ Watcher modes:
 | Periodically | Refresh all projects after the chosen interval (1 minute to 7 days; default 60 minutes), then repeat that interval after each run finishes. Includes projects hidden by filters. |
 | When a package changes | With the local helper, check known projects for package input changes every 5–300 seconds (default 15). Refresh metadata and run selected checks for affected repositories and their workspace members. |
 
-Automatic runs always refresh project metadata and package declarations. **Vulnerabilities** and **Outdated packages** are selected by default when automation is enabled; **Disk usage** is optional. Package checks run only for projects with a package.json. Checks run sequentially, save each successful report, and continue after individual failures while retaining the last successful report. Failures appear in a notification. Scans never install packages, apply updates, or start development servers.
+Automatic runs always refresh project metadata and package declarations. Under **Include in automatic scans**, **Vulnerabilities** and **Outdated packages** are selected by default when automation is enabled; **Disk usage**, **React Doctor**, and **Lighthouse** are optional and off by default. Existing settings and older configuration backups keep the new checks off until selected. Package checks run only for projects with a package.json; React Doctor scans React projects, and Lighthouse scans eligible frontend projects using the same eligibility rules as their manual scans. Checks run sequentially, save each successful report, and continue after individual failures while retaining the last successful report. Failures appear in a notification. Automatic scans never install packages or apply updates.
+
+Enabling automatic Lighthouse scans allows the helper to temporarily start eligible frontend development servers when no explicit `localRepos.previewUrl` is configured. Lighthouse loads the page in Chromium and uses the same server cleanup and report behavior as a manual scan. Chromium must be installed. React Doctor uses its existing source-analysis and scoring behavior. In package-change mode these checks run for affected or newly discovered projects; source-only changes do not trigger that mode, so use periodic or manual scans to refresh quality reports after source edits. Changing either option cancels the remaining automatic checks after the current request finishes.
 
 A successful vulnerability scan that finds a **new critical issue** opens an alert dialog immediately. This applies to automatic scans, workspace audit batches, and individual project audits, including the first audit. The dialog groups affected projects, lists new critical package findings, and offers **Review audit** to open a project's Packages tab. Scanning continues while the alert is open. Dismiss it explicitly or press Escape; clicking outside does not dismiss it.
 
@@ -185,7 +187,7 @@ Package-change detection reads file metadata for package.json, npm/pnpm/Yarn/Bun
 
 The watcher runs while the app is open and online, waits for existing app actions, and avoids overlapping runs in the same tab. Browser background throttling or computer sleep can delay scans; this is not a system background service. Changing to manual mode stops queued checks after the current request finishes. Changing or forgetting the connected directory clears its schedule. The workspace watcher status shows activity and failures; hover it for the next scheduled scan or change check. Use a single tab for automatic scans.
 
-Browser directory connections support periodic metadata scans only. They never request folder permission automatically: use **Synced …** to restore expired permission. Vulnerabilities, outdated packages, disk usage, and package-change watching require the local helper. Restart `npm run dev` after updating Local Repos to load the helper's watcher endpoint.
+Browser directory connections support periodic metadata scans only. They never request folder permission automatically: use **Synced …** to restore expired permission. Vulnerabilities, outdated packages, disk usage, React Doctor, Lighthouse, and package-change watching require the local helper. Restart `npm run dev` after updating Local Repos to load the helper's watcher endpoint.
 
 ## Commit history
 
@@ -305,7 +307,7 @@ Terminal processes are independent of Local Repos: read their output and stop th
 
 ## Run a project and capture a preview
 
-Connect through the helper, open a project, and select **Start server** or **Capture preview**. Scanning never starts project scripts automatically.
+Connect through the helper, open a project, and select **Start server** or **Capture preview**. Lighthouse scans can also temporarily start an eligible frontend, including automatic Lighthouse scans when explicitly enabled in **Settings → Watcher**. Metadata discovery does not execute project scripts.
 
 Use **Capture previews** in the workspace toolbar to capture every project in the workspace one at a time using the **Automatic** source. This includes projects hidden by the current filters. Progress shows the current project, completed count, successes, and failures; each successful preview updates the list and browser cache immediately. A failed capture keeps the previous image and continues to the next project. **Stop after current** finishes the active capture and its server cleanup before stopping the queue. Keep the app open while capturing; closing or reloading it discards the remaining queue.
 
