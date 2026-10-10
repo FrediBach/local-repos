@@ -12,8 +12,8 @@ const scannedAt = '2026-10-08T12:00:00Z'
 const project: RepoProject = { id: 'notes', name: 'Notebook', dirName: 'notebook', relativePath: 'apps/notebook', stack: ['React'], scripts: {}, description: '', packageManager: 'npm', scannedAt }
 const scannedProject: RepoProject = { ...project, audit: { manager: 'npm', scannedAt, counts: { info: 0, low: 0, moderate: 0, high: 0, critical: 1 }, findings: [] } }
 const website: RepoProject = { ...scannedProject, id: 'website', name: 'Website', relativePath: 'apps/website' }
-const security: ProjectTodo = { id: 'notes:security', projectId: 'notes', kind: 'security', priority: 'critical', title: 'Resolve security issues', description: '1 critical vulnerability needs attention.', tab: 'packages', scannedAt, findingKeys: ['security-a'] }
-const outdated: ProjectTodo = { ...security, id: 'notes:outdated', kind: 'outdated', priority: 'high', title: 'Update outdated packages', description: 'Review 2 packages with significant version lag.', findingKeys: ['outdated-a'] }
+const security: ProjectTodo = { id: 'notes:security', projectId: 'notes', kind: 'security', priority: 'critical', title: 'Resolve security issues', description: '1 critical vulnerability needs attention.', tab: 'vulnerabilities', scannedAt, findingKeys: ['security-a'] }
+const outdated: ProjectTodo = { ...security, id: 'notes:outdated', kind: 'outdated', tab: 'updates', priority: 'high', title: 'Update outdated packages', description: 'Review 2 packages with significant version lag.', findingKeys: ['outdated-a'] }
 const doctor: ProjectTodo = { ...security, id: 'website:react-doctor', projectId: 'website', kind: 'react-doctor', priority: 'high', title: 'Fix React Doctor errors', description: 'Review 3 errors.', tab: 'react-doctor', findingKeys: ['doctor-a'] }
 const props = { projects: [website, scannedProject], todos: [doctor, outdated, security], onClearProject: vi.fn(), onOpen: vi.fn(), onDismiss: vi.fn(), isDemo: false, onConnect: vi.fn() }
 
@@ -34,7 +34,9 @@ describe('automatic project todos', () => {
     const user = userEvent.setup()
     render(<ProjectTodos {...props} />)
     await user.click(screen.getByRole('button', { name: `Review ${security.title} in Notebook` }))
-    expect(props.onOpen).toHaveBeenLastCalledWith(scannedProject, 'packages')
+    expect(props.onOpen).toHaveBeenLastCalledWith(scannedProject, 'vulnerabilities')
+    await user.click(screen.getByRole('button', { name: `Review ${outdated.title} in Notebook` }))
+    expect(props.onOpen).toHaveBeenLastCalledWith(scannedProject, 'updates')
     await user.click(screen.getByRole('button', { name: `Review ${doctor.title} in Website` }))
     expect(props.onOpen).toHaveBeenLastCalledWith(website, 'react-doctor')
     const dismiss = screen.getByRole('button', { name: `Dismiss ${outdated.title} in Notebook` })
@@ -93,7 +95,7 @@ describe('automatic project todos', () => {
     expect(screen.getByText('No scans yet')).toBeTruthy()
     expect(screen.queryByText('No important active todos.')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Open project scans' }))
-    expect(props.onOpen).toHaveBeenCalledExactlyOnceWith(project, 'packages')
+    expect(props.onOpen).toHaveBeenCalledExactlyOnceWith(project, 'vulnerabilities')
     rerender(<ProjectTodos {...props} projects={[scannedProject]} projectId={project.id} todos={[]} />)
     expect(screen.getByRole('heading', { name: 'No important active todos.' })).toBeTruthy()
     expect(screen.getByText(/There are no active tasks from the available scans/)).toBeTruthy()

@@ -152,10 +152,10 @@ describe('Lighthouse badge and tab', () => {
 
   it('offers a keyboard-accessible Lighthouse tab for frontend projects', async () => {
     const user = userEvent.setup(), onChange = vi.fn()
-    const { rerender } = render(<ProjectTabs value="packages" onChange={onChange}><p>Details</p></ProjectTabs>)
+    const { rerender } = render(<ProjectTabs value="unused" onChange={onChange}><p>Details</p></ProjectTabs>)
     expect(screen.queryByRole('tab', { name: 'Lighthouse' })).toBeNull()
-    rerender(<ProjectTabs value="packages" onChange={onChange} frontend><p>Details</p></ProjectTabs>)
-    screen.getByRole('tab', { name: 'Packages' }).focus()
+    rerender(<ProjectTabs value="unused" onChange={onChange} frontend><p>Details</p></ProjectTabs>)
+    screen.getByRole('tab', { name: 'Unused' }).focus()
     await user.keyboard('{ArrowRight}')
     expect(onChange).toHaveBeenLastCalledWith('lighthouse')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Lighthouse' }))

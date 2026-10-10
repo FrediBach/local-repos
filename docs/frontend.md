@@ -17,7 +17,7 @@ and maintenance-report contracts used by both the frontend and helper.
 | --- | --- |
 | Workspace shell | Sidebar, topbar, connection/help dialogs, scan toolbar, and notices in [`src/components`](../src/components). `App` supplies their data and callbacks. |
 | Project browsing | [`use-project-filtering.ts`](../src/hooks/use-project-filtering.ts) owns filters, search, sorting, and the current page. [`project-results.tsx`](../src/components/project-results.tsx) renders flat grid results or monorepo groups in list view, and [`project-card.tsx`](../src/components/project-card.tsx) renders each project. Grid subpackages use directory-path titles and dashed card borders. |
-| Project details | [`project-detail-dialog.tsx`](../src/components/project-detail-dialog.tsx) composes overview, packages, React Doctor, Lighthouse, and README tabs; controls delegate actions back to `App`. |
+| Project details | [`project-detail-dialog.tsx`](../src/components/project-detail-dialog.tsx) composes focused project tabs; controls delegate actions back to `App`. |
 | Workspace operations | [`use-workspace-actions.ts`](../src/hooks/use-workspace-actions.ts) handles helper actions, maintenance batches, automatic scans, result merging, and notices. |
 | Automatic work | [`use-workspace-watcher.ts`](../src/hooks/use-workspace-watcher.ts) schedules scans; [`use-push-reminder.ts`](../src/hooks/use-push-reminder.ts) schedules Git push-status checks. |
 | Summary and todos | [`use-daily-summary.ts`](../src/hooks/use-daily-summary.ts) loads Git activity; [`use-project-todos.ts`](../src/hooks/use-project-todos.ts) derives actionable findings and reconciles dismissals. |
@@ -135,7 +135,23 @@ repository or shallow coverage is labeled. Directory changes hide stale data
 immediately, late callbacks are rejected, and cache-load results cannot replace
 newer history. Forgetting the workspace clears this separate activity cache.
 
-## Project action menus
+## Project details and action menus
+
+The project dialog keeps the preview, metadata, and latest commit in **Overview**,
+followed by disk usage and dependency cleanup. **History** contains the commit
+log, and **Development** holds the server, scripts, preview capture, and logs.
+**Packages** lists declared dependencies; **Vulnerabilities**, **Updates**, and
+**Unused** contain the audit, outdated-package and minor/patch update controls,
+and Knip reports.
+Eligible projects also show **React Doctor** and **Lighthouse**; **README** remains
+available for every project. `ProjectHistory` mounts only when **History** is
+selected, so opening the overview does not load its commit log.
+
+[`project-tabs.tsx`](../src/components/project-tabs.tsx) keeps readable labels in
+a single horizontally scrolling row, reveals the active tab, and provides scroll
+arrows when tabs overflow. Left/Right and Home/End keys retain tab selection and
+focus navigation. Badge, alert, todo, and command destinations open the relevant
+tab directly.
 
 [`project-action-menu.tsx`](../src/components/project-action-menu.tsx) supplies the
 same menu for grid and list cards. It reuses `projectCommands` eligibility and
@@ -317,7 +333,7 @@ keyboard navigation. Preserve those behaviors when reorganizing UI flows.
 Audit `counts` contain active vulnerabilities after helper-side ignore matching.
 Cards, severity filters and sorts use those counts. Findings optionally carry
 `suppression` provenance; older cached findings without it remain active.
-`ProjectPackages` places suppressed findings last with neutral styling and their
+`ProjectAudit` places suppressed findings last with neutral styling and their
 source rules, distinguishes an all-suppressed report from a clean report, and
 shows alias/rule warnings. Critical alerts and security todos exclude suppressed
 findings, including from the previous-alert identity set so removing or expiring

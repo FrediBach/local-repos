@@ -82,7 +82,7 @@ describe('workspace package search', () => {
     let failure = false
     fetchMock.mockImplementation((url: string) => url.endsWith('/unused') ? failure ? response({ error: 'Knip configuration failed' }, false) : response({ unused }) : original(url))
     const details = await openProject(user)
-    await user.click(within(details).getByRole('tab', { name: 'Packages' }))
+    await user.click(within(details).getByRole('tab', { name: 'Unused' }))
     expect(actionRequests('unused')).toHaveLength(0)
     await user.click(within(details).getByRole('button', { name: 'Scan for unused packages' }))
     await within(details).findByText('unused-package')
@@ -96,7 +96,7 @@ describe('workspace package search', () => {
     await user.click(screen.getByRole('button', { name: /Synced/ }))
     await waitFor(() => expect(actionRequests('scan')).toHaveLength(1))
     const reopened = await openProject(user)
-    await user.click(within(reopened).getByRole('tab', { name: 'Packages' }))
+    await user.click(within(reopened).getByRole('tab', { name: 'Unused' }))
     expect(within(reopened).getByText('unused-package')).toBeTruthy()
   })
 
@@ -106,7 +106,7 @@ describe('workspace package search', () => {
     const original = fetchMock.getMockImplementation()!
     fetchMock.mockImplementation((url: string) => url.endsWith('/audit') ? response({ audit: critical }) : original(url))
     const details = await openProject(user)
-    await user.click(within(details).getByRole('tab', { name: 'Packages' }))
+    await user.click(within(details).getByRole('tab', { name: 'Vulnerabilities' }))
     await user.click(within(details).getByRole('button', { name: 'Scan for vulnerabilities' }))
     const alert = await screen.findByRole('alertdialog', { name: 'New critical vulnerabilities' })
     expect(within(alert).getByText('Example advisory')).toBeTruthy()
@@ -222,7 +222,7 @@ describe('workspace maintenance actions', () => {
   it('updates and persists an audit report and retains it if a later scan fails', async () => {
     const user = await renderConnected()
     const dialog = await openProject(user)
-    await user.click(within(dialog).getByRole('tab', { name: 'Packages', exact: true }))
+    await user.click(within(dialog).getByRole('tab', { name: 'Vulnerabilities', exact: true }))
     expect(within(dialog).getByText('Not scanned yet.')).toBeTruthy()
     expect(actionRequests('audit')).toHaveLength(0)
     await user.click(within(dialog).getByRole('button', { name: 'Scan for vulnerabilities' }))

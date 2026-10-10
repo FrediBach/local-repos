@@ -66,7 +66,7 @@ describe('project command catalog', () => {
 
   it('keeps package mutation and dependency deletion behind their existing detail controls', () => {
     const commands = projectCommands(project, defaultSettings, false)
-    expect(commands.find(command => command.id === 'update-packages')).toMatchObject({ helper: false, intent: { kind: 'details', tab: 'packages' } })
+    expect(commands.find(command => command.id === 'update-packages')).toMatchObject({ helper: false, intent: { kind: 'details', tab: 'updates' } })
     expect(commands.find(command => command.id === 'cleanup')).toMatchObject({ helper: false, intent: { kind: 'details', tab: 'overview' } })
     expect(commands.some(command => command.intent.kind === 'action' && ['update-packages', 'update-minor', 'update-patches', 'delete-node-modules'].includes(command.intent.name))).toBe(false)
   })

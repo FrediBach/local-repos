@@ -238,7 +238,7 @@ function WorkspaceApp() {
     else if (intent.kind === 'favorite') toggleFavorite(project.id)
     else if (intent.kind === 'todos') openTodos(project)
     else {
-      if (intent.name === 'logs' && workspace?.mode === 'helper') openProject(project)
+      if (intent.name === 'logs' && workspace?.mode === 'helper') openProject(project, 'development')
       void action(project, intent.name, intent.body)
     }
   }
@@ -379,7 +379,7 @@ function WorkspaceApp() {
     <WorkspaceHelpDialog open={helpOpen} onOpenChange={setHelpOpen} workspace={workspace} busy={!!busy}
       onForget={() => { void forgetWorkspace(); setHelpOpen(false) }} />
     {tagProject && <ProjectTagDialog key={tagProject.id} project={tagProject} availableTags={availableTags} onSave={tags => updateTags(tagProject.id, tags)} onClose={() => setTagProjectId(undefined)} returnFocus={restoreTagFocus} />}
-    <CriticalVulnerabilityDialog alerts={criticalAlerts} onDismiss={() => setCriticalAlerts([])} onReview={id => { const project = projects.find(item => item.id === id); setCriticalAlerts([]); if (project) openProject(project, 'packages') }} />
+    <CriticalVulnerabilityDialog alerts={criticalAlerts} onDismiss={() => setCriticalAlerts([])} onReview={id => { const project = projects.find(item => item.id === id); setCriticalAlerts([]); if (project) openProject(project, 'vulnerabilities') }} />
     <WorkspaceNotice notice={notice} onDismiss={() => setNotice(undefined)} />
   </div>
 }

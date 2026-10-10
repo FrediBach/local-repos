@@ -6,8 +6,6 @@
 .react-doctor-level-poor { color: var(--danger); background: var(--danger-soft); }
 .react-doctor-level-unknown { color: var(--muted-foreground); background: var(--surface-muted); }
 .projects-list .project-react-doctor-badge { min-height: 28px; }
-.detail-tabs.react-doctor-tabs { overflow-x: auto; }
-.detail-tabs.react-doctor-tabs button { flex-shrink: 0; white-space: nowrap; }
 .react-doctor-heading { gap: 12px; flex-wrap: wrap; }
 .react-doctor-heading h3 { display: flex; align-items: center; gap: 8px; }
 .react-doctor-section > .maintenance-hint { margin-top: 10px; }
@@ -84,8 +82,6 @@
   .projects-list .project-title-row:has(> .project-react-doctor-badge) { grid-template-columns: minmax(0, 1fr) repeat(4, auto); }
   .projects-list .project-react-doctor-badge { grid-area: 1 / 4; }
   .projects-list .project-title-row:has(> .project-react-doctor-badge) > .favorite-button { grid-area: 1 / 5; }
-  .detail-tabs.react-doctor-tabs { gap: 12px; }
-  .detail-tabs.react-doctor-tabs button { font-size: .875rem; }
   .react-doctor-result { padding: 17px 14px; gap: 14px; }
   .react-doctor-score { flex-basis: 88px; width: 88px; height: 88px; }
   .react-doctor-score strong { font-size: 1.625rem; }

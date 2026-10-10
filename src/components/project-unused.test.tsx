@@ -11,6 +11,16 @@ const report: PackageUnused = { scannedAt: '2026-10-08T12:00:00Z', knipVersion: 
 const props = { project, helper: true, demo: false, busy: '', onAction: vi.fn() }
 
 describe('unused package details', () => {
+  it.each([true, false, undefined])('describes workspace analysis only for declared workspace members (%s)', declaredWorkspace => {
+    const monorepo = { id: 'studio', name: 'Studio', relativePath: 'studio', packagePath: 'frontend', declaredWorkspace }
+    render(<ProjectUnused {...props} project={{ ...project, monorepo }} />)
+    if (declaredWorkspace === false) {
+      expect(screen.queryByText(/Analyzes the workspace/)).toBeNull()
+    } else {
+      expect(screen.getByText(/Analyzes the workspace/)).toBeTruthy()
+    }
+  })
+
   it('starts only on request and distinguishes unscanned from a successful empty result', async () => {
     const user = userEvent.setup(), onAction = vi.fn()
     const { rerender } = render(<ProjectUnused {...props} onAction={onAction} />)

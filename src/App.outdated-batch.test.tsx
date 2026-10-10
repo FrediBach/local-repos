@@ -101,11 +101,11 @@ describe('outdated-package actions', () => {
     expect(storage.saveWorkspace).toHaveBeenLastCalledWith(expect.objectContaining({ projects: [expect.objectContaining({ outdated: report }), expect.objectContaining({ outdated: expect.objectContaining({ score: 0 }) }), projects[2]] }))
   })
 
-  it('runs a single-project scan from Packages and exposes the saved result through its card badge', async () => {
+  it('runs a single-project scan from Updates and exposes the saved result through its card badge', async () => {
     const user = await renderConnected()
     await user.click(screen.getByRole('button', { name: 'View Alpha' }))
     const dialog = within(screen.getByRole('dialog', { name: 'Alpha' }))
-    await user.click(dialog.getByRole('tab', { name: 'Packages', exact: true }))
+    await user.click(dialog.getByRole('tab', { name: 'Updates', exact: true }))
     await user.click(dialog.getByRole('button', { name: 'Scan for outdated packages' }))
     expect(requests()).toHaveLength(1)
     await complete('alpha')
@@ -114,7 +114,9 @@ describe('outdated-package actions', () => {
     await user.click(dialog.getByRole('button', { name: 'Close dialog' }))
     const badge = screen.getByRole('button', { name: /Alpha:.*View outdated/ })
     await user.click(badge)
-    expect(within(screen.getByRole('dialog', { name: 'Alpha' })).getByText('19.0.0')).toBeTruthy()
+    const reopened = within(screen.getByRole('dialog', { name: 'Alpha' }))
+    expect(reopened.getByRole('tab', { name: 'Updates' }).getAttribute('aria-selected')).toBe('true')
+    expect(reopened.getByText('19.0.0')).toBeTruthy()
   })
 
   it('offers a helper connection for browser-only workspaces', async () => {

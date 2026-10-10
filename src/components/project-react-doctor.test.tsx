@@ -153,10 +153,10 @@ describe('React Doctor card badge', () => {
 describe('React Doctor project tab', () => {
   it('appears only for React projects and participates in keyboard navigation', async () => {
     const user = userEvent.setup(), onChange = vi.fn()
-    const { rerender } = render(<ProjectTabs value="packages" onChange={onChange}><p>Details</p></ProjectTabs>)
+    const { rerender } = render(<ProjectTabs value="unused" onChange={onChange}><p>Details</p></ProjectTabs>)
     expect(screen.queryByRole('tab', { name: 'React Doctor' })).toBeNull()
-    rerender(<ProjectTabs value="packages" onChange={onChange} react><p>Details</p></ProjectTabs>)
-    screen.getByRole('tab', { name: 'Packages' }).focus()
+    rerender(<ProjectTabs value="unused" onChange={onChange} react><p>Details</p></ProjectTabs>)
+    screen.getByRole('tab', { name: 'Unused' }).focus()
     await user.keyboard('{ArrowRight}')
     expect(onChange).toHaveBeenLastCalledWith('react-doctor')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'React Doctor' }))

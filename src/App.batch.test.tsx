@@ -228,6 +228,7 @@ describe('workspace preview capture queue', () => {
 
     await user.click(screen.getByRole('button', { name: 'View Bravo site' }))
     const dialog = screen.getByRole('dialog', { name: 'Bravo site' })
+    await user.click(within(dialog).getByRole('tab', { name: 'Development' }))
     for (const name of ['Start server', 'Logs', 'Capture preview', 'VS Code', 'Sourcetree']) {
       expect((within(dialog).getByRole('button', { name, exact: true }) as HTMLButtonElement).disabled).toBe(true)
     }

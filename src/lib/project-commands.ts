@@ -16,7 +16,7 @@ export interface CommandTemplate {
 export interface ProjectCommand extends CommandTemplate {
   helper: boolean
   intent: { kind: 'action'; name: string; body?: unknown }
-    | { kind: 'details'; tab?: 'overview' | 'packages' | 'react-doctor' | 'lighthouse' | 'readme' }
+    | { kind: 'details'; tab?: 'overview' | 'packages' | 'updates' | 'react-doctor' | 'lighthouse' | 'readme' }
     | { kind: 'tags' }
     | { kind: 'favorite' }
     | { kind: 'todos' }
@@ -40,15 +40,15 @@ export function commandTemplates(settings: Applications): CommandTemplate[] {
     { id: 'open-lighthouse', title: 'View Lighthouse report', description: 'Review saved frontend scores and detailed audits', keywords: 'open lighthouse report analysis audits performance accessibility seo results' },
     { id: 'start', title: 'Start development server', description: 'Run the dev, start, or serve script and track its server', keywords: 'dev develop start serve launch app localhost' },
     { id: 'stop', title: 'Stop development server', description: 'Stop the project server managed by Local Repos', keywords: 'dev stop terminate shutdown server' },
-    { id: 'logs', title: 'View server logs', description: 'Show development server output in the project overview', keywords: 'dev logs console output debug errors' },
+    { id: 'logs', title: 'View server logs', description: 'Show development server output in Development', keywords: 'dev logs console output debug errors' },
     { id: 'screenshot', title: 'Capture preview', description: 'Refresh the project screenshot or preview image automatically', keywords: 'screenshot image thumbnail capture preview refresh website' },
     { id: 'storage', title: 'Measure disk usage', description: 'Measure project files and the root node_modules directory', keywords: 'storage disk usage space size measure refresh node_modules' },
-    { id: 'packages', title: 'Browse packages', description: 'View dependencies and saved maintenance reports', keywords: 'open view packages dependencies versions audit results reports' },
+    { id: 'packages', title: 'Browse packages', description: 'View and search declared project dependencies', keywords: 'open view packages dependencies declared versions search' },
     { id: 'readme', title: 'Read README', description: 'Open the project documentation', keywords: 'readme markdown documentation docs read view' },
     { id: 'tags', title: 'Add or edit tags', description: 'Choose existing labels or create a tag for this project', keywords: 'tag tags label labels add edit remove organize' },
     { id: 'favorite', title: 'Add to favorites', description: 'Toggle this project in your favorites', keywords: 'favorite favorites favourite favourites star starred unstar remove bookmark' },
     { id: 'todos', title: 'View project todos', description: 'Review findings and maintenance tasks for this project', keywords: 'todo todos tasks findings issues priorities' },
-    { id: 'update-packages', title: 'Review package updates', description: 'Open Packages to review and apply minor or patch updates', keywords: 'upgrade update packages dependencies minor patch patches install versions' },
+    { id: 'update-packages', title: 'Review package updates', description: 'Open Updates to review and apply minor or patch updates', keywords: 'upgrade update packages dependencies minor patch patches install versions' },
     { id: 'cleanup', title: 'Review dependency cleanup', description: 'Open disk usage to measure and review node_modules removal', keywords: 'delete remove cleanup clean free disk space node_modules dependencies' },
   ]
 }
@@ -59,7 +59,7 @@ export function projectCommands(project: RepoProject, settings: Applications, fa
   const devScript = selectDevScript(project)
   const commands = commandTemplates(settings).flatMap((template): ProjectCommand[] => {
     const action = (name: string, body?: unknown): ProjectCommand[] => [{ ...template, helper: true, intent: { kind: 'action', name, ...(body === undefined ? {} : { body }) } }]
-    const details = (tab: 'overview' | 'packages' | 'lighthouse' | 'readme'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
+    const details = (tab: 'overview' | 'packages' | 'updates' | 'lighthouse' | 'readme'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
     switch (template.id) {
       case 'folder': return action('open', { app: 'folder' })
       case 'editor': return action('open', { app: settings.editor })
@@ -75,10 +75,10 @@ export function projectCommands(project: RepoProject, settings: Applications, fa
       case 'logs': return devScript || running ? action('logs') : []
       case 'screenshot': return action('screenshot', { source: 'auto' })
       case 'storage': return action('storage')
-      case 'details':
+      case 'details': return details('overview')
       case 'cleanup': return details('overview')
       case 'packages': return details('packages')
-      case 'update-packages': return project.hasPackageJson === false ? [] : details('packages')
+      case 'update-packages': return project.hasPackageJson === false ? [] : details('updates')
       case 'readme': return details('readme')
       case 'tags': return [{ ...template, helper: false, intent: { kind: 'tags' } }]
       case 'favorite': return [{ ...template, title: favorite ? 'Remove favorite' : template.title, helper: false, intent: { kind: 'favorite' } }]

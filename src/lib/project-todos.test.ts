@@ -15,7 +15,7 @@ describe('important project todos', () => {
     }])
     expect(todos).toHaveLength(3)
     expect(todos.map(todo => [todo.kind, todo.priority, todo.tab])).toEqual([
-      ['security', 'critical', 'packages'], ['outdated', 'high', 'packages'], ['react-doctor', 'high', 'react-doctor'],
+      ['security', 'critical', 'vulnerabilities'], ['outdated', 'high', 'updates'], ['react-doctor', 'high', 'react-doctor'],
     ])
     expect(todos[0].description).toContain('1 critical vulnerability and 1 high-severity vulnerability')
     expect(todos[1].scannedAt).toBe('outdated scan')

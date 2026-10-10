@@ -67,7 +67,7 @@ describe('automatic workspace scans', () => {
     await advance(0)
     expect(screen.queryByRole('alertdialog')).toBeNull()
     const details = screen.getByRole('dialog', { name: 'alpha' })
-    expect(within(details).getByRole('tab', { name: 'Packages' }).getAttribute('aria-selected')).toBe('true')
+    expect(within(details).getByRole('tab', { name: 'Vulnerabilities' }).getAttribute('aria-selected')).toBe('true')
     expect(within(details).getByText('New advisory')).toBeTruthy()
   })
 

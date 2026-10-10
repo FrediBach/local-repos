@@ -185,10 +185,13 @@ describe('workspace vulnerability scans', () => {
     }
     await user.click(screen.getByRole('button', { name: 'View Bravo site' }))
     const dialog = screen.getByRole('dialog', { name: 'Bravo site' })
-    for (const name of ['Start server', 'Capture preview', 'Measure disk usage', 'VS Code', 'Sourcetree']) {
+    await user.click(within(dialog).getByRole('tab', { name: 'Development' }))
+    for (const name of ['Start server', 'Capture preview', 'VS Code', 'Sourcetree']) {
       expect((within(dialog).getByRole('button', { name, exact: true }) as HTMLButtonElement).disabled).toBe(true)
     }
-    await user.click(within(dialog).getByRole('tab', { name: 'Packages', exact: true }))
+    await user.click(within(dialog).getByRole('tab', { name: 'Overview' }))
+    expect((within(dialog).getByRole('button', { name: 'Measure disk usage' }) as HTMLButtonElement).disabled).toBe(true)
+    await user.click(within(dialog).getByRole('tab', { name: 'Vulnerabilities', exact: true }))
     expect((within(dialog).getByRole('button', { name: 'Scan for vulnerabilities' }) as HTMLButtonElement).disabled).toBe(true)
     await user.click(within(dialog).getByRole('button', { name: 'Close dialog' }))
     await user.click(progressSection().getByRole('button', { name: 'Stop after current' }))
@@ -215,6 +218,9 @@ describe('workspace vulnerability scans', () => {
     await user.click(badge('Alpha notebook', 'high'))
     let dialog = screen.getByRole('dialog', { name: 'Alpha notebook' })
     expect(within(dialog).getByText('Example high advisory')).toBeTruthy()
+    expect(within(dialog).getByRole('tab', { name: 'Vulnerabilities' }).getAttribute('aria-selected')).toBe('true')
+    expect(within(dialog).queryByRole('columnheader', { name: 'Declared version' })).toBeNull()
+    await user.click(within(dialog).getByRole('tab', { name: 'Packages' }))
     expect(within(dialog).getByRole('columnheader', { name: 'Declared version' })).toBeTruthy()
     await user.click(within(dialog).getByRole('button', { name: 'Close dialog' }))
     await user.click(screen.getByRole('button', { name: 'List view' }))

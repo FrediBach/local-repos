@@ -214,9 +214,25 @@ describe('smart project search', () => {
     await user.type(search, 'logs alpha')
     await user.click(suggestion('View server logs'))
     const details = screen.getByRole('dialog', { name: 'Alpha' })
+    expect(within(details).getByRole('tab', { name: 'Development' }).getAttribute('aria-selected')).toBe('true')
     await within(details).findByText('VITE ready on http://localhost:5173')
     expect(fetchMock).toHaveBeenCalledWith('/api/projects/alpha/logs', expect.objectContaining({ method: 'GET' }))
     expect(storage.saveWorkspace).not.toHaveBeenCalled()
+    await user.keyboard('{Escape}')
+    expect(document.activeElement).toBe(search)
+  })
+
+  it.each([
+    ['Review package updates', 'updates alpha', 'Updates', 'Scan for outdated packages'],
+    ['Review dependency cleanup', 'cleanup alpha', 'Overview', 'Measure disk usage'],
+  ])('opens %s in its matching tab without starting a mutation', async (title, query, tab, control) => {
+    const { user, search } = await setup()
+    await user.type(search, query)
+    await user.click(suggestion(title))
+    const details = within(screen.getByRole('dialog', { name: 'Alpha' }))
+    expect(details.getByRole('tab', { name: tab }).getAttribute('aria-selected')).toBe('true')
+    expect(details.getByRole('button', { name: control })).toBeTruthy()
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/projects/'))).toHaveLength(0)
     await user.keyboard('{Escape}')
     expect(document.activeElement).toBe(search)
   })

@@ -111,7 +111,7 @@ async function renderConnected() {
   storage.saveWorkspace.mockClear()
   return { user, ...result }
 }
-async function openProject(user: ReturnType<typeof userEvent.setup>, tab = 'Packages') {
+async function openProject(user: ReturnType<typeof userEvent.setup>, tab = 'Vulnerabilities') {
   await user.click(screen.getByRole('button', { name: 'View Alpha' }))
   const dialog = within(screen.getByRole('dialog', { name: 'Alpha' }))
   await user.click(dialog.getByRole('tab', { name: tab, exact: true }))
@@ -149,8 +149,8 @@ describe('automatic workspace todos', () => {
     expect(screen.getByRole('article', { name: 'Alpha todos' })).toBeTruthy()
     expect(screen.queryByRole('article', { name: 'Bravo todos' })).toBeNull()
     for (const [title, tab, reportText] of [
-      [auditTitle, 'Packages', 'Unsafe dependency advisory'],
-      [outdatedTitle, 'Packages', '11.0.0'],
+      [auditTitle, 'Vulnerabilities', 'Unsafe dependency advisory'],
+      [outdatedTitle, 'Updates', '11.0.0'],
       [doctorTitle, 'React Doctor', 'Compute derived state during render'],
     ]) {
       await user.click(review(title))
@@ -223,7 +223,7 @@ describe('automatic workspace todos', () => {
   })
 
   it.each([
-    { action: 'outdated', tab: 'Packages', first: 'Scan for outdated packages', again: 'Scan outdated again', key: 'outdated', report: outdated(), clean: outdated('current'), title: outdatedTitle },
+    { action: 'outdated', tab: 'Updates', first: 'Scan for outdated packages', again: 'Scan outdated again', key: 'outdated', report: outdated(), clean: outdated('current'), title: outdatedTitle },
     { action: 'react-doctor', tab: 'React Doctor', first: 'Run React Doctor', again: 'Scan React again', key: 'reactDoctor', report: doctor('error'), clean: doctor(), title: doctorTitle },
   ])('updates todos after individual $action scans', async ({ action, tab, first, again, key, report, clean, title }) => {
     loadProjects([projects[0]])

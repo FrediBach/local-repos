@@ -8,7 +8,7 @@ export interface ProjectTodo {
   title: string
   description: string
   priority: 'critical' | 'high'
-  tab: 'packages' | 'react-doctor'
+  tab: 'vulnerabilities' | 'updates' | 'react-doctor'
   scannedAt: string
   findingKeys: string[]
 }
@@ -48,7 +48,7 @@ export function projectTodos(projects: RepoProject[]): ProjectTodo[] {
         todos.push({ ...base, id: projectTodoId(project.id, 'security'), kind: 'security',
           title: critical ? 'Fix critical vulnerabilities' : 'Fix high-severity vulnerabilities',
           description: `${[critical && counted(critical, 'critical vulnerability', 'critical vulnerabilities'), high && counted(high, 'high-severity vulnerability', 'high-severity vulnerabilities')].filter(Boolean).join(' and ')}. Review affected packages and available fixes.`,
-          priority: critical ? 'critical' : 'high', tab: 'packages', scannedAt: report.scannedAt, findingKeys: findingKeys.sort() })
+          priority: critical ? 'critical' : 'high', tab: 'vulnerabilities', scannedAt: report.scannedAt, findingKeys: findingKeys.sort() })
       }
     }
 
@@ -57,7 +57,7 @@ export function projectTodos(projects: RepoProject[]): ProjectTodo[] {
       todos.push({ ...base, id: projectTodoId(project.id, 'outdated'), kind: 'outdated',
         title: 'Update outdated dependencies',
         description: `${counted(outdated.findings.length, 'outdated dependency', 'outdated dependencies')} ${outdated.findings.length === 1 ? 'exceeds' : 'exceed'} your high-priority threshold. Review the available updates.`,
-        priority: 'high', tab: 'packages', scannedAt: outdated.scannedAt,
+        priority: 'high', tab: 'updates', scannedAt: outdated.scannedAt,
         findingKeys: [...new Set(outdated.findings.map(finding => JSON.stringify([finding.name, finding.current, finding.latest, finding.change, finding.majorGap])))].sort() })
     }
 

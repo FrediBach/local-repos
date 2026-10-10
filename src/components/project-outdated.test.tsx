@@ -5,7 +5,6 @@ import userEvent from '@testing-library/user-event'
 import type { PackageOutdated, RepoProject } from '../types'
 import { OUTDATED_SCORE_EXPLANATION } from '../lib/outdated'
 import { ProjectOutdated } from './project-outdated'
-import { ProjectPackages } from './project-packages'
 
 afterEach(cleanup)
 
@@ -23,6 +22,16 @@ const report: PackageOutdated = {
 const props = { project, helper: true, demo: false, busy: '', onAction: vi.fn() }
 
 describe('outdated package details', () => {
+  it.each([true, false, undefined])('describes shared updates only for declared workspace members (%s)', declaredWorkspace => {
+    const monorepo = { id: 'studio', name: 'Studio', relativePath: 'studio', packagePath: 'frontend', declaredWorkspace }
+    render(<ProjectOutdated {...props} project={{ ...project, monorepo }} />)
+    if (declaredWorkspace === false) {
+      expect(screen.queryByText(/shares its lockfile with sibling packages/)).toBeNull()
+    } else {
+      expect(screen.getByText(/shares its lockfile with sibling packages/)).toBeTruthy()
+    }
+  })
+
   it('offers separate bounded update actions and disables them during maintenance', async () => {
     const user = userEvent.setup(), onAction = vi.fn()
     const { rerender } = render(<ProjectOutdated {...props} project={{ ...project, outdated: report }} onAction={onAction} />)
@@ -120,17 +129,5 @@ describe('outdated package details', () => {
     expect(screen.getByText('Connect with the local helper to check for outdated packages.')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Scan for outdated packages' }))
     expect(onAction).toHaveBeenCalledExactlyOnceWith('outdated')
-  })
-
-  it('keeps outdated and vulnerability rescan actions separate in the packages panel', async () => {
-    const user = userEvent.setup()
-    const onAction = vi.fn()
-    render(<ProjectPackages {...props} project={{ ...project, outdated: report, audit: { manager: 'pnpm', scannedAt: report.scannedAt, counts: { info: 0, low: 0, moderate: 0, high: 0, critical: 0 }, findings: [] } }} onAction={onAction} />)
-    await user.click(screen.getByRole('button', { name: 'Scan again' }))
-    expect(onAction).toHaveBeenLastCalledWith('audit')
-    await user.click(screen.getByRole('button', { name: 'Scan outdated again' }))
-    expect(onAction).toHaveBeenLastCalledWith('outdated')
-    expect(within(screen.getByRole('region', { name: 'Package vulnerability audit' })).getByRole('status').textContent).toContain('No known vulnerabilities reported')
-    expect(within(screen.getByRole('region', { name: 'Outdated packages' })).getByRole('status').textContent).toContain('3 outdated packages')
   })
 })
