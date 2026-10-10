@@ -11,11 +11,11 @@ server-side `RegisteredProject` and `ProjectRuntime` state.
 
 [`scripts/dev.mjs`](../scripts/dev.mjs) starts Vite and the helper together and
 stops both when either exits. [`server/index.ts`](../server/index.ts) listens on
-`127.0.0.1:4318`, handles startup errors, and calls `runtime.shutdown()` on SIGINT
+`127.0.0.1:4318`, handles startup errors, and calls `application.shutdown()` on SIGINT
 or SIGTERM. `npm run helper` starts only this process.
 
-[`createApp()`](../server/app.ts) creates a fresh Express app, project registry,
-runtime, and workspace map. Returning these objects separately allows tests to
+[`createApp()`](../server/app.ts) creates a fresh Express app and shared helper application containing the registry,
+runtime, root index, operation coordinator, and workspace map. Returning these objects separately allows tests to
 exercise HTTP behavior without the production listener. The Vite development
 and preview servers proxy `/api` to the helper; their ports are 5180 and 4173
 respectively ([configuration](../vite.config.ts)).
@@ -73,7 +73,8 @@ Runtime's deduplicated operation promises share the latest stage and subsequent
 updates with subscribers. The operation is reserved before asynchronous work;
 subscriptions are released on completion. A slow reader can miss intermediate
 updates, and disconnecting a client does not cancel shared work or its cleanup.
-There is no persistent job store or polling endpoint.
+REST streams have no persistent job store; the optional MCP service has bounded
+in-memory operation polling for metadata discovery and daily Git summaries.
 
 Services report actual preparation, registry, analysis, validation, and cleanup
 milestones. React Doctor's JSON mode suppresses terminal progress, so the helper
@@ -309,3 +310,93 @@ root and retry an action once when a project is unknown. Background status polli
 does not trigger that registration. Shutdown rejects new guarded work, terminates
 owned dev processes, closes browsers, waits for in-flight captures and maintenance
 or report operations, then removes temporary preview files.
+
+## Optional MCP read service
+
+[`application.ts`](../server/application.ts) owns the registry, runtime, scanned
+root memberships, boot ID, revisions, and [`operations.ts`](../server/operations.ts).
+Both REST scans and MCP discovery use this service. `createApp()` returns it as
+`application` alongside the existing `app`, `registry`, and `runtime` properties.
+Shutdown closes runtime resources, rejects new work, and waits for discovery
+and admitted operations. The static app and Vite proxy do not expose `/mcp`.
+
+MCP is absent unless `LOCAL_REPOS_MCP_CONFIG` names a valid, owner-only local
+configuration file outside the configured roots. [`mcp/policy.ts`](../server/mcp/policy.ts)
+canonicalizes roots, validates unique clients and credentials, and loads immutable
+per-client `read`, `discovery`, and `git` grants. Restart to apply policy changes
+or revoke credentials. README and preview content disclosure defaults off;
+absolute path disclosure defaults off. These settings are disclosure choices,
+not a sandbox or a guarantee that repository text contains no secrets.
+
+[`mcp/http.ts`](../server/mcp/http.ts) mounts an authenticated endpoint before the
+REST-specific custom-header middleware, after the existing Host/Origin/cross-site
+checks. Credentials are required on every request; REST still requires its
+existing header. Parsing is limited to 16 KiB and each principal may have four
+active HTTP requests. The official SDK supplies request codecs, modern serving,
+and stateless 2025 compatibility. [`mcp/stdio.ts`](../server/mcp/stdio.ts) bridges
+SDK calls to the running helper, with no separate application/runtime. It accepts
+only a literal `127.0.0.1` HTTP endpoint and refuses redirects and other origins.
+
+[`project-index.ts`](../server/project-index.ts) projects only current memberships
+of the caller's configured roots. Each canonical project can have several
+root-relative memberships. Missing projects are marked not observed, with a
+last-seen timestamp retained internally; they disappear from normal MCP lists
+without deleting existing registry/process ownership. A root summary reports
+unobserved counts and scan warnings, so a limited scan does not assert deletion.
+Unscanned roots differ from successfully empty scans. Unknown and unauthorized
+project IDs both return `PROJECT_NOT_FOUND`.
+
+The registry preserves known parent package/Git context across narrower scans.
+Git directories and package workspace directories are separate internal fields.
+Context changes cannot commit while the affected old or new workspace is busy.
+A global discovery reservation serializes scans and prevents package maintenance
+from racing registration. Metadata reads do not run project code. Git reads
+revalidate the effective repository against the caller's grants, disable lazy
+fetches, and preserve exact author/ref matching and shallow/unknown-ref states.
+Daily operations deduplicate canonical repository roots and read one repository
+at a time (the existing service uses at most three ref readers).
+
+Tools and resources use the schemas in [`mcp/schemas.ts`](../server/mcp/schemas.ts).
+Defaults are 25 rows, maximum 100, with an adaptive byte budget. Signed cursors
+bind principal, boot, query, revision, and projected content; Git cursors also
+bind current refs. README cursors bind sanitized content and UTF-8 byte offsets.
+Responses include both validated structured data and compatibility text, together
+limited to 128 KiB. README chunks are at most 32 KiB; explicit preview resources
+are limited to 2 MiB. Oversized individual rows are errors rather than silent
+omissions. Project summaries identify truncated metadata fields; script rows
+identify truncated commands. URL userinfo, common credential query parameters,
+and terminal controls are removed on output, with best-effort secret protection.
+
+The read catalog includes server/root/project metadata, dependency/script pages,
+README chunks, report summaries/rows, actionable findings, Git history/day/push
+reads, and operation polling/cancellation. Resources expose matching metadata,
+reports, READMEs, previews, and authorized operation status. There are no analysis,
+process-control, desktop, script-launch, or dependency mutation MCP tools.
+
+Report snapshots belong to the current helper. Reads distinguish missing,
+unsupported, invalidated, and available reports; null scores, skipped declarations,
+suppressions, partial storage, and warning information remain visible. REST report
+attempts update helper attempt records even if the reader disconnects. Failed
+reruns preserve the prior report. Changed package fingerprints and report removal
+produce helper-lifetime invalidations; successful replacement reports supersede
+them. Fingerprints do not prove freshness. Reading a report never runs a check.
+Findings use the shared todo rules and default outdated scoring, without claiming
+access to browser dismissals, settings, or tags.
+
+Operation admission reserves `(principal, requestId)` before work and binds it to
+the normalized request. There is one active operation per principal and at most
+100 admitted work items across the helper. Terminal records retain results for
+30 minutes, up to 200 records/32 MiB, with an 8 MiB per-result cap. Compact retry
+keys persist for the helper lifetime, capped at 10,000; expired admissions cannot
+be replayed. Cancellation stops queued work or stops after the current repository;
+completed work is still recorded as successful. Disconnecting never cancels an
+admitted job. Terminal diagnostics log only operation ID, kind, project IDs,
+duration, outcome, and invalidation count.
+
+Browser reconciliation and fresh MCP analysis remain later phases. The browser
+continues owning its durable cache and does not consume MCP invalidations or
+operation progress. REST scan responses now add optional `rootId`,
+`helperInstanceId`, and `revision`; existing consumers may ignore these fields.
+The protocol tests exercise official SDK HTTP and stdio clients under both
+2026-07-28 and 2025-11-25. External host application interoperability and OAuth
+flows have not been verified or advertised.

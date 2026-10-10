@@ -49,6 +49,8 @@ starting the helper separately.
 | [src/lib](../src/lib) | Parsing and domain logic, browser filesystem access, API client, storage, and configuration. Some pure modules are shared with the helper. |
 | [src/types.ts](../src/types.ts) | Shared project, workspace, scan, Git, preview, and maintenance contracts. |
 | [server/app.ts](../server/app.ts) | Express API construction, request checks, dispatch, and error responses. |
+| [server/application.ts](../server/application.ts), [server/project-index.ts](../server/project-index.ts), [server/operations.ts](../server/operations.ts) | Shared helper composition, current root membership, bounded projections, and ephemeral operations. |
+| [server/mcp](../server/mcp) | Optional authenticated loopback MCP read service, local policy, schemas, and stdio bridge. |
 | [server/scanner.ts](../server/scanner.ts) | Node filesystem discovery, Git metadata, and registered project identity. |
 | [server/runtime.ts](../server/runtime.ts) | Process lifecycle, previews, maintenance coordination, and application opening. |
 | [server](../server) feature modules | Git queries, package tools, storage, script validation, and preview rendering. |
@@ -133,3 +135,21 @@ service worker caches the interface; IndexedDB stores project data and captured
 previews. API responses are not an offline cache. Navigation fallback is limited
 to the root page, so unknown paths and `/api` are not rewritten to the app on
 static hosting. Installing the PWA does not start or install the Node helper.
+
+## MCP access
+
+An optional authenticated `/mcp` endpoint uses the same helper registry and
+runtime as REST. It exposes metadata discovery, bounded snapshot/report reads,
+and local Git queries under per-client configured root grants. A stdio bridge
+connects to that helper; it never starts another scanner or process manager.
+Configuration and credentials live outside scanned roots and are loaded only
+when explicitly enabled. No MCP route is proxied by Vite or deployed to Vercel.
+
+The application owns current root membership independently of additive registry
+entries, a random boot identity, monotonic revisions, and bounded operation
+records. Discovery and package maintenance share a reservation. Overlapping scans
+preserve authoritative package/Git scope and keep independent display memberships.
+MCP cannot access browser-owned IndexedDB or preferences. Browser reconciliation,
+fresh MCP analysis, process control, and reviewed maintenance are future phases;
+see [the helper architecture](local-helper.md#optional-mcp-read-service) and
+[setup](../README.md#optional-mcp-access).

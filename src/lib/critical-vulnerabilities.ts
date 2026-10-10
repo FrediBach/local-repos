@@ -1,4 +1,4 @@
-import type { AuditFinding, PackageAudit } from '@/types'
+import type { AuditFinding, PackageAudit } from '../types'
 
 export interface CriticalVulnerabilityAlert {
   projectId: string

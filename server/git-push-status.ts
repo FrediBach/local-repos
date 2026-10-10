@@ -8,7 +8,7 @@ const exec = promisify(execFile)
 
 /** Read current local refs without fetching, pushing, or changing the worktree. */
 export async function readGitPushStatus(entry: RegisteredProject): Promise<GitPushStatus> {
-  const directory = entry.workspaceDirectory ?? entry.directory
+  const directory = entry.gitDirectory ?? entry.workspaceDirectory ?? entry.directory
   const signal = AbortSignal.timeout(30_000)
   const git = async (args: string[]) => (await exec('git', [...gitOptions, ...args], {
     cwd: directory, timeout: 10_000, signal, maxBuffer: 2 * 1024 * 1024,

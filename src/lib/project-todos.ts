@@ -1,4 +1,4 @@
-import type { RepoProject } from '@/types'
+import type { RepoProject } from '../types'
 import { criticalFindingKey } from './critical-vulnerabilities'
 
 export interface ProjectTodo {

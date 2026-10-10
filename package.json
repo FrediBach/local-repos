@@ -13,12 +13,16 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "doctor": "react-doctor --verbose --no-score"
+    "doctor": "react-doctor --verbose --no-score",
+    "mcp:stdio": "tsx server/mcp/stdio.ts"
   },
   "engines": {
     "node": ">=22.12.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
     "@radix-ui/react-dialog": "^1.2.0",
     "@radix-ui/react-dropdown-menu": "^2.1.25",
     "@radix-ui/react-slot": "^1.4.0",
@@ -37,7 +41,8 @@
     "remark-gfm": "^4.0.1",
     "semver": "^7.8.5",
     "tailwind-merge": "^3.7.0",
-    "yaml": "^2.9.1"
+    "yaml": "^2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

@@ -110,3 +110,10 @@ Use a production build and preview to verify service worker behavior: PWA
 service worker generation is not enabled for the development server. Deployment
 and cache boundaries are described in [architecture.md](architecture.md); user
 installation instructions remain in the [README](../README.md).
+
+MCP integration tests in `server/mcp/mcp.test.ts` create protected temporary
+policy files, disposable repositories, loopback helpers, and SDK HTTP/stdio
+clients. They cover both protocol revisions without configuring a user's host
+application or credentials. The bridge must be invoked with npm's `--silent`
+option (or directly through `node --import tsx server/mcp/stdio.ts`) so npm does
+not put its script banner on protocol stdout.

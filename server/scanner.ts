@@ -23,6 +23,7 @@ export interface RegisteredProject {
   directory: string
   root: string
   workspaceDirectory?: string
+  gitDirectory?: string
 }
 
 export class HelperError extends Error {
@@ -67,7 +68,7 @@ async function git(directory: string, args: string[]): Promise<string | undefine
       timeout: 5_000,
       maxBuffer: 256 * 1024,
       encoding: 'utf8',
-      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' },
     })
     return stdout.trim()
   } catch {
@@ -144,7 +145,7 @@ async function inspectProject(directory: string, root: string, names: string[], 
     else if (filenames.has('yarn.lock')) project.packageManager = 'yarn'
     else if (filenames.has('bun.lock') || filenames.has('bun.lockb')) project.packageManager = 'bun'
   }
-  return { project, directory, root }
+  return { project, directory, root, gitDirectory: filenames.has('.git') ? directory : undefined }
 }
 
 function looksLikeProject(names: string[]): boolean {
@@ -205,6 +206,7 @@ export async function scanDirectory(input: unknown, onProgress?: ScanProgressRep
             if (workspace && !names.includes('.git')) {
               project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath, declaredWorkspace }
               project.project.git ??= workspace.entry.project.git
+              project.gitDirectory = workspace.entry.gitDirectory
               if (project.project.git?.committedAt) project.project.updatedAt = project.project.git.committedAt
               if (declaredWorkspace) {
                 project.workspaceDirectory = workspace.entry.directory
@@ -286,7 +288,25 @@ export class ProjectRegistry {
     return [...this.projects.values()].filter(other => (other.workspaceDirectory ?? other.directory) === directory)
   }
 
-  register(entries: RegisteredProject[]): void {
+  register(entries: RegisteredProject[], scopeBusy?: (id: string) => boolean): void {
+    // Validate the entire scan before changing any live object. Membership paths
+    // belong to the index; a narrower scan cannot discard known workspace scope.
+    for (const entry of entries) {
+      const previous = this.projects.get(entry.project.id)
+      if (!previous) continue
+      if (previous.workspaceDirectory && !entry.workspaceDirectory && entry.gitDirectory !== entry.directory && previous.workspaceDirectory !== entry.root && isWithin(previous.workspaceDirectory, entry.root)) {
+        entry.workspaceDirectory = previous.workspaceDirectory
+        entry.project.monorepo = previous.project.monorepo
+      }
+      if (previous.gitDirectory && !entry.gitDirectory && previous.gitDirectory !== entry.root && isWithin(previous.gitDirectory, entry.root)) entry.gitDirectory = previous.gitDirectory
+      const nextWorkspace = entries.find(other => other.directory === entry.workspaceDirectory)
+      const nextWorkspaceKnown = nextWorkspace && this.projects.has(nextWorkspace.project.id)
+      if ((previous.workspaceDirectory !== entry.workspaceDirectory || previous.gitDirectory !== entry.gitDirectory) && (scopeBusy?.(entry.project.id) || (nextWorkspaceKnown && scopeBusy?.(nextWorkspace.project.id)))) {
+        throw new HelperError('SCOPE_CONFLICT: Workspace context changed while the project is busy. Rescan when idle.', 409)
+      }
+      if (isWithin(previous.root, entry.root)) entry.root = previous.root
+      else if (!isWithin(entry.root, previous.root)) throw new HelperError('SCOPE_CONFLICT: Conflicting project roots.', 409)
+    }
     for (const entry of entries) {
       const previous = this.projects.get(entry.project.id)
       if (previous) {
@@ -326,6 +346,7 @@ export class ProjectRegistry {
     if (entry.workspaceDirectory && (await realpath(entry.workspaceDirectory) !== entry.workspaceDirectory || !isWithin(entry.root, entry.workspaceDirectory))) {
       throw new HelperError('The workspace path changed. Sync again before taking an action.', 403)
     }
+    if (entry.gitDirectory && (await realpath(entry.gitDirectory) !== entry.gitDirectory || !isWithin(entry.root, entry.gitDirectory))) throw new HelperError('The Git path changed. Sync again before taking an action.', 403)
     return entry
   }
 }

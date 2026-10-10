@@ -19,7 +19,7 @@ function queryOptions(input: Record<string, unknown>): GitHistoryQuery {
 export async function readCommits(directory: string, revisions: string[], visit: (commit: GitCommit) => void, signal?: AbortSignal): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn('git', [...gitOptions, 'log', '--date-order', '--no-color', '--no-decorate', '--encoding=UTF-8', '--format=%H%x00%aN%x00%aE%x00%cI%x00%s%x00', ...revisions, '--'], {
-      cwd: directory, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' }, stdio: ['ignore', 'pipe', 'pipe'], signal,
+      cwd: directory, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' }, stdio: ['ignore', 'pipe', 'pipe'], signal,
     })
     const timeout = setTimeout(() => { child.kill(); reject(new HelperError('Reading Git history timed out. Try a specific branch.', 504)) }, 30_000)
     let pending = '', fields: string[] = []
@@ -49,9 +49,9 @@ export async function readCommits(directory: string, revisions: string[], visit:
 
 export async function readGitHistory(entry: RegisteredProject, input: Record<string, unknown> = {}, now = new Date()): Promise<GitHistory> {
   const query = queryOptions(input)
-  const directory = entry.workspaceDirectory ?? entry.directory
+  const directory = entry.gitDirectory ?? entry.workspaceDirectory ?? entry.directory
   const git = async (args: string[]) => (await execFileAsync('git', [...gitOptions, ...args], {
-    cwd: directory, timeout: 10_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
+    cwd: directory, timeout: 10_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' },
   })).stdout.trim()
   const to = now.toISOString().slice(0, 10)
   const start = new Date(`${to}T00:00:00Z`)

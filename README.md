@@ -405,6 +405,90 @@ The app uses only `/`; projects and filters are local UI state. There is deliber
 
 The manifest includes a stable app ID, root scope, language, categories, theme colors, and install icons. The 192px and 512px icons have an opaque background, with the mark inside the maskable safe area; a separate 180px Apple touch icon and 32px ICO cover other launchers. To regenerate the checked-in images from `public/favicon.svg` and `design/og-image.svg`, run `npm run assets:generate`. The social image uses locally installed Helvetica Neue, Helvetica, or Arial fonts; regenerate it on a machine with one of those fonts. Ordinary builds use the committed PNGs and do not need a font or image-rendering step.
 
+## Optional MCP access
+
+The local helper can expose project discovery, bounded project context, cached
+reports, and local Git history to MCP clients without opening the browser UI.
+MCP is **disabled by default**. This first release cannot run checks, start
+servers, launch scripts, or change dependencies. Reports exist only if this helper
+has them; MCP cannot read your browser cache, favorites, tags, or settings.
+
+Create a JSON configuration outside all directories you intend to scan, for
+example `~/.config/local-repos/mcp.json`. Restrict its directory to your account
+and its file permissions to `600`. Generate a separate random token for each
+client with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`.
+Replace both example paths and the token placeholder:
+
+```json
+{
+  "enabled": true,
+  "roots": ["/absolute/path/to/projects"],
+  "clients": [{
+    "id": "my-assistant",
+    "token": "REPLACE_WITH_A_RANDOM_TOKEN",
+    "roots": ["/absolute/path/to/projects"],
+    "capabilities": ["read", "discovery", "git"],
+    "disclosePaths": false,
+    "discloseContent": true
+  }]
+}
+```
+
+`read` permits metadata/report reads, `discovery` permits explicit root scans,
+and `git` permits local Git queries. `discloseContent` permits scanned README
+chunks and existing preview images; it defaults to `false`. Absolute root paths
+are omitted unless `disclosePaths` is enabled. Repository content remains
+untrusted; URL credential stripping and terminal-control removal are best-effort
+redaction, not a guarantee that content contains no secrets.
+
+Start the helper with the configuration path in its environment:
+
+```sh
+LOCAL_REPOS_MCP_CONFIG="$HOME/.config/local-repos/mcp.json" npm run helper
+```
+
+Use the same environment variable with `npm run dev` to start the UI too. The
+endpoint is `http://127.0.0.1:4318/mcp`, with an `Authorization: Bearer <token>`
+header on every request. Credentials are loaded at startup; restart after changing
+or revoking them. Keep configuration files out of repositories. The helper remains
+local and the static hosted app has no MCP endpoint.
+
+For command-based clients, create a separate owner-only client file containing
+`{"url":"http://127.0.0.1:4318/mcp","token":"YOUR_TOKEN"}` outside scanned roots.
+Run from this repository checkout:
+
+```sh
+LOCAL_REPOS_MCP_CLIENT_CONFIG="$HOME/.config/local-repos/mcp-client.json" npm run --silent mcp:stdio
+```
+
+The helper must already be running. The bridge does not start it, follows no
+redirects, and prints diagnostics only on stderr. Keep `--silent` when invoking
+through npm so its script banner does not corrupt protocol stdout. A host can
+instead launch `node --import tsx server/mcp/stdio.ts` with this checkout as its
+working directory and the client-file environment variable set.
+
+Begin with `local_repos_list_roots`, then `local_repos_scan_root` using a returned
+root ID and a unique `requestId`. Poll `local_repos_get_operation`, retrieve its
+result, and use `local_repos_list_projects` / `local_repos_get_project` for context.
+Scanning is metadata-only. Cached report reads never trigger analysis. Daily Git
+summaries accept explicit UTC start/end instants for a 22–26 hour calendar day;
+Git inspection never fetches, commits, or pushes.
+
+Pages default to 25 rows, with a maximum of 100 and additional byte limits.
+Cursors expire when their snapshot changes. A scan or daily summary has one active
+operation per client, at most 100 admitted work items across the helper, and
+bounded terminal-result retention (30 minutes, 200 records, 32 MiB). Daily roots
+with more than 100 projects require a smaller configured scan root. Reusing a
+request ID with identical arguments returns the admitted operation; changed
+arguments conflict, and expired results never trigger a replay. Helper restart
+loses operations, registrations, and reports. Rescan explicitly after restart.
+
+The official SDK integration tests cover HTTP and stdio with protocol revisions
+2026-07-28 and 2025-11-25. External host applications have not yet been verified;
+HTTP clients must support configured bearer headers, and OAuth discovery is not
+implemented. Browser reconciliation and fresh MCP analysis are deferred. See the
+[helper architecture](docs/local-helper.md#optional-mcp-read-service) for details.
+
 ## Architecture
 
 See the [architecture documentation](docs/README.md) for the runtime boundaries,

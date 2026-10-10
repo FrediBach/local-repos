@@ -263,6 +263,9 @@ export interface ScanProgress {
 export type ScanProgressReporter = (progress: ScanProgress) => void
 
 export interface ScanResult {
+  rootId?: string
+  helperInstanceId?: string
+  revision?: number
   rootName: string
   rootPath?: string
   projects: RepoProject[]

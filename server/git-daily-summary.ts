@@ -18,11 +18,11 @@ function dayQuery(input: Record<string, unknown>): GitDayQuery {
 
 export async function readGitDay(entry: RegisteredProject, input: Record<string, unknown>): Promise<GitDay> {
   const { from, to } = dayQuery(input)
-  const directory = entry.workspaceDirectory ?? entry.directory
+  const directory = entry.gitDirectory ?? entry.workspaceDirectory ?? entry.directory
   const signal = AbortSignal.timeout(50_000)
   const git = async (args: string[]) => (await exec('git', [...gitOptions, ...args], {
     cwd: directory, timeout: 10_000, signal, maxBuffer: 4 * 1024 * 1024,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' },
   })).stdout.trim()
   const result: GitDay = { available: false, shallow: false, commits: [] }
   let topLevel: string

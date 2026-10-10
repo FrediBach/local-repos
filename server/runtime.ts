@@ -103,7 +103,23 @@ export class ProjectRuntime {
   private screenshotDirectory?: Promise<string>
   private closed = false
 
-  constructor(private readonly registry: ProjectRegistry) {}
+  private metadataScan = false
+
+  constructor(private readonly registry: ProjectRegistry, private readonly onInvalidate: (projects: RegisteredProject[], reason: string) => void = () => {}) {}
+
+  reserveMetadataScan(): () => void {
+    if (this.closed || this.metadataScan || this.maintenance.size) throw new HelperError('Wait for the current scan or maintenance operation.', 409)
+    this.metadataScan = true
+    return () => { this.metadataScan = false }
+  }
+
+  scopeBusy(id: string): boolean {
+    return this.registry.related(id).some(({ project: { id: key } }) =>
+      this.running.has(key) || this.starts.has(key) || this.captures.has(key) || this.storageScans.has(key)
+      || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key)
+      || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key) || this.maintenance.has(key)
+      || [...this.stoppingChildren.values()].some(child => child.id === key))
+  }
 
   async status(id: string): Promise<DevState> {
     const entry = this.registry.lookup(id)
@@ -266,6 +282,7 @@ export class ProjectRuntime {
 
   private async changePackages(id: string, run: (entry: RegisteredProject) => Promise<PackageUpdate>): Promise<PackageUpdate> {
     this.available(id)
+    if (this.metadataScan) throw new HelperError('Wait for metadata discovery to finish.', 409)
     const related = this.registry.related(id)
     for (const { project } of related) {
       const key = project.id
@@ -284,6 +301,7 @@ export class ProjectRuntime {
         return update
       } finally {
         // Installs can partially succeed before failing. Never keep old scores.
+        this.onInvalidate(related, 'A package update was attempted; refresh affected reports.')
         for (const member of related) {
           member.project.audit = undefined
           member.project.outdated = undefined
@@ -305,6 +323,7 @@ export class ProjectRuntime {
 
   async deleteNodeModules(id: string, confirm: unknown): Promise<ProjectStorage> {
     this.available(id)
+    if (this.metadataScan) throw new HelperError('Wait for metadata discovery to finish.', 409)
     if (confirm !== true) throw new HelperError('Confirm removal of this project’s node_modules folder before continuing.', 400)
     const relatedIds = this.registry.related(id).map(entry => entry.project.id)
     const relatedIdSet = new Set(relatedIds)
@@ -320,7 +339,9 @@ export class ProjectRuntime {
     this.maintenance.add(id)
     const promise = (async () => {
       const entry = await this.registry.get(id)
-      const storage = await removeProjectNodeModules(entry.directory)
+      let storage: ProjectStorage
+      try { storage = await removeProjectNodeModules(entry.directory) }
+      finally { this.onInvalidate(this.registry.related(id), 'Installed dependency removal was attempted; refresh affected reports.') }
       entry.project.storage = storage
       return storage
     })()

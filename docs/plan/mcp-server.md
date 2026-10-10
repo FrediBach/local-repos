@@ -1,7 +1,16 @@
 # MCP server plan
 
-Status: proposed; no MCP server, configuration, or commands in this document are
-implemented yet. Prepared on 2026-10-10 against Local Repos 0.5.0.
+Status: phases 0–1 implemented on 2026-10-10; phases 2–5 remain planned.
+This document preserves the design proposal below. For shipped configuration,
+contracts, limits, and verification status, see [README](../../README.md#optional-mcp-access)
+and [helper architecture](../local-helper.md#optional-mcp-read-service).
+
+The initial release includes authenticated HTTP and a stdio bridge, read/discovery/
+Git tools, resources, bounded operation polling, and shared root/scope guards.
+Official SDK clients cover both transport modes and protocol revisions. External
+host application interoperability remains unverified; no universal OAuth support
+is claimed. Fresh analysis, browser reconciliation, process controls, mutations,
+prompts, and optional protocol extensions are not shipped.
 
 ## 1. Recommended direction
 

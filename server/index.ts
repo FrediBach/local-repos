@@ -1,6 +1,7 @@
 import { createApp, HELPER_PORT } from './app'
+import { loadPolicy } from './mcp/policy'
 
-const { app, runtime } = createApp()
+const { app, application } = createApp({ mcpPolicy: await loadPolicy(process.env.LOCAL_REPOS_MCP_CONFIG), operationLogger: event => console.error('[local-repos:mcp]', JSON.stringify(event)) })
 const server = app.listen(HELPER_PORT, '127.0.0.1', () => {
   console.log(`Local Repos helper is listening at http://127.0.0.1:${HELPER_PORT}`)
 })
@@ -15,7 +16,7 @@ async function shutdown() {
   if (stopping) return
   stopping = true
   server.close()
-  await runtime.shutdown()
+  await application.shutdown()
   process.exit(0)
 }
 process.once('SIGINT', shutdown)
