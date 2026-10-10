@@ -8,6 +8,13 @@ import { outdatedProject, readProjectManifest, runOutdatedCommand, type Outdated
 
 const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 
+interface UpdateSelection {
+  name: string
+  acceptsCurrent: (version: string) => boolean
+  accepts: (version: string) => boolean
+  beforeInstall: () => Promise<void>
+}
+
 export function updateTarget(current: string, versions: string[], level: 'minor' | 'patch'): string | undefined {
   if (!stable.test(current)) return
   const [major, minor] = current.split('.').map(Number)
@@ -22,7 +29,7 @@ export function updateTarget(current: string, versions: string[], level: 'minor'
 }
 
 /** Explicit install action. Resolve every target before changing any packages. */
-export async function updateProject(entry: RegisteredProject, level: 'minor' | 'patch', runner: OutdatedRunner = runOutdatedCommand): Promise<PackageUpdate> {
+export async function updateProject(entry: RegisteredProject, level: 'minor' | 'patch', runner: OutdatedRunner = runOutdatedCommand, selection?: UpdateSelection): Promise<PackageUpdate> {
   const manifestPath = path.join(entry.directory, 'package.json')
   const { dependencies, original, manifest } = await readProjectManifest(entry)
   const report = await outdatedProject(entry, runner)
@@ -54,6 +61,11 @@ export async function updateProject(entry: RegisteredProject, level: 'minor' | '
   }
   const targets: { name: string; from: string; to: string; kind: ProjectDependency['kind'] }[] = []
   for (const finding of report.findings) {
+    if (selection && finding.name !== selection.name) continue
+    if (selection && !selection.acceptsCurrent(finding.current)) {
+      result.skipped.push({ name: finding.name, reason: 'The selected project’s resolved dependency is not affected by this finding. It may belong to another workspace package.' })
+      continue
+    }
     const dependency = dependencies.get(finding.name)
     const declarations = (['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const).filter(kind => manifest[kind]?.[finding.name] !== undefined)
     if (!dependency || dependency.kind === 'peerDependencies' || declarations.length !== 1 || !/^[~^]?\d+(?:\.\d+){0,2}$/.test(dependency.version) || !stable.test(finding.current)) {
@@ -71,12 +83,13 @@ export async function updateProject(entry: RegisteredProject, level: 'minor' | '
       else { const value = JSON.parse(output.stdout); versions = Array.isArray(value) ? value : value.versions }
     } catch { throw new HelperError(`Could not read published versions for ${finding.name}. No packages were changed.`, 502) }
     if (!Array.isArray(versions) || !versions.every(version => typeof version === 'string')) throw new HelperError(`Could not read published versions for ${finding.name}. No packages were changed.`, 502)
-    const to = updateTarget(finding.current, versions, level)
+    const to = updateTarget(finding.current, selection ? versions.filter(version => stable.test(version) && selection.accepts(version)) : versions, level)
     if (to) targets.push({ name: finding.name, from: finding.current, to, kind: dependency.kind })
   }
-  result.skipped.push(...(report.skipped ?? []))
+  result.skipped.push(...(report.skipped ?? []).filter(item => !selection || item.name === selection.name))
   // Avoid overwriting edits made while registry requests were in progress.
   if (!(await lstat(manifestPath)).isFile() || await readFile(manifestPath, 'utf8') !== original) throw new HelperError('package.json changed during the update check. Resync and try again.', 409)
+  if (targets.length) await selection?.beforeInstall()
   for (const kind of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
     const group = targets.filter(target => target.kind === kind)
     if (!group.length) continue

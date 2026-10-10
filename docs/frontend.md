@@ -328,7 +328,23 @@ GFM support and raw HTML skipped. Dialogs use shared Radix primitives. `App`
 restores focus to project/tag openers, and project tabs implement arrow/Home/End
 keyboard navigation. Preserve those behaviors when reorganizing UI flows.
 
-## Vulnerability suppressions
+## Vulnerability fixes and suppressions
+
+[`project-audit.tsx`](../src/components/project-audit.tsx) keeps vulnerability
+scanning separate from the requested **Install compatible fix** action. Shared
+[`audit-fix.ts`](../src/lib/audit-fix.ts) identifies supported declared dependencies
+or an audit-reported direct parent; suppressed findings and findings without a
+reported fix have no install control. Buttons identify the target package and
+are disabled without the helper, in demo mode, while busy, or while the selected
+project's development server is starting or running.
+
+The action sends only an `AuditFixRequest` finding identity through the existing
+workspace action hook; the helper selects and revalidates the version to install.
+Compatible fixes stay within the current major version, pin exact versions, and
+disable lifecycle scripts. The normal workspace operation guards, report
+invalidation, metadata refresh, and notices apply. A new audit reports remaining
+findings after installation; the UI never treats an installation as a clean audit.
+Older cached findings can omit fix metadata and remain readable.
 
 Audit `counts` contain active vulnerabilities after helper-side ignore matching.
 Cards, severity filters and sorts use those counts. Findings optionally carry

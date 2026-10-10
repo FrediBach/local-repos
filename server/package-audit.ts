@@ -2,6 +2,7 @@ import { execFile, type ExecFileOptionsWithStringEncoding } from 'node:child_pro
 import { lstat, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import valid from 'semver/functions/valid'
 import type { AuditFinding, AuditSeverity, PackageAudit, RepoProject, ScanProgressReporter } from '../src/types'
 import { HelperError, type RegisteredProject } from './scanner'
 import { advisoryIdentifiers, readAuditIgnores, resolveIgnoreAliases } from './audit-ignore'
@@ -18,6 +19,7 @@ const object = (value: unknown): value is JsonObject => typeof value === 'object
 const text = (value: unknown): string | undefined => typeof value === 'string' && value.trim() ? value : undefined
 const severity = (value: unknown): value is AuditSeverity => typeof value === 'string' && severities.includes(value as AuditSeverity)
 const versionParts = (value: string): number[] | undefined => /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(value.trim())?.slice(1).map(Number)
+const packageName = /^(?:@[a-zA-Z0-9._~-]+\/)?[a-zA-Z0-9_~][a-zA-Z0-9._~-]*$/
 
 const runAuditCommand: AuditRunner = (command, args, options) => new Promise((resolve, reject) => {
   execFile(command, args, options, (error, stdout, stderr) => {
@@ -53,6 +55,13 @@ function countsFrom(value: unknown): PackageAudit['counts'] {
   return counts
 }
 
+function npmFixTarget(value: unknown): AuditFinding['fixTarget'] {
+  if (!object(value) || typeof value.name !== 'string' || !packageName.test(value.name)
+    || typeof value.version !== 'string' || !valid(value.version)
+    || (value.isSemVerMajor !== undefined && typeof value.isSemVerMajor !== 'boolean')) return undefined
+  return { name: value.name, version: value.version, ...(typeof value.isSemVerMajor === 'boolean' ? { isSemVerMajor: value.isSemVerMajor } : {}) }
+}
+
 function advisoryFinding(value: unknown, fallbackName?: string): AuditFinding {
   if (!object(value) || !severity(value.severity)) unsupportedReport()
   const name = text(value.module_name) ?? text(value.name) ?? fallbackName
@@ -63,6 +72,7 @@ function advisoryFinding(value: unknown, fallbackName?: string): AuditFinding {
     range: text(value.vulnerable_versions) ?? text(value.range),
     url: safeUrl(value.url),
     fixAvailable: value.patched_versions === null ? false : typeof value.patched_versions === 'string' ? !['<0.0.0', ''].includes(value.patched_versions) : undefined,
+    ...(text(value.patched_versions) ? { patchedRange: text(value.patched_versions) } : {}),
   }
 }
 
@@ -90,6 +100,7 @@ function parseReport(stdout: string, format: 'npm' | 'pnpm' | 'yarn-classic' | '
         if (!object(value) || !severity(value.severity) || !Array.isArray(value.via)) unsupportedReport()
         const advisories = value.via.filter(object)
         const titles = advisories.map(advisory => text(advisory.title)).filter(Boolean)
+        const fixTarget = npmFixTarget(value.fixAvailable)
         if (value.via.some(item => !object(item) && typeof item !== 'string')) unsupportedReport()
         add({
           name: text(value.name) ?? name, severity: value.severity,
@@ -99,7 +110,8 @@ function parseReport(stdout: string, format: 'npm' | 'pnpm' | 'yarn-classic' | '
           title: titles.length ? titles.join('; ') : 'Depends on a vulnerable package',
           range: text(value.range), url: safeUrl(advisories.find(advisory => typeof advisory.url === 'string')?.url),
           direct: typeof value.isDirect === 'boolean' ? value.isDirect : undefined,
-          fixAvailable: typeof value.fixAvailable === 'boolean' ? value.fixAvailable : object(value.fixAvailable) ? true : undefined,
+          fixAvailable: typeof value.fixAvailable === 'boolean' ? value.fixAvailable : fixTarget ? true : undefined,
+          ...(fixTarget ? { fixTarget } : {}),
         })
       }
       if (!object(record.metadata)) unsupportedReport()

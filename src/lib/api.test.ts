@@ -83,3 +83,13 @@ it('does not retry streamed errors from status polling', async () => {
   await expect(api('/projects/alpha/status', undefined, true, vi.fn())).rejects.toThrow('Project not found')
   expect(fetch).toHaveBeenCalledOnce()
 })
+
+
+it('allows the full fresh-audit and bounded-install deadline before timing out a vulnerability fix', async () => {
+  const timeout = vi.spyOn(AbortSignal, 'timeout')
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ packageUpdate: {} }) }))
+  try {
+    await projectAction('alpha', 'fix-vulnerability', { name: 'alpha', title: 'Unsafe input', range: '<1.5.0' })
+    expect(timeout).toHaveBeenCalledWith(540_000)
+  } finally { timeout.mockRestore() }
+})

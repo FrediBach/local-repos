@@ -48,7 +48,7 @@ Project paths below are relative to `/api/projects/:id`.
 | Git reads | `POST /history`, `/daily-summary`, `/push-status` | Git services |
 | Package analysis | `POST /audit`, `/outdated`, `/unused`, `/react-doctor` | Runtime and package services |
 | Frontend analysis | `POST /lighthouse` | Runtime and Lighthouse service |
-| Dependency changes | `POST /update-packages`, `/delete-node-modules` | Runtime and maintenance services |
+| Dependency changes | `POST /update-packages`, `/fix-vulnerability`, `/delete-node-modules` | Runtime and maintenance services |
 | Storage | `POST /storage` | Runtime and storage service |
 | Preview | `POST /screenshot`, `GET /api/screenshots/:filename` | Runtime and preview services |
 | Desktop integration | `POST /open`, `/run-script` | Runtime and script service |
@@ -176,6 +176,16 @@ Individual service modules handle command construction, validation, and parsing.
   rechecks the original manifest before mutation, and disables lifecycle scripts.
   Installs may partially succeed; related projects' package/storage reports are
   invalidated and dependency metadata refreshed even if an install fails.
+  The separate `fix-vulnerability` action uses
+  [`package-audit-fix.ts`](../server/package-audit-fix.ts) to accept an audited
+  finding identity, recheck it with a fresh audit, and resolve a supported declared
+  dependency or an audit-reported direct parent. It only installs a stable
+  compatible fix within the target's current major version, pins the exact
+  version, and disables lifecycle scripts. Unsupported targets and fixes requiring
+  a major upgrade do not install. The operation uses the same related-project
+  maintenance guards and report invalidation; the client requests a fresh audit
+  after metadata refresh to report remaining findings. Ordinary audits and
+  automatic scans never invoke this mutation.
 - **Storage:** [`project-storage.ts`](../server/project-storage.ts) measures
   allocated bytes, counts hard links once, and excludes symlink targets. Its
   250,000-entry, 128-level, and 20-second limits produce `partial` results. Cleanup

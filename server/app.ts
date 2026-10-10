@@ -96,6 +96,7 @@ export function createApp(options: { allowedOrigins?: string[] } = {}) {
   app.post('/api/projects/:id/delete-node-modules', async (request, response) => response.json({ storage: await runtime.deleteNodeModules(request.params.id, request.body?.confirm) }))
   app.post('/api/projects/:id/audit', async (request, response) => respondWithScan(request, response, async onProgress => ({ audit: await runtime.audit(request.params.id, onProgress) })))
   app.post('/api/projects/:id/update-packages', async (request, response) => response.json({ packageUpdate: await runtime.updatePackages(request.params.id, request.body?.level) }))
+  app.post('/api/projects/:id/fix-vulnerability', async (request, response) => response.json({ packageUpdate: await runtime.fixVulnerability(request.params.id, request.body) }))
   app.post('/api/projects/:id/outdated', async (request, response) => respondWithScan(request, response, async onProgress => ({ outdated: await runtime.outdated(request.params.id, onProgress) })))
   app.post('/api/projects/:id/unused', async (request, response) => respondWithScan(request, response, async onProgress => ({ unused: await runtime.unused(request.params.id, onProgress) })))
   app.post('/api/projects/:id/react-doctor', async (request, response) => respondWithScan(request, response, async onProgress => ({ reactDoctor: await runtime.reactDoctor(request.params.id, onProgress) })))

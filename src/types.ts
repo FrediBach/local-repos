@@ -85,10 +85,13 @@ export interface AuditFinding {
   title: string
   url?: string
   fixAvailable?: boolean
+  fixTarget?: { name: string; version: string; isSemVerMajor?: boolean }
+  patchedRange?: string
   direct?: boolean
   identifiers?: string[]
   suppression?: { source: string; ids: string[]; reason?: string }
 }
+export type AuditFixRequest = Pick<AuditFinding, 'name' | 'title' | 'range' | 'url'>
 export interface PackageAudit {
   manager: RepoProject['packageManager']
   scannedAt: string

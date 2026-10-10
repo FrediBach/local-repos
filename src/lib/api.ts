@@ -63,7 +63,7 @@ export async function api<T>(path: string, body?: unknown, retry = true, onProgr
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Local-Repos': '1', ...(onProgress ? { Accept: 'application/x-ndjson' } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(path.endsWith('update-packages') ? 420_000 : /(?:screenshot|lighthouse)$/.test(path) ? 240_000 : /(?:audit|outdated|unused|react-doctor|delete-node-modules)$/.test(path) ? 150_000 : 60_000),
+    signal: AbortSignal.timeout(path.endsWith('fix-vulnerability') ? 540_000 : path.endsWith('update-packages') ? 420_000 : /(?:screenshot|lighthouse)$/.test(path) ? 240_000 : /(?:audit|outdated|unused|react-doctor|delete-node-modules)$/.test(path) ? 150_000 : 60_000),
   })
   let data: T
   let failure: HelperError | undefined

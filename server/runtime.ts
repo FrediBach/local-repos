@@ -16,6 +16,7 @@ import { discoverPreviewAssets, type PreviewAssetCandidate } from './preview-ass
 import { renderPreviewAsset } from './preview-asset-renderer'
 import { auditProject } from './package-audit'
 import { updateProject } from './package-update'
+import { fixAuditFinding } from './package-audit-fix'
 import { parsePackageJson } from '../src/lib/metadata'
 import { outdatedProject } from './package-outdated'
 import { unusedProject } from './package-unused'
@@ -256,6 +257,15 @@ export class ProjectRuntime {
   async updatePackages(id: string, level: unknown): Promise<PackageUpdate> {
     this.available(id)
     if (level !== 'minor' && level !== 'patch') throw new HelperError('Choose a minor or patch update.', 400)
+    return this.changePackages(id, entry => updateProject(entry, level))
+  }
+
+  async fixVulnerability(id: string, request: unknown): Promise<PackageUpdate> {
+    return this.changePackages(id, entry => fixAuditFinding(entry, request))
+  }
+
+  private async changePackages(id: string, run: (entry: RegisteredProject) => Promise<PackageUpdate>): Promise<PackageUpdate> {
+    this.available(id)
     const related = this.registry.related(id)
     for (const { project } of related) {
       const key = project.id
@@ -269,7 +279,7 @@ export class ProjectRuntime {
     const promise = (async () => {
       const entry = await this.registry.get(id)
       try {
-        const update = await updateProject(entry, level)
+        const update = await run(entry)
         entry.project.packageUpdate = update
         return update
       } finally {

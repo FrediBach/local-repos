@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { PackageAudit, RepoProject } from '../types'
+import type { AuditFinding, PackageAudit, RepoProject } from '../types'
 import { ProjectAudit } from './project-audit'
 
 afterEach(cleanup)
@@ -125,5 +125,93 @@ describe('package audit status', () => {
     expect(screen.getByText('Connect with the local helper to run package audits.')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Scan for vulnerabilities' }))
     expect(onAction).toHaveBeenCalledExactlyOnceWith('audit')
+  })
+})
+
+describe('compatible vulnerability fixes', () => {
+  const finding: AuditFinding = {
+    name: 'affected', severity: 'high', title: 'Unsafe request handling', range: '<1.2.4',
+    url: 'https://example.com/advisory', direct: true, fixAvailable: true,
+  }
+  const fixProject: RepoProject = {
+    ...project,
+    dependencies: [{ name: 'affected', version: '^1.2.3', kind: 'dependencies' }],
+    audit: { ...cleanReport, counts: { ...cleanReport.counts, high: 1 }, findings: [finding] },
+  }
+
+  it('requests only the selected advisory identity and keeps audit scanning separate', async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<ProjectAudit {...props} project={fixProject} onAction={onAction} />)
+    expect(screen.getByText(/only minor or patch updates, pins exact versions, and disables lifecycle scripts/)).toBeTruthy()
+    expect(onAction).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Install compatible fix for affected' }))
+    expect(onAction).toHaveBeenCalledExactlyOnceWith('fix-vulnerability', {
+      name: finding.name, title: finding.title, range: finding.range, url: finding.url,
+    })
+    await user.click(screen.getByRole('button', { name: 'Scan again' }))
+    expect(onAction).toHaveBeenLastCalledWith('audit')
+  })
+
+  it('identifies a supported direct parent while sending the original transitive finding', async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    const transitive = { ...finding, direct: false, fixTarget: { name: 'parent', version: '2.3.4', isSemVerMajor: false } }
+    render(<ProjectAudit {...props} project={{
+      ...fixProject,
+      dependencies: [{ name: 'parent', version: '^2.3.0', kind: 'devDependencies' }],
+      audit: { ...cleanReport, findings: [transitive] },
+    }} onAction={onAction} />)
+    expect(screen.getByText(/within its current major version/).textContent).toBe('Updates parent within its current major version.')
+    await user.click(screen.getByRole('button', { name: 'Install compatible fix for parent' }))
+    expect(onAction).toHaveBeenCalledExactlyOnceWith('fix-vulnerability', {
+      name: finding.name, title: finding.title, range: finding.range, url: finding.url,
+    })
+  })
+
+  it('offers no install for suppressed, unfixable, unsupported, or unidentified transitive findings', () => {
+    const findings: AuditFinding[] = [
+      { ...finding, title: 'Suppressed', suppression: { source: '.trivyignore', ids: ['GHSA-test'] } },
+      { ...finding, title: 'No reported fix', fixAvailable: false },
+      { ...finding, title: 'Unknown fix availability', fixAvailable: undefined },
+      { ...finding, name: 'unidentified-child', title: 'Transitive issue', direct: false },
+      { ...finding, name: 'peer', title: 'Peer-only issue' },
+    ]
+    render(<ProjectAudit {...props} project={{
+      ...fixProject,
+      dependencies: [...fixProject.dependencies!, { name: 'peer', version: '^1.2.3', kind: 'peerDependencies' }],
+      audit: { ...cleanReport, findings },
+    }} />)
+    expect(screen.queryByRole('button', { name: /Install compatible fix/ })).toBeNull()
+    expect(screen.getByText(/Update the parent dependency manually/)).toBeTruthy()
+    expect(screen.getByText(/this dependency cannot be updated here/)).toBeTruthy()
+    const suppressed = screen.getAllByRole('listitem').find(item => item.classList.contains('audit-finding-suppressed'))!
+    expect(within(suppressed).queryByText(/manual update|parent dependency/)).toBeNull()
+  })
+
+  it.each([
+    { name: 'another operation is busy', busy: 'another-project:outdated' },
+    { name: 'a fix is running', busy: 'fixture:fix-vulnerability' },
+    { name: 'the workspace is in demo mode', demo: true },
+    { name: 'the helper is disconnected', helper: false },
+  ])('disables installation when $name', async ({ name: _name, ...overrides }) => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<ProjectAudit {...props} {...overrides} project={fixProject} onAction={onAction} />)
+    const button = screen.getByRole('button', { name: 'Install compatible fix for affected' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    await user.click(button)
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  it.each(['starting', 'running'] as const)('disables installation while the dev server is %s', async status => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<ProjectAudit {...props} project={{ ...fixProject, dev: { status } }} onAction={onAction} />)
+    expect(screen.getByText('Stop the development server before installing a fix.')).toBeTruthy()
+    const button = screen.getByRole('button', { name: 'Install compatible fix for affected' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    await user.click(button)
+    expect(onAction).not.toHaveBeenCalled()
   })
 })

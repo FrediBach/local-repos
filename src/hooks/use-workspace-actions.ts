@@ -11,7 +11,7 @@ import { useSettings } from './use-settings'
 import { cachePreview, packageWorkspaceId, preservePreviews } from '@/lib/workspace'
 import { isReactProject } from '@/lib/react-doctor'
 import { isLighthouseProject } from '@/lib/lighthouse'
-import type { LighthouseReport, PackageAudit, PackageOutdated, ReactDoctorReport, RepoProject, RunProjectScriptRequest, Workspace } from '@/types'
+import type { LighthouseReport, PackageAudit, PackageOutdated, PackageUpdate, ReactDoctorReport, RepoProject, RunProjectScriptRequest, ScanProgressReporter, Workspace } from '@/types'
 
 interface Options {
   workspace?: Workspace
@@ -236,6 +236,66 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     } finally { scan.finish(); if (version === workspaceVersion.current) setBusy('') }
   }
 
+  async function changePackages(project: RepoProject, name: string, body: unknown, updateLevel: 'minor' | 'patch' | undefined, version: number, report?: ScanProgressReporter) {
+    if (!workspace) return
+    const current = () => version === workspaceVersion.current
+    const fixing = name === 'fix-vulnerability'
+    let packageUpdate: PackageUpdate | undefined
+    const failures: string[] = []
+    report?.({ phase: fixing ? 'Applying a compatible vulnerability fix' : 'Updating dependencies' })
+    try {
+      const result = await projectAction<{ packageUpdate?: PackageUpdate }>(project.id, fixing ? name : 'update-packages', fixing ? body : { level: updateLevel })
+      if (!result.packageUpdate) throw new Error('The helper did not return a package update result.')
+      packageUpdate = result.packageUpdate
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : 'The package action could not be completed.')
+    }
+    if (!current()) return
+    const repositoryId = packageWorkspaceId(project)
+    const invalidate = (value: Workspace): Workspace => ({ ...value, projects: value.projects.map(item => packageWorkspaceId(item) === repositoryId ? {
+      ...item, outdated: undefined, unused: undefined, audit: undefined, reactDoctor: undefined, lighthouse: undefined, storage: undefined,
+      ...(item.id === project.id && packageUpdate ? { packageUpdate } : {}),
+    } : item) })
+    // A failed install may still change files. Never retain or restore old scores.
+    const cleared = invalidate(workspace)
+    let next = cleared
+    let refreshed = false
+    report?.({ phase: 'Refreshing project metadata' })
+    try {
+      if (!workspace.rootPath) throw new Error('No registered workspace path.')
+      const scan = await scanWithHelper(workspace.rootPath, report)
+      if (!current()) return
+      next = invalidate(preservePreviews({ ...scan, mode: 'helper' }, cleared))
+      refreshed = true
+    } catch {
+      failures.push('Metadata could not be refreshed. Resync before taking another package action.')
+    }
+    if (!current()) return
+    report?.({ phase: 'Saving refreshed project metadata' })
+    let cached = await persist(next, false)
+    if (!current()) return
+    if (fixing && packageUpdate && refreshed) {
+      report?.({ phase: 'Rechecking vulnerabilities' })
+      try {
+        const result = await projectAction<{ audit?: PackageAudit }>(project.id, 'audit', {}, report)
+        if (!current()) return
+        if (!result.audit) throw new Error('The helper did not return an audit report.')
+        const audit = result.audit
+        reportCriticalVulnerabilities(project, audit)
+        next = { ...next, projects: next.projects.map(item => item.id === project.id ? { ...item, audit } : item) }
+        report?.({ phase: 'Saving the fresh vulnerability report' })
+        cached = await persist(next, false)
+      } catch (error) {
+        failures.push(`The dependency update completed, but the vulnerability recheck failed: ${error instanceof Error ? error.message : 'Scan failed.'} Scan again to verify the result.`)
+      }
+    }
+    if (!current()) return
+    if (!cached) failures.push('Results could not be saved in this browser.')
+    if (failures.length) setNotice({ text: failures.join(' '), error: true })
+    else if (fixing) setNotice({ text: `Compatible dependency update completed for ${project.name}. Vulnerabilities were rescanned; review the current findings.` })
+    else if (packageUpdate) setNotice({ text: packageUpdate.packages.length ? `Updated ${packageUpdate.packages.length} packages in ${project.name}.` : `No eligible ${updateLevel} updates found for ${project.name}.` })
+  }
+
   async function action(project: RepoProject, name: string, body: unknown = {}) {
     if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
@@ -244,11 +304,12 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     const updateLevel = name === 'update-minor' ? 'minor' : name === 'update-patches' ? 'patch' : undefined
     const version = ++workspaceVersion.current
     setBusy(`${project.id}:${name}`)
-    const titles: Record<string, string> = { audit: 'Scanning vulnerabilities', outdated: 'Checking outdated packages', unused: 'Scanning unused packages', 'react-doctor': 'Running React Doctor', lighthouse: 'Running Lighthouse', screenshot: 'Capturing preview', storage: 'Measuring disk usage' }
+    const titles: Record<string, string> = { audit: 'Scanning vulnerabilities', outdated: 'Checking outdated packages', unused: 'Scanning unused packages', 'react-doctor': 'Running React Doctor', lighthouse: 'Running Lighthouse', screenshot: 'Capturing preview', storage: 'Measuring disk usage', 'fix-vulnerability': 'Fixing vulnerability' }
     const scan = titles[name] ? scans.begin(titles[name], () => version === workspaceVersion.current, project) : undefined
     try {
+      if (updateLevel || name === 'fix-vulnerability') { await changePackages(project, name, body, updateLevel, version, scan?.report); return }
       if (name === 'logs') { const result = await api<{ logs: string }>(`/projects/${encodeURIComponent(project.id)}/logs`); setLogs(result.logs || 'No output yet. Start the dev server to see its logs.'); return }
-      const result = await projectAction<Partial<RepoProject>>(project.id, updateLevel ? 'update-packages' : name, updateLevel ? { level: updateLevel } : body, scan?.report)
+      const result = await projectAction<Partial<RepoProject>>(project.id, name, body, scan?.report)
       if (name === 'screenshot' && result.screenshot) { scan?.report({ phase: 'Saving preview' }); result.screenshot = await cachePreview(result.screenshot) }
       if (version !== workspaceVersion.current) return
       if (name === 'lighthouse' && !result.lighthouse) throw new Error('The helper did not return a Lighthouse report.')
@@ -267,19 +328,10 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       if (name === 'audit' && cached) setNotice({ text: `Package audit completed for ${project.name}.` })
       if (name === 'react-doctor' && cached) setNotice({ text: `React Doctor scan completed for ${project.name}${result.reactDoctor?.warning || result.reactDoctor?.score === null ? ' with limited results. Open the React Doctor tab for details.' : '.'}` })
       if (name === 'lighthouse' && cached) setNotice({ text: `Lighthouse scan completed for ${project.name}${result.lighthouse?.warnings.length || result.lighthouse?.categories.length !== 4 || result.lighthouse?.categories.some(category => category.score === null) ? ' with limited results. Open the Lighthouse tab for details.' : '.'}` })
-      if (updateLevel && result.packageUpdate) setNotice({ text: result.packageUpdate.packages.length ? `Updated ${result.packageUpdate.packages.length} packages in ${project.name}.` : `No eligible ${updateLevel} updates found for ${project.name}.` })
       if (name === 'open') setNotice({ text: 'Open request sent to your computer.' })
       if (name === 'run-script') setNotice({ text: 'Script sent to your terminal. Follow its progress and stop it there.' })
     } catch (error) { if (version === workspaceVersion.current) setNotice({ text: error instanceof Error ? error.message : 'The action could not be completed.', error: true }) }
     finally {
-      if (updateLevel && workspace.rootPath && version === workspaceVersion.current) {
-        const repositoryId = packageWorkspaceId(project)
-        const cleared = { ...workspace, projects: workspace.projects.map(item => packageWorkspaceId(item) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, reactDoctor: undefined, lighthouse: undefined, storage: undefined } : item) }
-        try {
-          const refreshed = await scanWithHelper(workspace.rootPath, scan?.report)
-          if (version === workspaceVersion.current) await persist(preservePreviews({ ...refreshed, mode: 'helper' }, cleared), false)
-        } catch { if (version === workspaceVersion.current) { await persist(cleared, false); setNotice({ text: 'Package action finished, but metadata could not be refreshed. Resync before taking another package action.', error: true }) } }
-      }
       scan?.finish()
       if (version === workspaceVersion.current) setBusy('')
     }

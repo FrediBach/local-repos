@@ -14,6 +14,7 @@ import * as packageOutdated from './package-outdated'
 import * as packageUnused from './package-unused'
 import * as reactDoctor from './react-doctor'
 import * as packageUpdate from './package-update'
+import * as packageAuditFix from './package-audit-fix'
 import * as projectStorage from './project-storage'
 import * as projectScripts from './project-scripts'
 
@@ -323,6 +324,86 @@ describe('local helper API security', () => {
 })
 
 describe('project storage and package actions', () => {
+  it('validates registered fix requests and retains local-only API protections', async () => {
+    const project = await createProject()
+    const endpoint = `/api/projects/${project.id}/fix-vulnerability`
+    const finding = { name: 'fixture-package', title: 'Fixture advisory', range: '<1.0.1' }
+    expect((await post('/api/projects/unknown/fix-vulnerability', finding)).status).toBe(404)
+    expect((await post(endpoint, {})).status).toBe(400)
+    expect((await post(endpoint, finding, { Origin: 'https://untrusted.example' })).status).toBe(403)
+    expect((await post(endpoint, finding, { 'X-Local-Repos': '' })).status).toBe(403)
+    const packageUpdate = { level: 'minor' as const, packages: [{ name: finding.name, from: '1.0.0', to: '1.0.1' }], updatedAt: auditResult.scannedAt, skipped: [] }
+    const fix = vi.spyOn(packageAuditFix, 'fixAuditFinding').mockResolvedValue(packageUpdate)
+    const response = await post(endpoint, finding)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ packageUpdate })
+    expect(fix).toHaveBeenCalledExactlyOnceWith(helper.registry.lookup(project.id), finding)
+  })
+
+  it('reserves fixes before asynchronous validation and blocks related actions until mutation cleanup finishes', async () => {
+    await mkdir(path.join(directory, 'apps/member'), { recursive: true })
+    await writeFile(path.join(directory, 'package.json'), '{"name":"root","workspaces":["apps/*"]}')
+    await writeFile(path.join(directory, 'apps/member/package.json'), '{"name":"member"}')
+    const projects = (await (await post('/api/scan', { path: directory })).json()).projects as RepoProject[]
+    const root = projects.find(project => project.name === 'root')!
+    const member = projects.find(project => project.name === 'member')!
+    for (const project of projects) {
+      const saved = helper.registry.lookup(project.id).project
+      saved.audit = auditResult
+      saved.outdated = outdatedResult
+      saved.unused = unusedResult
+      saved.reactDoctor = reactDoctorResult
+      saved.storage = storageResult
+    }
+    const update = { level: 'minor' as const, packages: [{ name: 'fixture-package', from: '1.0.0', to: '1.0.1' }], updatedAt: auditResult.scannedAt, skipped: [] }
+    let finish!: (value: typeof update) => void
+    const fix = vi.spyOn(packageAuditFix, 'fixAuditFinding').mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const fixing = helper.runtime.fixVulnerability(member.id, { name: 'fixture-package', title: 'Fixture advisory' })
+    await expect(helper.runtime.start(root.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.audit(root.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.screenshot(root.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.lighthouse(root.id)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.deleteNodeModules(root.id, true)).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.updatePackages(root.id, 'patch')).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.fixVulnerability(root.id, {})).rejects.toMatchObject({ status: 409 })
+    await vi.waitFor(() => expect(fix).toHaveBeenCalledOnce())
+    finish(update)
+    expect(await fixing).toEqual(update)
+    for (const project of projects) {
+      const saved = helper.registry.lookup(project.id).project
+      expect(saved.audit).toBeUndefined()
+      expect(saved.outdated).toBeUndefined()
+      expect(saved.unused).toBeUndefined()
+      expect(saved.reactDoctor).toBeUndefined()
+      expect(saved.storage).toBeUndefined()
+    }
+    vi.spyOn(packageAudit, 'auditProject').mockResolvedValueOnce(auditResult)
+    expect(await helper.runtime.audit(root.id)).toEqual(auditResult)
+  })
+
+  it('invalidates reports and refreshes dependency metadata after a partially failed fix, then permits retries', async () => {
+    const project = await createProject()
+    const entry = helper.registry.lookup(project.id)
+    entry.project.audit = auditResult
+    entry.project.outdated = outdatedResult
+    entry.project.unused = unusedResult
+    entry.project.reactDoctor = reactDoctorResult
+    entry.project.storage = storageResult
+    const fix = vi.spyOn(packageAuditFix, 'fixAuditFinding').mockImplementationOnce(async () => {
+      await writeFile(path.join(entry.directory, 'package.json'), '{"name":"fixture","dependencies":{"fixture-package":"1.0.1"}}')
+      throw new HelperError('Install partially failed.', 422)
+    })
+    await expect(helper.runtime.fixVulnerability(project.id, { name: 'fixture-package', title: 'Fixture advisory' })).rejects.toThrow('Install partially failed.')
+    expect(entry.project.audit).toBeUndefined()
+    expect(entry.project.outdated).toBeUndefined()
+    expect(entry.project.unused).toBeUndefined()
+    expect(entry.project.reactDoctor).toBeUndefined()
+    expect(entry.project.storage).toBeUndefined()
+    expect(entry.project.dependencies).toEqual([{ name: 'fixture-package', version: '1.0.1', kind: 'dependencies' }])
+    fix.mockResolvedValueOnce({ level: 'minor', packages: [], updatedAt: auditResult.scannedAt, skipped: [] })
+    expect((await post(`/api/projects/${project.id}/fix-vulnerability`, { name: 'fixture-package', title: 'Fixture advisory' })).status).toBe(200)
+  })
+
   it('validates update levels and blocks sibling maintenance until an update completes', async () => {
     await mkdir(path.join(directory, 'apps/web'), { recursive: true })
     await mkdir(path.join(directory, 'apps/admin'), { recursive: true })
@@ -345,6 +426,7 @@ describe('project storage and package actions', () => {
     await expect(helper.runtime.reactDoctor(admin.id)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.deleteNodeModules(admin.id, true)).rejects.toMatchObject({ status: 409 })
     await expect(helper.runtime.updatePackages(admin.id, 'minor')).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.fixVulnerability(admin.id, { name: 'alpha', title: 'Advisory' })).rejects.toMatchObject({ status: 409 })
     finish(updateResult)
     expect(await updating).toEqual(updateResult)
     expect(helper.registry.lookup(web.id).project.packageUpdate).toEqual(updateResult)
@@ -481,7 +563,7 @@ describe('project storage and package actions', () => {
   it('rejects unknown ids for every maintenance action', async () => {
     const audit = vi.spyOn(packageAudit, 'auditProject').mockResolvedValue(auditResult)
     const outdated = vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
-    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated', 'unused', 'react-doctor', 'update-packages']) {
+    for (const action of ['storage', 'delete-node-modules', 'audit', 'outdated', 'unused', 'react-doctor', 'update-packages', 'fix-vulnerability']) {
       expect((await post(`/api/projects/unknown/${action}`, { confirm: true })).status).toBe(404)
     }
     expect(audit).not.toHaveBeenCalled()

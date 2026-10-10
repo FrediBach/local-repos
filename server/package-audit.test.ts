@@ -144,7 +144,7 @@ describe('package auditing', () => {
     const runner = runnerFor(npmReport, 1)
     const report = await auditProject(project, runner)
     expect(report).toMatchObject({ manager: 'npm', counts: { ...zero, high: 2 } })
-    expect(report.findings).toContainEqual(expect.objectContaining({ name: 'vulnerable-package', direct: true, severity: 'high', fixAvailable: true, range: '<2.0.0' }))
+    expect(report.findings).toContainEqual(expect.objectContaining({ name: 'vulnerable-package', direct: true, severity: 'high', fixAvailable: true, fixTarget: { name: 'vulnerable-package', version: '2.0.0' }, range: '<2.0.0' }))
     expect(report.findings).toContainEqual(expect.objectContaining({ name: 'parent-package', title: 'Depends on a vulnerable package', fixAvailable: false }))
     expect(runner).toHaveBeenCalledWith('npm', ['audit', '--json', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer'], expect.objectContaining({
       cwd: directory, shell: false, timeout: 60_000, maxBuffer: 8 * 1024 * 1024,
@@ -155,6 +155,34 @@ describe('package auditing', () => {
 
   it('accepts a verified empty npm report and npm-shrinkwrap', async () => {
     expect(await auditProject(await entry('npm', 'npm-shrinkwrap.json'), runnerFor(cleanReport))).toMatchObject({ counts: zero, findings: [] })
+  })
+
+  it('preserves the actual npm parent fix target and its major-version indicator', async () => {
+    const fixAvailable = { name: '@scope/direct-parent', version: '3.1.0', isSemVerMajor: true }
+    const report = { ...npmReport, vulnerabilities: { ...npmReport.vulnerabilities, 'vulnerable-package': { ...npmReport.vulnerabilities['vulnerable-package'], isDirect: false, fixAvailable } } }
+    const result = await auditProject(await entry(), runnerFor(report, 1))
+    expect(result.findings.find(finding => finding.name === 'vulnerable-package')).toMatchObject({ direct: false, fixAvailable: true, fixTarget: fixAvailable })
+  })
+
+  it.each([
+    {}, { name: '--global', version: '1.2.3' }, { name: 'package', version: 'latest' },
+    { name: 'package', version: '^1.2.3' }, { name: 'package', version: '1.2.3', isSemVerMajor: 'false' },
+  ])('does not advertise malformed npm remediation metadata (%j)', async fixAvailable => {
+    const report = { ...npmReport, vulnerabilities: { ...npmReport.vulnerabilities, 'vulnerable-package': { ...npmReport.vulnerabilities['vulnerable-package'], fixAvailable } } }
+    const result = await auditProject(await entry(), runnerFor(report, 1))
+    const finding = result.findings.find(finding => finding.name === 'vulnerable-package')
+    expect(finding?.fixAvailable).toBeUndefined()
+    expect(finding?.fixTarget).toBeUndefined()
+  })
+
+  it('preserves advisory patched ranges and leaves absent fix details unknown', async () => {
+    const report = { advisories: { 123: advisory, 456: { ...advisory, module_name: 'unknown-fix', patched_versions: undefined } }, metadata: { vulnerabilities: { ...zero, high: 2 } } }
+    const result = await auditProject(await entry('pnpm'), runnerFor(report, 1))
+    expect(result.findings.find(finding => finding.name === 'vulnerable-package')).toMatchObject({ fixAvailable: true, patchedRange: '>=2.0.0' })
+    const unknown = result.findings.find(finding => finding.name === 'unknown-fix')
+    expect(unknown?.fixAvailable).toBeUndefined()
+    expect(unknown?.patchedRange).toBeUndefined()
+    expect(unknown?.fixTarget).toBeUndefined()
   })
 
   it('parses legacy pnpm advisory reports including unfixable findings', async () => {
