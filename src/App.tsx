@@ -7,6 +7,7 @@ import { WorkspaceWatcherStatus } from '@/components/workspace-watcher-status'
 import { WorkspaceNotice } from '@/components/workspace-notice'
 import { WorkspaceSidebar } from '@/components/workspace-sidebar'
 import { WorkspaceToolbar } from '@/components/workspace-toolbar'
+import { WorkspaceReportNote } from '@/components/workspace-report-note'
 import { ProjectSearchToolbar } from '@/components/project-search-toolbar'
 import { ProjectDetailDialog } from '@/components/project-detail-dialog'
 import type { ProjectTab } from '@/components/project-tabs'
@@ -356,7 +357,7 @@ function WorkspaceApp() {
       <div className="page-content">
         {helperState.operations.length > 0 && <p role="status">Helper work: {helperState.operations.map(operation => operation.progress?.phase ?? operation.kind).join(', ')}</p>}
         {helperState.error && <p role="status">{helperState.error}</p>}
-        {workspace?.projects.some(project => Object.values(project.reportState ?? {}).some(state => state?.validity === 'unknown')) && <p role="status">Some dated reports are cached snapshots whose freshness is unknown after reconnecting.</p>}
+        {page !== 'projects' && <WorkspaceReportNote workspace={workspace} />}
         {activeScanProgress && <ScanProgressPanel progress={activeScanProgress} />}
         <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
           onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />

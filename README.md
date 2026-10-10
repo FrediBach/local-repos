@@ -573,7 +573,10 @@ Visible helper-connected browser tabs reconcile reports and externally active
 work every three seconds and on focus. Development-server starts, stops, and
 unexpected exits also update that shared revision. After a helper restart, the browser
 re-registers its connected directory, including in manual watcher mode. Successful
-cached reports remain visible with unknown freshness; explicit helper invalidations
+cached reports remain visible with unknown freshness, with a compact **Cached reports**
+note at the top right beside the directory sync status (below it on narrow screens).
+Rerun the relevant scans to refresh those
+reports; explicit helper invalidations
 remove stale reports from the browser cache. Browser-directory and hosted modes
 are unaffected.
 

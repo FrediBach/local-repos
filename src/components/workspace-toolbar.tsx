@@ -1,6 +1,7 @@
 import { remoteActivityProjects } from '@/lib/remote-activity'
 import { Folder, Gauge, GitPullRequest, LoaderCircle, Monitor, Package, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react'
 import { Button } from './ui/button'
+import { WorkspaceReportNote } from './workspace-report-note'
 import { relativeTime } from '@/lib/relative-time'
 import { isReactProject } from '@/lib/react-doctor'
 import { isLighthouseProject } from '@/lib/lighthouse'
@@ -24,8 +25,11 @@ export function WorkspaceToolbar({ workspace, projectCount, busy, onResync, scan
   const workspacePath = workspace?.rootPath ?? (workspace ? workspace.rootName : '~/projects / demo workspace')
   return <section className="workspace-toolbar" aria-label="Workspace controls">
           <div className="workspace-details">
+            <div className="workspace-identity">
             <div className="workspace-directory"><Folder size={15} /><span className="workspace-path" title={workspacePath}>{workspacePath}</span>{isDemo && <span className="sample-badge">SAMPLE</span>}</div>
             <div className="workspace-status"><span>{projectCount} {projectCount === 1 ? 'project' : 'projects'}</span>{workspace && <><span aria-hidden="true">·</span><button onClick={onResync} disabled={!!busy} className="sync-button" title="Resync directory" aria-busy={busy === 'sync'}><RefreshCw size={13} className={busy === 'sync' ? 'spinning' : ''} /><span>{busy === 'sync' ? 'Syncing…' : `Synced ${relativeTime(workspace.syncedAt).toLowerCase()}`}</span></button></>}</div>
+            </div>
+            <WorkspaceReportNote workspace={workspace} />
           </div>
           <WorkspaceActions workspace={workspace} projectCount={projectCount} busy={busy} scanAllRemoteActivity={scanAllRemoteActivity} scanAllOutdated={scanAllOutdated} scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} scanAllLighthouse={scanAllLighthouse} captureAllPreviews={captureAllPreviews} />
         </section>
