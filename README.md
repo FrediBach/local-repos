@@ -405,6 +405,42 @@ The app uses only `/`; projects and filters are local UI state. There is deliber
 
 The manifest includes a stable app ID, root scope, language, categories, theme colors, and install icons. The 192px and 512px icons have an opaque background, with the mark inside the maskable safe area; a separate 180px Apple touch icon and 32px ICO cover other launchers. To regenerate the checked-in images from `public/favicon.svg` and `design/og-image.svg`, run `npm run assets:generate`. The social image uses locally installed Helvetica Neue, Helvetica, or Arial fonts; regenerate it on a machine with one of those fonts. Ordinary builds use the committed PNGs and do not need a font or image-rendering step.
 
+## Public issues and pull requests
+
+Use **Check issues & PRs** above the project list to scan all known public
+GitHub.com and GitLab.com repositories. Each project's action menu also has
+**Check issues and pull requests**. These checks require the local helper and
+use the project's Git origin; GitLab subgroups and SSH origins are supported.
+Private repositories, self-hosted servers and other providers are not supported.
+No tokens, cookies or local Git/CLI credentials are used.
+
+Public repositories still have API limits: GitHub allows **60 unauthenticated
+requests per hour per public IP address**, shared with other apps and computers
+using that IP. Each results page uses a request. A large workspace or frequent
+rescans can exhaust this allowance. Rate-limit errors show the provider's reset
+or retry time in UTC; the helper pauses further issue/PR requests to that provider
+until then. GitLab checks can continue during a GitHub cooldown. Restarting the
+helper clears its local cooldown but does not reset the provider's quota.
+See [GitHub's rate-limit documentation](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+
+Project cards show linked **issues** and **PRs** (or GitLab **MRs**) count badges,
+including zero after a successful check. Hover or focus a badge to see the last
+successful check time. Failed or rate-limited checks keep previous counts and
+report the failure. Repositories beyond the bounded scan limit (20 pages of 100
+items per collection) keep their previous results instead of showing partial
+counts. Packages sharing a repository are checked once in a workspace scan.
+
+For automatic checks, enable **Settings → Watcher → Public issues and pull
+requests** and choose a non-manual scan mode. Periodic mode uses its configured
+interval. Package-change mode also checks remote activity at that interval, with
+a five-minute minimum, even when local files have not changed. This requires the
+app to remain open and online; the setting defaults off.
+
+The first successful check establishes the baseline. Later checks show an in-app
+notice for newly open issues or pull/merge requests, even when the total count
+has not increased. Reopened items also qualify. Items opened and closed between
+checks are not detected. The saved baseline survives app and helper restarts.
+
 ## Optional MCP access
 
 The in-app Help dialog includes **Connect an AI assistant with MCP**, a step-by-step

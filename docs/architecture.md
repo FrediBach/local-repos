@@ -104,6 +104,10 @@ these distinctions for client and helper coordination.
 - The helper is a local capability boundary: loopback binding, host/origin
   checks, a custom request header, registered IDs, canonical path validation,
   and bounded subprocess execution are part of its design.
+- Public issue/PR checks are separate helper actions against GitHub.com and
+  GitLab.com APIs, with no credentials or redirects. Dated open-item snapshots
+  live in the browser workspace cache and helper revisioned state; comparison
+  notices use item identities rather than count differences.
 - Git summaries and push checks inspect locally available history without
   fetching or pushing. Package registry checks and remote preview capture can
   make network requests. Explicit script and dev-server actions run project

@@ -1,0 +1,4 @@
+.project-remote-activity { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.project-remote-activity a { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; color: var(--muted-foreground); font-size: 0.8125rem; text-decoration: none; }
+.project-remote-activity a:hover { color: var(--foreground); background: var(--hover); }
+.project-remote-activity a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

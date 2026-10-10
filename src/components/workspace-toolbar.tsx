@@ -1,4 +1,5 @@
-import { Folder, Gauge, LoaderCircle, Monitor, Package, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react'
+import { remoteActivityProjects } from '@/lib/remote-activity'
+import { Folder, Gauge, GitPullRequest, LoaderCircle, Monitor, Package, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react'
 import { Button } from './ui/button'
 import { relativeTime } from '@/lib/relative-time'
 import { isReactProject } from '@/lib/react-doctor'
@@ -10,6 +11,7 @@ interface Props {
   projectCount: number
   busy: string
   onResync: () => void
+  scanAllRemoteActivity: () => void
   scanAllOutdated: () => void
   scanAllVulnerabilities: () => void
   scanAllReactDoctor: () => void
@@ -17,7 +19,7 @@ interface Props {
   captureAllPreviews: () => void
 }
 
-export function WorkspaceToolbar({ workspace, projectCount, busy, onResync, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews }: Props) {
+export function WorkspaceToolbar({ workspace, projectCount, busy, onResync, scanAllRemoteActivity, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews }: Props) {
   const isDemo = !workspace
   const workspacePath = workspace?.rootPath ?? (workspace ? workspace.rootName : '~/projects / demo workspace')
   return <section className="workspace-toolbar" aria-label="Workspace controls">
@@ -25,13 +27,14 @@ export function WorkspaceToolbar({ workspace, projectCount, busy, onResync, scan
             <div className="workspace-directory"><Folder size={15} /><span className="workspace-path" title={workspacePath}>{workspacePath}</span>{isDemo && <span className="sample-badge">SAMPLE</span>}</div>
             <div className="workspace-status"><span>{projectCount} {projectCount === 1 ? 'project' : 'projects'}</span>{workspace && <><span aria-hidden="true">·</span><button onClick={onResync} disabled={!!busy} className="sync-button" title="Resync directory" aria-busy={busy === 'sync'}><RefreshCw size={13} className={busy === 'sync' ? 'spinning' : ''} /><span>{busy === 'sync' ? 'Syncing…' : `Synced ${relativeTime(workspace.syncedAt).toLowerCase()}`}</span></button></>}</div>
           </div>
-          <WorkspaceActions workspace={workspace} projectCount={projectCount} busy={busy} scanAllOutdated={scanAllOutdated} scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} scanAllLighthouse={scanAllLighthouse} captureAllPreviews={captureAllPreviews} />
+          <WorkspaceActions workspace={workspace} projectCount={projectCount} busy={busy} scanAllRemoteActivity={scanAllRemoteActivity} scanAllOutdated={scanAllOutdated} scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} scanAllLighthouse={scanAllLighthouse} captureAllPreviews={captureAllPreviews} />
         </section>
 }
 
-function WorkspaceActions({ workspace, projectCount, busy, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews }: Omit<Props, 'onResync'>) {
+function WorkspaceActions({ workspace, projectCount, busy, scanAllRemoteActivity, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews }: Omit<Props, 'onResync'>) {
   const batchDisabled = !!busy || !workspace || !projectCount
   return <div className="workspace-actions">
+            <Button variant="outline" size="sm" disabled={batchDisabled || !remoteActivityProjects(workspace?.projects ?? []).length} onClick={scanAllRemoteActivity} aria-busy={busy === 'batch-remote-activity'} title="Check public GitHub and GitLab issues and pull requests for all repositories. Requires the local helper.">{busy === 'batch-remote-activity' ? <LoaderCircle size={16} className="spinning" /> : <GitPullRequest size={16} />}Check issues & PRs</Button>
             <Button variant="outline" size="sm" disabled={batchDisabled} onClick={scanAllOutdated} aria-busy={busy === 'batch-outdated'} title={workspace?.mode === 'browser' ? 'Connect the local helper to scan outdated packages' : `Check outdated packages in all ${projectCount} projects, including those hidden by filters. Contacts their configured registries.`}>{busy === 'batch-outdated' ? <LoaderCircle size={16} className="spinning" /> : <Package size={16} />}Scan outdated packages</Button>
             <Button variant="outline" size="sm" disabled={batchDisabled} onClick={scanAllVulnerabilities} aria-busy={busy === 'batch-audit'} title={workspace?.mode === 'browser' ? 'Connect the local helper to scan vulnerabilities' : `Audit all ${projectCount} projects, including those hidden by filters. Package names and versions are sent to their configured registries.`}>{busy === 'batch-audit' ? <LoaderCircle size={16} className="spinning" /> : <ShieldCheck size={16} />}Scan vulnerabilities</Button>
             <ReactDoctorScanButton workspace={workspace} busy={busy} disabled={batchDisabled} onScan={scanAllReactDoctor} />

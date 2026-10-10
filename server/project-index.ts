@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { RepoProject } from '../src/types'
+import type { HelperReportKind, RepoProject } from '../src/types'
 import { packageMatches } from '../src/lib/packages'
 import { discoverProjectScripts } from '../src/lib/project-scripts'
 import { projectTodos } from '../src/lib/project-todos'
@@ -81,7 +81,7 @@ export class ProjectIndex {
     const next = start + items.length
     return { items, nextCursor: next < values.length ? this.cursors.encode(binding, next) : null, total: values.length, coverage }
   }
-  reportState(project: RepoProject, kind: s.ReportKind) {
+  reportState(project: RepoProject, kind: HelperReportKind) {
     const key = `${project.id}:${kind}`
     let state = this.reports.get(key)
     if (!state) { state = { value: project[kind], revision: this.application.revision }; this.reports.set(key, state) }
@@ -93,7 +93,7 @@ export class ProjectIndex {
     }
     return state
   }
-  attempt(project: RepoProject, kind: s.ReportKind, status: 'running' | 'succeeded' | 'failed', operationId: string) {
+  attempt(project: RepoProject, kind: HelperReportKind, status: 'running' | 'succeeded' | 'failed', operationId: string) {
     this.reportState(project, kind).lastAttempt = { operationId, status, at: new Date().toISOString(), ...(status === 'failed' ? { errorCode: 'OPERATION_FAILED' } : {}) }
     this.application.revision++
   }

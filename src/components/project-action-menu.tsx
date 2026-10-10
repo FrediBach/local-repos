@@ -1,4 +1,4 @@
-import { Code2, Ellipsis, FolderGit2, FolderOpen, Gauge, GitBranch, HardDrive, Monitor, PackageSearch, Play, ShieldCheck, Square, Star, Stethoscope, Tag, Trash2 } from 'lucide-react'
+import { Code2, Ellipsis, FolderGit2, FolderOpen, Gauge, GitBranch, GitPullRequest, HardDrive, Monitor, PackageSearch, Play, ShieldCheck, Square, Star, Stethoscope, Tag, Trash2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { useSettings } from '@/hooks/use-settings'
 import { desktopAppName } from '@/lib/desktop-apps'
@@ -16,7 +16,7 @@ interface Props {
   onAction: (project: RepoProject, action: string, body?: unknown) => void
 }
 
-const scanIcons = { audit: ShieldCheck, outdated: PackageSearch, unused: Trash2, 'react-doctor': Stethoscope, lighthouse: Gauge, storage: HardDrive }
+const scanIcons = { 'remote-activity': GitPullRequest, audit: ShieldCheck, outdated: PackageSearch, unused: Trash2, 'react-doctor': Stethoscope, lighthouse: Gauge, storage: HardDrive }
 const previewSources: { source: PreviewMode; label: string }[] = [
   { source: 'auto', label: 'Automatic' },
   { source: 'local', label: 'Local project' },

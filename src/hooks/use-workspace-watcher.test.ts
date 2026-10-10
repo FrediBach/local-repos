@@ -195,3 +195,16 @@ describe('workspace watcher scheduling', () => {
     expect(props.run).toHaveBeenCalledWith(['root'], expect.any(Function), expect.any(Function))
   })
 })
+
+
+it('checks remote activity on a bounded schedule even when package fingerprints do not change', async () => {
+  const props = { ...options(), settings: { ...defaultSettings, watcherMode: 'changes' as const, watcherRemoteActivity: true, watcherIntervalMinutes: 5 } }
+  api.mockResolvedValue({ fingerprints: { root: 'original' } })
+  renderHook(useWorkspaceWatcher, { initialProps: props })
+  await advance(0)
+  expect(props.run).toHaveBeenCalledWith([], expect.any(Function), expect.any(Function))
+  await advance(299_999)
+  expect(props.run).toHaveBeenCalledOnce()
+  await advance(1)
+  expect(props.run).toHaveBeenCalledTimes(2)
+})

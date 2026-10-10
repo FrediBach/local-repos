@@ -498,3 +498,43 @@ workspace after any attempted install/removal, including partial failures, then
 refreshes dependency metadata. Browser snapshots expose the same tombstones.
 Active cancellation is stop-after-current; neither cancellation nor failure
 promises rollback. Stale plans fail before mutation and need fresh preparation.
+
+## Public issues and pull requests
+
+`POST /api/projects/:id/remote-activity` runs a separate public API check through
+[`remote-activity.ts`](../server/remote-activity.ts). Metadata discovery remains
+local. It resolves only registered projects through `ProjectRegistry.get()` and
+recognizes GitHub.com and GitLab.com origins, including SSH origins and GitLab
+subgroups. Unknown hosts, enterprise/self-managed hosts and other providers are
+unsupported. Requests use fixed HTTPS API hosts, omit credentials and cookies,
+and reject redirects; local Git/CLI credentials are never read.
+
+GitHub's issue collection includes pull requests, which the service separates.
+GitLab uses distinct issue and merge request collections with `scope=all`.
+Pagination uses locally constructed page numbers, never server-provided URLs.
+A check has a 45-second deadline, 20-page limit per collection (100 items per
+page), and 4 MiB response limit per page. It publishes a report only after all
+collections finish. Inaccessibility, rate limits, malformed responses, timeouts,
+and truncation fail explicitly and preserve prior dated counts.
+
+A runtime-owned `RemoteActivityRateLimits` tracks one cooldown per provider across
+all issue/PR checks, including different repositories and tabs. It uses
+`x-ratelimit-remaining`, `x-ratelimit-reset`, and `Retry-After`, and inspects at most
+16 KiB of an error body to recognize secondary-limit messages without displaying
+upstream content. Confirmed exhaustion returns an explicit reset/retry timestamp
+in UTC and prevents further outbound checks until that time (with a one-second
+margin for header deadlines). Without a usable deadline it waits at least one
+minute. A plain HTTP 403 is reported separately as access denial. Successful
+responses that exhaust the quota remain usable; checks needing more pages fail
+without publishing partial counts. Cooldowns are in-memory, scoped to the helper
+lifetime; restarting does not reset provider-side quotas. The scanner avoids an
+extra empty-page request when provider pagination explicitly signals completion.
+
+The runtime reserves the check before filesystem awaits, coordinates it with
+metadata scans and related-package maintenance, coalesces same-project requests,
+and aborts owned network requests during shutdown. The browser report participates
+in revisioned workspace snapshots; package report invalidations exclude remote
+activity. MCP analysis/report schemas are unchanged and do not expose this new
+check. The public API contracts are documented by
+[GitHub](https://docs.github.com/en/rest/issues/issues) and
+[GitLab](https://docs.gitlab.com/api/issues/).

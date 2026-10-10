@@ -95,7 +95,7 @@ export class MaintenancePlans {
       }
       const attempt = () => {
         markAttempted()
-        result.invalidatedReports = record.plan.affectedProjectIds.map(projectId => ({ projectId, kinds: [...reportKinds] }))
+        result.invalidatedReports = record.plan.affectedProjectIds.map(projectId => ({ projectId, kinds: reportKinds.filter(kind => kind !== 'remoteActivity') }))
       }
       try {
         if (record.update) {

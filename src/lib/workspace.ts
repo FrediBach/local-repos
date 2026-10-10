@@ -1,3 +1,4 @@
+import { remoteRepository } from './remote-activity'
 import { reportKinds, type RepoProject, type Workspace } from '@/types'
 
 /** Older scans only grouped declared workspaces, so an omitted flag retains that meaning. */
@@ -33,6 +34,7 @@ export function preservePreviews(next: Workspace, previous?: Workspace): Workspa
         if (incoming) merged.reportState![kind] = { ...incoming, validity: 'unknown' }
       }
     }
+    if (merged.remoteActivity?.repository !== remoteRepository(project)?.url) merged.remoteActivity = undefined
     if (!Object.keys(merged.reportState!).length) delete merged.reportState
     if (cached.screenshot?.startsWith('data:image/png;base64,') && (!project.preview || project.preview.capturedAt === cached.preview?.capturedAt)) {
       merged.screenshot = cached.screenshot
@@ -61,6 +63,7 @@ export function protectReportRevisions(next: Workspace, previous?: Workspace): W
         merged.reportState = { ...merged.reportState, [kind]: { ...incoming, validity: 'unknown' } }
       }
     }
+    if (merged.remoteActivity?.repository !== remoteRepository(project)?.url) merged.remoteActivity = undefined
     return merged
   }) }
 }

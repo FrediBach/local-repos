@@ -197,7 +197,15 @@ export interface LighthouseReport {
   warnings: string[]
 }
 
-export const reportKinds = ['storage', 'audit', 'outdated', 'unused', 'reactDoctor', 'lighthouse'] as const
+export interface RemoteActivityReport {
+  repository: string
+  scannedAt: string
+  /** Complete open-item snapshots. GitHub issues exclude pull requests. */
+  issues: number[]
+  pullRequests: number[]
+}
+
+export const reportKinds = ['storage', 'audit', 'outdated', 'unused', 'reactDoctor', 'lighthouse', 'remoteActivity'] as const
 export type HelperReportKind = typeof reportKinds[number]
 export interface HelperReportState {
   helperInstanceId: string
@@ -263,6 +271,7 @@ export interface RepoProject {
   unused?: PackageUnused
   reactDoctor?: ReactDoctorReport
   lighthouse?: LighthouseReport
+  remoteActivity?: RemoteActivityReport
   packageUpdate?: PackageUpdate
   git?: {
     branch?: string

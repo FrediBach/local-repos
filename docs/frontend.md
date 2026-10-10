@@ -381,3 +381,32 @@ Process lifecycle changes (pending start, readiness, stop, failure, and unexpect
 exit) advance the helper revision too. The same reconciliation updates project
 server buttons and running filters for work started by MCP, including when the
 browser previously knew no server was running. Process logs remain on demand.
+
+## Public repository activity
+
+`remoteActivity` is an optional dated report containing a canonical repository URL
+and complete open issue / pull request ID lists. Older caches omit it. The project
+card shows linked counts (including known zeroes), with the last successful check
+in each badge's accessible label and tooltip. A changed Git origin clears the
+old report; metadata rescans, helper restarts and failed checks preserve matching
+successful reports. Package mutations do not invalidate remote activity.
+
+The project menu and command search offer **Check issues and pull requests** for
+supported origins. The workspace toolbar's **Check issues & PRs** uses
+[`use-remote-activity-batch.ts`](../src/hooks/use-remote-activity-batch.ts), with
+sequential requests, stop-after-current, generation guards and cache/failure
+reporting. Projects sharing a canonical origin are checked once and receive the
+same result. The helper remains required for these actions.
+
+The optional **Public issues and pull requests** watcher setting defaults off.
+Periodic mode includes these checks; package-change mode also checks remote
+activity at the configured periodic interval (at least five minutes), even with
+unchanged local fingerprints. These scans use the existing action hook, global
+busy state and helper reconciliation. They run only while the app is open and
+online. Manual mode makes no automatic requests.
+
+The first successful result establishes a baseline. Later results compare open
+item IDs, so replacing an issue while keeping the same total still produces an
+in-app notice. Reopened items count as newly open. Results are compared per
+repository, with one notice per checked repository, and saved to the existing
+workspace cache. Items opened and closed between checks are not observed.

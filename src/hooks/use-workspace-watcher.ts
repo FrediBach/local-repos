@@ -22,7 +22,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
   const [error, setError] = useState(false)
   const [nextRun, setNextRun] = useState<number>()
   const { workspace, settings, online } = options
-  const { watcherMode: mode, watcherIntervalMinutes: minutes, watcherPollSeconds: seconds, watcherAudit, watcherOutdated, watcherStorage, watcherReactDoctor, watcherLighthouse } = settings
+  const { watcherMode: mode, watcherIntervalMinutes: minutes, watcherPollSeconds: seconds, watcherAudit, watcherOutdated, watcherStorage, watcherReactDoctor, watcherLighthouse, watcherRemoteActivity } = settings
 
   useEffect(() => {
     // A metadata refresh must not restart the timer or replace its baseline.
@@ -33,6 +33,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
     let active = true
     let timer: ReturnType<typeof setTimeout>
     let baseline = fingerprintsOf(initialWorkspace)
+    let nextRemoteCheck = 0
     const rootPath = initialWorkspace.rootPath
     const delay = mode === 'periodic' ? minutes * 60_000 : seconds * 1000
     const current = () => active
@@ -56,7 +57,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
           if (result.fingerprints) {
             const snapshot = result.fingerprints
             changedIds = [...new Set([...Object.keys(snapshot), ...Object.keys(baseline)])].filter(id => snapshot[id] !== baseline[id])
-            if (!changedIds.length) { setError(false); publish('Watching for package changes'); return }
+            if (!changedIds.length && (!watcherRemoteActivity || Date.now() < nextRemoteCheck)) { setError(false); publish('Watching for package changes'); return }
             // Shared workspaces need sibling checks; other grouped packages are independent.
             const projects = latest.current.workspace!.projects
             const changed = new Set(changedIds)
@@ -72,6 +73,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
         const scanned = await latest.current.run(changedIds, current, publish)
         if (active && scanned) {
           baseline = fingerprintsOf(scanned)
+          nextRemoteCheck = Date.now() + Math.max(5, minutes) * 60_000
           publish(`Last automatic scan ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
         }
       } catch (cause) {
@@ -83,7 +85,7 @@ export function useWorkspaceWatcher(options: WatcherOptions) {
     }
     schedule(mode === 'changes' ? 0 : delay)
     return () => { active = false; clearTimeout(timer) }
-  }, [workspace?.mode, workspace?.rootPath, workspace?.handle, mode, minutes, seconds, watcherAudit, watcherOutdated, watcherStorage, watcherReactDoctor, watcherLighthouse, online])
+  }, [workspace?.mode, workspace?.rootPath, workspace?.handle, mode, minutes, seconds, watcherAudit, watcherOutdated, watcherStorage, watcherReactDoctor, watcherLighthouse, watcherRemoteActivity, online])
 
   return { message: watcherMessage(workspace, mode, minutes, online, status), error, nextRun }
 }

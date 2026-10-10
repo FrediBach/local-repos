@@ -1,3 +1,4 @@
+import { remoteRepository } from './remote-activity'
 import type { RepoProject } from '../types'
 import type { AppSettings } from './settings'
 import { desktopAppName } from './desktop-apps'
@@ -33,6 +34,7 @@ export function commandTemplates(settings: Applications): CommandTemplate[] {
     { id: 'git-client', title: `Open in ${desktopAppName(settings.gitClient)}`, description: 'Open the project in your preferred Git client', keywords: `git client repository branches ${settings.gitClient}` },
     { id: 'scripts', title: 'Run a script', description: 'Choose a project script and launch it in your terminal', keywords: 'scripts command execute launch terminal npm pnpm yarn bun test build lint format storybook scaffold generate' },
     { id: 'audit', title: 'Scan for vulnerabilities', description: 'Run the package vulnerability check again', keywords: 'audit security vulnerability vulnerabilities rerun rescan check scan again' },
+    { id: 'remote-activity', title: 'Check issues and pull requests', description: 'Count open issues and pull or merge requests in public GitHub and GitLab repositories', keywords: 'scan check github gitlab issues pull merge requests pr mr remote activity' },
     { id: 'outdated', title: 'Check outdated packages', description: 'Compare installed packages with available versions', keywords: 'rerun rescan scan outdated dependencies versions latest lag updates' },
     { id: 'unused', title: 'Scan unused packages', description: 'Use Knip to find potentially unused dependencies', keywords: 'rerun rescan knip check unused dependencies dead code' },
     { id: 'react-doctor', title: 'Run React Doctor', description: 'Check React code health, performance, and correctness', keywords: 'rerun rescan scan react doctor diagnostics health errors warnings' },
@@ -67,6 +69,7 @@ export function projectCommands(project: RepoProject, settings: Applications, fa
       case 'audit':
       case 'outdated':
       case 'unused': return project.hasPackageJson === false ? [] : action(template.id)
+      case 'remote-activity': return remoteRepository(project) ? action('remote-activity') : []
       case 'react-doctor': return isReactProject(project) ? action('react-doctor') : []
       case 'lighthouse': return isLighthouseProject(project) ? action('lighthouse') : []
       case 'open-lighthouse': return isLighthouseProject(project) || project.lighthouse ? details('lighthouse') : []

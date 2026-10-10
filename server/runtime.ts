@@ -8,7 +8,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import type { Browser } from 'playwright'
-import type { DevProcessStatus, PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, LighthouseReport, PreviewMode, ProjectStorage, RepoProject, ScanProgressReporter } from '../src/types'
+import type { RemoteActivityReport, DevProcessStatus, PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, LighthouseReport, PreviewMode, ProjectStorage, RepoProject, ScanProgressReporter } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -20,6 +20,7 @@ import { auditProject } from './package-audit'
 import { updateProject } from './package-update'
 import { fixAuditFinding } from './package-audit-fix'
 import { parsePackageJson } from '../src/lib/metadata'
+import { RemoteActivityRateLimits, scanRemoteActivity } from './remote-activity'
 import { outdatedProject } from './package-outdated'
 import { unusedProject } from './package-unused'
 import { reactDoctorProject } from './react-doctor'
@@ -90,6 +91,9 @@ export class ProjectRuntime {
   private readonly captures = new Map<string, ProgressTask<string>>()
   private readonly storageScans = new Map<string, ProgressTask<ProjectStorage>>()
   private readonly audits = new Map<string, ProgressTask<PackageAudit>>()
+  private readonly remoteActivityRateLimits = new RemoteActivityRateLimits()
+  private readonly remoteActivityScans = new Map<string, ProgressTask<RemoteActivityReport>>()
+  private readonly remoteActivityControllers = new Set<AbortController>()
   private readonly outdatedScans = new Map<string, ProgressTask<PackageOutdated>>()
   private readonly unusedScans = new Map<string, ProgressTask<PackageUnused>>()
   private readonly reactDoctorScans = new Map<string, ProgressTask<ReactDoctorReport>>()
@@ -114,19 +118,19 @@ export class ProjectRuntime {
   constructor(private readonly registry: ProjectRegistry, private readonly onInvalidate: (projects: RegisteredProject[], reason: string) => void = () => {}, private readonly onDevChange: () => void = () => {}) {}
 
   reserveMetadataScan(): () => void {
-    if (this.closed || this.metadataScan || this.maintenance.size) throw new HelperError('Wait for the current scan or maintenance operation.', 409)
+    if (this.closed || this.metadataScan || this.maintenance.size || this.remoteActivityScans.size) throw new HelperError('Wait for the current scan or maintenance operation.', 409)
     this.metadataScan = true
     return () => { this.metadataScan = false }
   }
 
   activeWork() {
-    const groups = { preview: this.captures, storage: this.storageScans, audit: this.audits, outdated: this.outdatedScans, unused: this.unusedScans, reactDoctor: this.reactDoctorScans, lighthouse: this.lighthouseScans, start: this.starts, maintenance: this.maintenance }
+    const groups = { remoteActivity: this.remoteActivityScans, preview: this.captures, storage: this.storageScans, audit: this.audits, outdated: this.outdatedScans, unused: this.unusedScans, reactDoctor: this.reactDoctorScans, lighthouse: this.lighthouseScans, start: this.starts, maintenance: this.maintenance }
     return Object.entries(groups).flatMap(([kind, values]) => [...values.keys()].map(id => ({ operationId: `runtime:${kind}:${id}`, kind, projectIds: [id] })))
   }
   scopeBusy(id: string): boolean {
     return this.registry.related(id).some(({ project: { id: key } }) =>
       this.running.has(key) || this.starts.has(key) || this.captures.has(key) || this.storageScans.has(key)
-      || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key)
+      || this.remoteActivityScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key)
       || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key) || this.maintenance.has(key)
       || [...this.stoppingChildren.values()].some(child => child.id === key))
   }
@@ -191,6 +195,24 @@ export class ProjectRuntime {
     this.audits.set(id, promise)
     try { return await followProgress(promise, onProgress) }
     finally { this.audits.delete(id) }
+  }
+
+  async remoteActivity(id: string, onProgress?: ScanProgressReporter): Promise<RemoteActivityReport> {
+    this.available(id)
+    if (this.metadataScan) throw new HelperError('Wait for metadata scanning to finish.', 409)
+    const pending = this.remoteActivityScans.get(id)
+    if (pending) return followProgress(pending, onProgress)
+    const controller = new AbortController()
+    this.remoteActivityControllers.add(controller)
+    const promise = createProgressTask(async report => {
+      const entry = await this.registry.get(id)
+      const result = await scanRemoteActivity(entry.project, fetch, report, controller.signal, this.remoteActivityRateLimits)
+      entry.project.remoteActivity = result
+      return result
+    })
+    this.remoteActivityScans.set(id, promise)
+    try { return await followProgress(promise, onProgress) }
+    finally { this.remoteActivityScans.delete(id); this.remoteActivityControllers.delete(controller) }
   }
 
   async outdated(id: string, onProgress?: ScanProgressReporter): Promise<PackageOutdated> {
@@ -343,7 +365,7 @@ export class ProjectRuntime {
     for (const { project } of related) {
       const key = project.id
       if (this.running.has(key) || this.starts.has(key) || this.captures.has(key)
-        || this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key)
+        || this.storageScans.has(key) || this.remoteActivityScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key)
         || [...this.stoppingChildren.values()].some(child => child.id === key)) {
         throw new HelperError('Stop dev servers and wait for previews and package scans in this repository to finish before updating dependencies.', 409)
       }
@@ -387,7 +409,7 @@ export class ProjectRuntime {
       || [...this.stoppingChildren.values()].some(child => relatedIdSet.has(child.id))) {
       throw new HelperError('Stop the project’s dev server and wait for preview capture and server shutdown to finish before removing dependencies.', 409)
     }
-    if (relatedIds.some(key => this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key))) {
+    if (relatedIds.some(key => this.storageScans.has(key) || this.remoteActivityScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key))) {
       throw new HelperError('Wait for disk usage measurement and package scans to finish before removing dependencies.', 409)
     }
     // Reserve before any filesystem await so a simultaneous start, screenshot,
@@ -741,6 +763,7 @@ export class ProjectRuntime {
 
   async shutdown(): Promise<void> {
     this.closed = true
+    for (const controller of this.remoteActivityControllers) controller.abort()
     for (const controller of this.lighthouseControllers) controller.abort()
     this.keepAlive.clear()
     for (const id of this.starts.keys()) this.setDev(this.registry.lookup(id), { status: 'stopped' })
@@ -766,7 +789,7 @@ export class ProjectRuntime {
     // closed check immediately closes it, and awaiting here prevents orphaning
     // Chromium when the helper's entry point exits the process.
     await Promise.allSettled([...this.captures.values(), ...this.lighthouseScans.values()])
-    await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.unusedScans.values(), ...this.reactDoctorScans.values(), ...this.removals.values(), ...this.updates.values(), ...this.plannedMaintenance])
+    await Promise.allSettled([...this.remoteActivityScans.values(), ...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.unusedScans.values(), ...this.reactDoctorScans.values(), ...this.removals.values(), ...this.updates.values(), ...this.plannedMaintenance])
     if (this.screenshotDirectory) await rm(await this.screenshotDirectory, { recursive: true, force: true }).catch(() => undefined)
   }
 }

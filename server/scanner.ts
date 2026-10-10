@@ -1,3 +1,4 @@
+import { remoteRepository } from '../src/lib/remote-activity'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
@@ -318,8 +319,9 @@ export class ProjectRegistry {
         const outdated = entry.project.outdated ?? previous.project.outdated
         const unused = entry.project.unused ?? previous.project.unused
         const reactDoctor = entry.project.reactDoctor ?? previous.project.reactDoctor
+        const remoteActivity = previous.project.remoteActivity?.repository === remoteRepository(entry.project)?.url ? previous.project.remoteActivity : undefined
         const lighthouse = entry.project.lighthouse ?? previous.project.lighthouse
-        Object.assign(previous.project, entry.project, { monorepo: entry.project.monorepo, workspacePackageCount: entry.project.workspacePackageCount, dev, screenshot, preview, storage, audit, outdated, unused, reactDoctor, lighthouse })
+        Object.assign(previous.project, entry.project, { monorepo: entry.project.monorepo, workspacePackageCount: entry.project.workspacePackageCount, dev, screenshot, preview, storage, audit, outdated, unused, reactDoctor, lighthouse, remoteActivity })
         entry.project = previous.project
       }
       this.projects.set(entry.project.id, entry)

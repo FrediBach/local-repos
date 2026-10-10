@@ -2,12 +2,11 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { ProjectRuntime } from './runtime'
 import { HelperError, ProjectRegistry, scanDirectory, type RegisteredProject } from './scanner'
-import { reportKinds, type RepoProject, type HelperActivity, type WorkspaceState, type ScanProgressReporter } from '../src/types'
+import { reportKinds, type HelperReportKind, type RepoProject, type HelperActivity, type WorkspaceState, type ScanProgressReporter } from '../src/types'
 import { MaintenancePlans } from './mcp/maintenance-plans'
 import { Operations } from './operations'
 import { rootId } from './mcp/policy'
 import { ProjectIndex } from './project-index'
-import type { ReportKind } from './mcp/schemas'
 
 export interface RootSnapshot {
   id: string; directory: string; scannedAt: string; warnings: string[]
@@ -62,7 +61,7 @@ export class HelperApplication {
     this.scans.add(task)
     try { return await task } finally { this.scans.delete(task) }
   }
-  async readReport<T>(projectId: string, kind: ReportKind, run: () => Promise<T>, operationId = `rest_${randomUUID()}`): Promise<T> {
+  async readReport<T>(projectId: string, kind: HelperReportKind, run: () => Promise<T>, operationId = `rest_${randomUUID()}`): Promise<T> {
     const project = this.registry.lookup(projectId).project
     this.index.attempt(project, kind, 'running', operationId)
     try {

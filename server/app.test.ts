@@ -9,6 +9,7 @@ import { devCommand } from './runtime'
 import { desktopApps } from '../src/lib/desktop-apps'
 import * as desktopLaunch from './desktop-apps'
 import type { PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, ProjectStorage, RepoProject, ScanProgressReporter } from '../src/types'
+import * as remoteActivity from './remote-activity'
 import * as packageAudit from './package-audit'
 import * as packageOutdated from './package-outdated'
 import * as packageUnused from './package-unused'
@@ -429,7 +430,7 @@ describe('project storage and package actions', () => {
     await expect(helper.runtime.fixVulnerability(admin.id, { name: 'alpha', title: 'Advisory' })).rejects.toMatchObject({ status: 409 })
     finish(updateResult)
     expect(await updating).toEqual(updateResult)
-    const revisions = helper.registry.related(web.id).flatMap(entry => Object.values(helper.application.projectState(entry.project).reportState!).map(state => state.revision))
+    const revisions = helper.registry.related(web.id).flatMap(entry => Object.entries(helper.application.projectState(entry.project).reportState!).filter(([kind]) => kind !== 'remoteActivity').map(([, state]) => state.revision))
     expect(new Set(revisions).size).toBe(1)
     expect(helper.registry.lookup(web.id).project.packageUpdate).toEqual(updateResult)
     update.mockResolvedValueOnce(updateResult)
@@ -443,14 +444,18 @@ describe('project storage and package actions', () => {
     entry.project.audit = auditResult
     entry.project.unused = unusedResult
     entry.project.reactDoctor = reactDoctorResult
+    const remote = { repository: 'https://github.com/team/repo', scannedAt: '2026-10-10T10:00:00Z', issues: [1], pullRequests: [] }
+    entry.project.remoteActivity = remote
     vi.spyOn(packageUpdate, 'updateProject').mockRejectedValueOnce(new Error('Install failed'))
     await expect(helper.runtime.updatePackages(project.id, 'minor')).rejects.toThrow('Install failed')
     expect(entry.project.outdated).toBeUndefined()
     expect(entry.project.audit).toBeUndefined()
     expect(entry.project.unused).toBeUndefined()
     expect(entry.project.reactDoctor).toBeUndefined()
-    const markers = Object.values(helper.application.projectState(entry.project).reportState!)
+    const markers = Object.entries(helper.application.projectState(entry.project).reportState!).filter(([kind]) => kind !== 'remoteActivity').map(([, state]) => state)
     expect(markers.every(state => state.validity === 'invalidated')).toBe(true)
+    expect(entry.project.remoteActivity).toEqual(remote)
+    expect(helper.application.projectState(entry.project).reportState?.remoteActivity?.validity).toBe('available')
     expect(new Set(markers.map(state => state.revision)).size).toBe(1)
     vi.spyOn(packageOutdated, 'outdatedProject').mockResolvedValue(outdatedResult)
     expect(await helper.runtime.outdated(project.id)).toEqual(outdatedResult)
@@ -905,4 +910,78 @@ describe('dev server lifecycle', () => {
     expect(await helper.runtime.status(project.id)).toEqual(kept)
     expect(await (await fetch(kept.url!)).text()).toBe('preview')
   }, 15_000)
+})
+
+
+describe('public repository activity actions', () => {
+  const report = { repository: 'https://github.com/team/repo', scannedAt: '2026-10-10T10:00:00Z', issues: [1], pullRequests: [2] }
+  it('uses registered projects and request protections, publishes dated results, and preserves success after failures', async () => {
+    const project = await createProject()
+    const service = vi.spyOn(remoteActivity, 'scanRemoteActivity').mockResolvedValue(report)
+    const endpoint = `/api/projects/${project.id}/remote-activity`
+    expect((await post(endpoint, {}, { 'X-Local-Repos': '' })).status).toBe(403)
+    expect((await post(endpoint, {}, { origin: 'https://evil.example' })).status).toBe(403)
+    expect((await post('/api/projects/unknown/remote-activity')).status).toBe(404)
+    expect(service).not.toHaveBeenCalled()
+    const response = await post(endpoint)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ remoteActivity: report, reportState: { remoteActivity: { validity: 'available' } } })
+    service.mockRejectedValueOnce(new Error('Unavailable'))
+    expect((await post(endpoint)).status).toBe(500)
+    expect(helper.registry.lookup(project.id).project.remoteActivity).toEqual(report)
+    await rename(path.join(directory, 'project'), path.join(directory, 'moved'))
+    expect((await post(endpoint)).status).toBe(404)
+    expect(service).toHaveBeenCalledTimes(2)
+  })
+  it('reserves before validation, coalesces duplicate checks and blocks metadata and related maintenance', async () => {
+    const project = await createProject()
+    let finish!: (value: typeof report) => void
+    const service = vi.spyOn(remoteActivity, 'scanRemoteActivity').mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const first = helper.runtime.remoteActivity(project.id)
+    const duplicate = helper.runtime.remoteActivity(project.id)
+    expect(() => helper.runtime.reserveMetadataScan()).toThrow('Wait for')
+    await expect(helper.runtime.updatePackages(project.id, 'patch')).rejects.toMatchObject({ status: 409 })
+    await expect(helper.runtime.deleteNodeModules(project.id, true)).rejects.toMatchObject({ status: 409 })
+    await vi.waitFor(() => expect(service).toHaveBeenCalledOnce())
+    finish(report)
+    expect(await first).toEqual(report)
+    expect(await duplicate).toEqual(report)
+    const release = helper.runtime.reserveMetadataScan()
+    await expect(helper.runtime.remoteActivity(project.id)).rejects.toMatchObject({ status: 409 })
+    release()
+  })
+  it('shares a rate-limit cooldown across project requests and retains successful reports', async () => {
+    await createProject()
+    await mkdir(path.join(directory, 'other'))
+    await writeFile(path.join(directory, 'other/package.json'), '{"name":"other"}')
+    const scan = await (await post('/api/scan', { path: directory })).json()
+    const [first, second] = scan.projects as RepoProject[]
+    for (const project of [first, second]) {
+      const entry = helper.registry.lookup(project.id)
+      entry.project.git = { origin: `https://github.com/team/${project.name}` }
+      entry.project.remoteActivity = report
+    }
+    const originalFetch = globalThis.fetch
+    const upstream = vi.fn(async () => new Response('{"message":"API rate limit exceeded"}', { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.ceil(Date.now() / 1000) + 120) } }))
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) => String(url).startsWith('https://api.github.com/') ? upstream() : originalFetch(url, options))
+    for (const project of [first, second]) {
+      const response = await post(`/api/projects/${project.id}/remote-activity`)
+      expect(response.status).toBe(429)
+      expect((await response.json()).error).toContain('60 requests per hour per IP address')
+      expect(helper.registry.lookup(project.id).project.remoteActivity).toEqual(report)
+    }
+    expect(upstream).toHaveBeenCalledOnce()
+  })
+  it('aborts and awaits active network reads on shutdown', async () => {
+    const project = await createProject()
+    const service = vi.spyOn(remoteActivity, 'scanRemoteActivity').mockImplementation((_project, _fetch, _progress, signal) => new Promise((_resolve, reject) => {
+      signal!.addEventListener('abort', () => reject(new Error('Aborted')), { once: true })
+    }))
+    const pending = helper.runtime.remoteActivity(project.id)
+    const rejected = expect(pending).rejects.toThrow('Aborted')
+    await vi.waitFor(() => expect(service).toHaveBeenCalledOnce())
+    await helper.runtime.shutdown()
+    await rejected
+    await expect(helper.runtime.remoteActivity(project.id)).rejects.toMatchObject({ status: 503 })
+  })
 })
