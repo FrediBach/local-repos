@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
-import { selectDevScript } from '../src/lib/dev-script'
+import { selectDevScript, simpleCommand } from '../src/lib/dev-script'
 import { HelperError, type RegisteredProject } from './scanner'
 
 interface ServerScript {
@@ -12,43 +12,6 @@ interface ServerScript {
   hostEnvironment: string[]
   strictPort?: boolean
   environmentOnly?: boolean
-}
-
-/** Only inspect a simple command; never interpret or execute shell expressions. */
-function simpleCommand(script: string): { tokens: string[]; assignments: Record<string, string> } | undefined {
-  if (/[|&;<>()`#\r\n]/.test(script)) return undefined
-  const tokens: string[] = []
-  let token = ''
-  let quote = ''
-  let escaped = false
-  for (const character of script.trim()) {
-    if (escaped) { token += character; escaped = false; continue }
-    if (character === '\\' && quote !== "'") { escaped = true; continue }
-    if (quote) {
-      if (character === quote) quote = ''
-      else token += character
-    } else if (character === '"' || character === "'") quote = character
-    else if (/\s/.test(character)) {
-      if (token) tokens.push(token)
-      token = ''
-    } else token += character
-  }
-  if (quote || escaped) return undefined
-  if (token) tokens.push(token)
-  const assignments: Record<string, string> = {}
-  while (tokens.length) {
-    const assignment = /^([A-Za-z_][A-Za-z_\d]*)=(.*)$/.exec(tokens[0])
-    if (assignment) {
-      assignments[assignment[1]] = assignment[2]
-      tokens.shift()
-    } else if (['cross-env', 'env'].includes(path.basename(tokens[0]))) tokens.shift()
-    else break
-  }
-  // npx wrappers are common in package scripts. Flags to npx itself are left
-  // alone because their argument forwarding rules vary by version.
-  if (tokens[0] === 'npx' && tokens[1] && !tokens[1].startsWith('-')) tokens.shift()
-  if (!tokens.length || tokens.includes('--')) return undefined
-  return { tokens, assignments }
 }
 
 function serverScript(script: string): ServerScript | undefined {

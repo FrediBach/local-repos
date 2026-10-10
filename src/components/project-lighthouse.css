@@ -1,0 +1,52 @@
+.project-lighthouse-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 3px; min-height: 32px; margin-left: auto; padding: 3px 5px; border: 1px solid currentColor; border-radius: 4px; font-size: .75rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+:is(.project-audit-badge, .project-outdated-badge, .project-react-doctor-badge) + .project-lighthouse-badge { margin-left: 0; }
+.project-lighthouse-badge:hover { box-shadow: 0 0 0 1px currentColor; }
+.projects-list .project-lighthouse-badge { min-height: 28px; }
+.projects-grid .project-title-row > .project-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.projects-grid .project-title-row:has(> .project-lighthouse-badge) { flex-wrap: wrap; justify-content: flex-start; }
+.projects-grid .project-title-row:has(> .project-lighthouse-badge) > .project-name { flex-basis: 100%; }
+.projects-grid .project-title-row:has(> .project-lighthouse-badge) > :is(.project-audit-badge, .project-outdated-badge, .project-react-doctor-badge, .project-lighthouse-badge) { margin-left: 0; }
+.detail-tabs.lighthouse-tabs { overflow-x: auto; }
+.detail-tabs.lighthouse-tabs button { flex-shrink: 0; white-space: nowrap; }
+.lighthouse-section > .maintenance-hint { margin-top: 10px; }
+.lighthouse-scores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 22px; padding: 20px 14px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 10px; }
+.lighthouse-category-score { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
+.lighthouse-category-score .react-doctor-score { flex-basis: auto; width: 96px; height: 96px; }
+.lighthouse-category-score h4 { margin: 0; text-align: center; font-size: .8125rem; font-weight: 600; color: var(--foreground); }
+.lighthouse-page-meta { display: flex; flex-direction: column; gap: 5px; font-size: .8125rem; color: var(--muted-foreground); line-height: 1.7; overflow-wrap: anywhere; }
+.lighthouse-page-meta a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.lighthouse-page-meta a svg { display: inline; margin-left: 5px; }
+.lighthouse-section-title { margin: 22px 0 13px; font-size: 1rem; font-weight: 600; color: var(--foreground); }
+.lighthouse-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lighthouse-metrics > div { display: flex; flex-direction: column; gap: 9px; padding: 14px; border: 1px solid var(--border); border-radius: 7px; }
+.lighthouse-metrics > div > span { color: var(--muted-foreground); font-size: .8125rem; }
+.lighthouse-metric-value { font-size: 1.125rem; font-weight: 600; background: transparent; font-variant-numeric: tabular-nums; }
+.lighthouse-audit-attention { color: var(--warning); }
+.lighthouse-audit-passed { color: var(--accent); }
+.lighthouse-audit-unavailable { color: var(--danger); }
+.lighthouse-audit-manual, .lighthouse-audit-informative, .lighthouse-audit-not-applicable { color: var(--muted-foreground); }
+.lighthouse-display-value { max-width: 180px; white-space: normal; overflow-wrap: anywhere; }
+.lighthouse-guidance, .lighthouse-explanation { color: var(--muted-foreground); font-size: .8125rem; line-height: 1.8; overflow-wrap: anywhere; }
+.lighthouse-guidance p { margin: 0 0 12px; }
+.lighthouse-guidance a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.lighthouse-guidance code { font-size: .75rem; background: var(--surface); padding: 2px 4px; border-radius: 3px; }
+.lighthouse-audit-table { max-width: 100%; overflow: auto; margin-top: 12px; max-height: 340px; border: 1px solid var(--border); border-radius: 5px; }
+.lighthouse-audit-table table { width: 100%; border-collapse: collapse; font-size: .75rem; line-height: 1.6; text-align: left; }
+.lighthouse-audit-table th { background: var(--surface); color: var(--foreground); font-weight: 600; }
+.lighthouse-audit-table td, .lighthouse-audit-table th { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; min-width: 110px; max-width: 400px; overflow-wrap: anywhere; }
+.lighthouse-audit-table td { color: var(--muted-foreground); }
+@media (max-width: 600px) {
+  .projects-list .project-title-row:has(> .project-lighthouse-badge) { grid-template-columns: repeat(4, max-content) minmax(0, 1fr) auto; }
+  .projects-list .project-title-row:has(> .project-lighthouse-badge) .project-name { grid-area: 1 / 1 / 2 / 6; }
+  .projects-list .project-title-row:has(> .project-lighthouse-badge) .project-tags { grid-area: 3 / 1 / 4 / -1; }
+  .projects-list .project-title-row:has(> .project-lighthouse-badge) > .project-audit-badge { grid-area: 2 / 1; }
+  .projects-list .project-title-row:has(> .project-lighthouse-badge) > .project-outdated-badge { grid-area: 2 / 2; }
+  .projects-list .project-title-row:has(> .project-lighthouse-badge) > .project-react-doctor-badge { grid-area: 2 / 3; }
+  .projects-list .project-title-row > .project-lighthouse-badge { grid-area: 2 / 4; }
+  .projects-list .project-title-row:has(> .project-lighthouse-badge) > .favorite-button { grid-area: 1 / 6; }
+  .lighthouse-scores { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 10px; }
+  .detail-tabs.lighthouse-tabs { gap: 12px; }
+}
+@media (max-width: 380px) {
+  .lighthouse-metrics { grid-template-columns: minmax(0, 1fr); }
+}

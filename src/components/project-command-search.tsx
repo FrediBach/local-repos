@@ -95,7 +95,7 @@ export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, 
       if (suggestion.intent.command.intent.kind === 'tags' && !tagsReady) return 'Loading saved tags…'
       if (suggestion.helper && busy) return 'Wait for the current operation'
     }
-    if (suggestion.intent.kind === 'workspace' && busy && ['resync', 'connect', 'audit-all', 'outdated-all', 'react-doctor-all', 'previews-all'].includes(suggestion.intent.name)) return 'Wait for the current operation'
+    if (suggestion.intent.kind === 'workspace' && busy && ['resync', 'connect', 'audit-all', 'outdated-all', 'react-doctor-all', 'lighthouse-all', 'previews-all'].includes(suggestion.intent.name)) return 'Wait for the current operation'
     return undefined
   }
 

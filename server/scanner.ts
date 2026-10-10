@@ -274,7 +274,8 @@ export class ProjectRegistry {
         const outdated = entry.project.outdated ?? previous.project.outdated
         const unused = entry.project.unused ?? previous.project.unused
         const reactDoctor = entry.project.reactDoctor ?? previous.project.reactDoctor
-        Object.assign(previous.project, entry.project, { monorepo: entry.project.monorepo, workspacePackageCount: entry.project.workspacePackageCount, dev, screenshot, preview, storage, audit, outdated, unused, reactDoctor })
+        const lighthouse = entry.project.lighthouse ?? previous.project.lighthouse
+        Object.assign(previous.project, entry.project, { monorepo: entry.project.monorepo, workspacePackageCount: entry.project.workspacePackageCount, dev, screenshot, preview, storage, audit, outdated, unused, reactDoctor, lighthouse })
         entry.project = previous.project
       }
       this.projects.set(entry.project.id, entry)

@@ -100,8 +100,10 @@ describe('workspace vulnerability scans', () => {
   it('places the scan before preview capture and audits every project sequentially even when the list is filtered', async () => {
     const { user } = await renderConnected()
     const reactScan = screen.getByRole('button', { name: 'Scan React projects', exact: true })
+    const lighthouseScan = screen.getByRole('button', { name: 'Scan frontends with Lighthouse', exact: true })
     expect(scanButton().nextElementSibling).toBe(reactScan)
-    expect(reactScan.nextElementSibling).toBe(screen.getByRole('button', { name: 'Capture previews', exact: true }))
+    expect(reactScan.nextElementSibling).toBe(lighthouseScan)
+    expect(lighthouseScan.nextElementSibling).toBe(screen.getByRole('button', { name: 'Capture previews', exact: true }))
     await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'Bravo site')
     expect(screen.getAllByRole('article')).toHaveLength(1)
     const savedFirst = deferred<void>()

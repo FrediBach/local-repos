@@ -4,6 +4,7 @@ import { desktopAppName } from './desktop-apps'
 import { selectDevScript } from './dev-script'
 import { discoverProjectScripts, scriptCategories, scriptRunCommand } from './project-scripts'
 import { isReactProject } from './react-doctor'
+import { isLighthouseProject } from './lighthouse'
 
 export interface CommandTemplate {
   id: string
@@ -15,7 +16,7 @@ export interface CommandTemplate {
 export interface ProjectCommand extends CommandTemplate {
   helper: boolean
   intent: { kind: 'action'; name: string; body?: unknown }
-    | { kind: 'details'; tab?: 'overview' | 'packages' | 'react-doctor' | 'readme' }
+    | { kind: 'details'; tab?: 'overview' | 'packages' | 'react-doctor' | 'lighthouse' | 'readme' }
     | { kind: 'tags' }
     | { kind: 'favorite' }
     | { kind: 'todos' }
@@ -35,6 +36,8 @@ export function commandTemplates(settings: Applications): CommandTemplate[] {
     { id: 'outdated', title: 'Check outdated packages', description: 'Compare installed packages with available versions', keywords: 'rerun rescan scan outdated dependencies versions latest lag updates' },
     { id: 'unused', title: 'Scan unused packages', description: 'Use Knip to find potentially unused dependencies', keywords: 'rerun rescan knip check unused dependencies dead code' },
     { id: 'react-doctor', title: 'Run React Doctor', description: 'Check React code health, performance, and correctness', keywords: 'rerun rescan scan react doctor diagnostics health errors warnings' },
+    { id: 'lighthouse', title: 'Run Lighthouse', description: 'Test frontend performance, accessibility, best practices, and SEO', keywords: 'rerun rescan scan lighthouse frontend website web vitals performance accessibility seo' },
+    { id: 'open-lighthouse', title: 'View Lighthouse report', description: 'Review saved frontend scores and detailed audits', keywords: 'open lighthouse report analysis audits performance accessibility seo results' },
     { id: 'start', title: 'Start development server', description: 'Run the dev, start, or serve script and track its server', keywords: 'dev develop start serve launch app localhost' },
     { id: 'stop', title: 'Stop development server', description: 'Stop the project server managed by Local Repos', keywords: 'dev stop terminate shutdown server' },
     { id: 'logs', title: 'View server logs', description: 'Show development server output in the project overview', keywords: 'dev logs console output debug errors' },
@@ -56,7 +59,7 @@ export function projectCommands(project: RepoProject, settings: Applications, fa
   const devScript = selectDevScript(project)
   const commands = commandTemplates(settings).flatMap((template): ProjectCommand[] => {
     const action = (name: string, body?: unknown): ProjectCommand[] => [{ ...template, helper: true, intent: { kind: 'action', name, ...(body === undefined ? {} : { body }) } }]
-    const details = (tab: 'overview' | 'packages' | 'readme'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
+    const details = (tab: 'overview' | 'packages' | 'lighthouse' | 'readme'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
     switch (template.id) {
       case 'folder': return action('open', { app: 'folder' })
       case 'editor': return action('open', { app: settings.editor })
@@ -65,6 +68,8 @@ export function projectCommands(project: RepoProject, settings: Applications, fa
       case 'outdated':
       case 'unused': return project.hasPackageJson === false ? [] : action(template.id)
       case 'react-doctor': return isReactProject(project) ? action('react-doctor') : []
+      case 'lighthouse': return isLighthouseProject(project) ? action('lighthouse') : []
+      case 'open-lighthouse': return isLighthouseProject(project) || project.lighthouse ? details('lighthouse') : []
       case 'start': return devScript && !running ? action('start') : []
       case 'stop': return running ? action('stop') : []
       case 'logs': return devScript || running ? action('logs') : []

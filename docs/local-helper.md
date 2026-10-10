@@ -47,6 +47,7 @@ Project paths below are relative to `/api/projects/:id`.
 | Process state | `GET /status`, `GET /logs`, `POST /start`, `POST /stop` | Runtime |
 | Git reads | `POST /history`, `/daily-summary`, `/push-status` | Git services |
 | Package analysis | `POST /audit`, `/outdated`, `/unused`, `/react-doctor` | Runtime and package services |
+| Frontend analysis | `POST /lighthouse` | Runtime and Lighthouse service |
 | Dependency changes | `POST /update-packages`, `/delete-node-modules` | Runtime and maintenance services |
 | Storage | `POST /storage` | Runtime and storage service |
 | Preview | `POST /screenshot`, `GET /api/screenshots/:filename` | Runtime and preview services |
@@ -102,6 +103,9 @@ Individual service modules handle command construction, validation, and parsing.
 
 - **Development servers:** [`dev-server.ts`](../server/dev-server.ts) combines the
   selected `dev`, `start`, or `serve` script with supported framework flags. It
+  shares the pure command tokenizer in [`dev-script.ts`](../src/lib/dev-script.ts)
+  with Lighthouse eligibility so quoted arguments and environment assignments
+  are interpreted consistently without executing shell expressions. It
   honors explicit script configuration and supplies loopback host/port defaults
   where supported. Runtime launches the package manager with argument arrays and
   `shell: false`, checks configured/logged loopback URLs for up to 45 seconds, and
@@ -171,6 +175,38 @@ Individual service modules handle command construction, validation, and parsing.
   missing launchers report setup guidance. Windows script launching remains unsupported.
   Paths and names are quoted; browser-supplied script bodies are never interpolated.
   Terminal scripts run independently and are not tracked as runtime dev servers.
+
+## Lighthouse pipeline
+
+[`lighthouse.ts`](../server/lighthouse.ts) validates the registered project's
+current bounded, regular package manifest with a no-follow open. The selected
+frontend script and explicit preview URL must still match scanned metadata.
+[`lighthouse.ts`](../src/lib/lighthouse.ts) supplies shared eligibility; generic
+homepage URLs and library dependencies do not opt projects in.
+
+Runtime reserves the Lighthouse operation before filesystem awaits, checks
+related workspace maintenance and preview operations, and reuses the existing
+dev-server lifecycle. An explicit preview URL takes precedence over local
+startup. Temporary servers stop in cleanup unless an explicit start claims
+them; previously persistent servers remain running. Fresh Playwright Chromium
+is owned by the runtime, bound to a loopback debugging port, and checks that the
+target serves successful HTML without a recognized framework build-error overlay.
+
+[`lighthouse-worker.mjs`](../server/lighthouse-worker.mjs) runs the installed
+Lighthouse Node API in a bounded subprocess against that browser using the desktop
+preset and the four performance, accessibility, best-practices, and SEO categories.
+It cannot start a replacement browser. The worker has a two-minute deadline and
+16 MiB output limit; startup, Chromium launch, and HTML preflight have separate
+bounds. Lighthouse is pinned to 12.8.2 to retain the Node 22.12 minimum. Only the
+helper imports the package; it never enters the browser bundle.
+
+The service checks report version, requested URL, category coverage, audit
+references, and score ranges. Fatal runtime errors fail the action. Partial audits
+retain null scores, explicit modes, and warnings. Stored report rows are bounded
+text; raw report HTML, screenshots, and traces are omitted. Successful reports
+are preserved by registry rescans; failures keep the last report, and package
+update attempts invalidate related reports. Shutdown aborts the worker and closes
+Chromium, including browsers whose launch was already pending.
 
 ## Preview pipeline
 

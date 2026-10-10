@@ -154,6 +154,46 @@ export interface ReactDoctorReport {
   warning?: string
 }
 
+export type LighthouseCategoryId = 'performance' | 'accessibility' | 'best-practices' | 'seo'
+
+export interface LighthouseCategory {
+  id: LighthouseCategoryId
+  title: string
+  /** Lighthouse category score on a 0–100 scale; null means unavailable. */
+  score: number | null
+}
+
+export interface LighthouseAudit {
+  id: string
+  title: string
+  description: string
+  /** Individual audit score on Lighthouse's original 0–1 scale. */
+  score: number | null
+  scoreDisplayMode: string
+  categories: LighthouseCategoryId[]
+  displayValue?: string
+  numericValue?: number
+  numericUnit?: string
+  explanation?: string
+  /** Bounded, text-only diagnostic rows; never executable report HTML. */
+  details?: {
+    headings: { key: string; label: string }[]
+    items: Record<string, string>[]
+    omitted?: number
+  }
+}
+
+export interface LighthouseReport {
+  scannedAt: string
+  version: string
+  requestedUrl: string
+  url: string
+  formFactor: 'mobile' | 'desktop'
+  categories: LighthouseCategory[]
+  audits: LighthouseAudit[]
+  warnings: string[]
+}
+
 export interface RepoProject {
   id: string
   name: string
@@ -186,6 +226,7 @@ export interface RepoProject {
   outdated?: PackageOutdated
   unused?: PackageUnused
   reactDoctor?: ReactDoctorReport
+  lighthouse?: LighthouseReport
   packageUpdate?: PackageUpdate
   git?: {
     branch?: string

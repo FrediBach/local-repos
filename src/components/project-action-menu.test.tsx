@@ -10,6 +10,7 @@ const project: RepoProject = { id: 'fixture', name: 'Fixture', dirName: 'fixture
 const scans = [
   ['Scan for vulnerabilities', 'audit'], ['Check outdated packages', 'outdated'],
   ['Scan unused packages', 'unused'], ['Run React Doctor', 'react-doctor'], ['Measure disk usage', 'storage'],
+  ['Run Lighthouse', 'lighthouse'],
 ]
 function setup(value = project, busy = '') {
   const onAction = vi.fn()
@@ -41,6 +42,7 @@ describe('project action menu', () => {
     const { user } = setup({ ...project, hasPackageJson: false, stack: [], scripts: {} })
     await user.click(screen.getByRole('button', { name: 'Actions for Fixture' }))
     for (const [label] of scans.slice(0, 4)) expect(screen.queryByRole('menuitem', { name: label })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Run Lighthouse' })).toBeNull()
     expect(screen.queryByRole('menuitem', { name: 'Start development server' })).toBeNull()
     expect(screen.getByRole('menuitem', { name: 'Measure disk usage' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Capture preview' })).toBeTruthy()

@@ -68,7 +68,7 @@ async function waitForContent(page: Page, timeout: number): Promise<void> {
   })
 }
 
-async function settlePage(page: Page, timeout: number): Promise<void> {
+export async function settlePage(page: Page, timeout: number): Promise<void> {
   await page.evaluate(`(async () => {
     const budget = ${Math.min(2000, timeout)}
     const visibleImages = [...document.images].filter((image) => {

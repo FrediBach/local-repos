@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { preservePreviews } from './workspace'
-import type { RepoProject, Workspace } from '../types'
+import type { LighthouseReport, RepoProject, Workspace } from '../types'
 
 const cachedPng = 'data:image/png;base64,aGVsbG8='
 
@@ -20,6 +20,14 @@ function workspace(projects: RepoProject[]): Workspace {
 }
 
 describe('captured preview persistence', () => {
+  it('preserves Lighthouse snapshots across rescans and prefers fresh partial reports for the same ID', () => {
+    const lighthouse: LighthouseReport = { scannedAt: '2026-10-10T10:00:00Z', version: '12.8.2', requestedUrl: 'http://localhost:3000/', url: 'http://localhost:3000/', formFactor: 'desktop', categories: [{ id: 'performance', title: 'Performance', score: 88 }], audits: [], warnings: [] }
+    const previous = workspace([{ ...project('one'), lighthouse }])
+    expect(preservePreviews(workspace([project('one')]), previous).projects[0].lighthouse).toEqual(lighthouse)
+    const fresh: LighthouseReport = { ...lighthouse, categories: [{ id: 'performance', title: 'Performance', score: null }], warnings: ['Performance unavailable.'] }
+    expect(preservePreviews(workspace([{ ...project('one'), lighthouse: fresh }]), previous).projects[0].lighthouse).toEqual(fresh)
+    expect(preservePreviews(workspace([project('two')]), previous).projects[0].lighthouse).toBeUndefined()
+  })
   it('keeps dated React Doctor findings after resync, prefers fresh reports and never transfers them to another project', () => {
     const reactDoctor = { scannedAt: '2026-10-09T10:00:00Z', version: '0.9.17', score: 82, label: 'Great', findings: [] }
     const previous = workspace([{ ...project('one'), reactDoctor }])

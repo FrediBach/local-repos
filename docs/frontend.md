@@ -17,7 +17,7 @@ and maintenance-report contracts used by both the frontend and helper.
 | --- | --- |
 | Workspace shell | Sidebar, topbar, connection/help dialogs, scan toolbar, and notices in [`src/components`](../src/components). `App` supplies their data and callbacks. |
 | Project browsing | [`use-project-filtering.ts`](../src/hooks/use-project-filtering.ts) owns filters, search, sorting, and the current page. [`project-results.tsx`](../src/components/project-results.tsx) renders flat grid results or monorepo groups in list view, and [`project-card.tsx`](../src/components/project-card.tsx) renders each project. Grid subpackages use directory-path titles and dashed card borders. |
-| Project details | [`project-detail-dialog.tsx`](../src/components/project-detail-dialog.tsx) composes overview, packages, React Doctor, and README tabs; controls delegate actions back to `App`. |
+| Project details | [`project-detail-dialog.tsx`](../src/components/project-detail-dialog.tsx) composes overview, packages, React Doctor, Lighthouse, and README tabs; controls delegate actions back to `App`. |
 | Workspace operations | [`use-workspace-actions.ts`](../src/hooks/use-workspace-actions.ts) handles helper actions, maintenance batches, automatic scans, result merging, and notices. |
 | Automatic work | [`use-workspace-watcher.ts`](../src/hooks/use-workspace-watcher.ts) schedules scans; [`use-push-reminder.ts`](../src/hooks/use-push-reminder.ts) schedules Git push-status checks. |
 | Summary and todos | [`use-daily-summary.ts`](../src/hooks/use-daily-summary.ts) loads Git activity; [`use-project-todos.ts`](../src/hooks/use-project-todos.ts) derives actionable findings and reconciles dismissals. |
@@ -145,6 +145,33 @@ Actions delegate through the existing workspace action hook, preserving helper
 connection prompts, busy checks, stale-response guards, caching, and notices.
 An individual preview capture shows the same card progress badge as batch capture.
 
+## Lighthouse frontend reports
+
+[`lighthouse.ts`](../src/lib/lighthouse.ts) shares frontend eligibility between
+the browser and helper: a recognized serving command in the selected startup
+script or an explicit, normalized `localRepos.previewUrl`. Package dependencies,
+homepages, and visual monorepo grouping alone do not establish a testable page.
+The helper revalidates current metadata and the HTML response before auditing.
+The toolbar and command search offer workspace scans; cards, action menus, and
+the Lighthouse tab offer individual scans through `useWorkspaceActions`.
+
+[`use-lighthouse-batch.ts`](../src/hooks/use-lighthouse-batch.ts) processes eligible
+projects sequentially with stop-after-current, workspace generation checks,
+failure details, and cache-write warnings. It participates in existing global
+busy and watcher coordination. Reports are optional on older workspace snapshots,
+survive rescans and failed reruns, and are invalidated after dependency update
+attempts in their package workspace.
+
+[`project-lighthouse.tsx`](../src/components/project-lighthouse.tsx) displays four
+category scores, performance measurements, provenance, scan warnings, and
+filterable audit details. Category scores use 0–100; audit scores retain
+Lighthouse's 0–1 scale and explicit manual, informational, not-applicable, and
+error modes. Missing data is never converted to a passing score. The card badge
+specifically shows performance. Cached reports remain readable when a project
+loses scan eligibility. Diagnostic rows contain bounded text and descriptions
+render safe Markdown without raw HTML. Report content stays in the workspace
+cache; there is no additional settings or database schema migration.
+
 ## Persistence and identity
 
 | Storage | Contents | Identity |
@@ -162,7 +189,7 @@ checkout moves. Browser IDs do not distinguish roots with identical names and
 relative layouts. Avoid treating a display name as a durable project identity.
 
 [`workspace.ts`](../src/lib/workspace.ts) preserves data-URL PNG previews and
-dated storage, audit, outdated, unused, and React Doctor reports across scans
+dated storage, audit, outdated, unused, React Doctor, and Lighthouse reports across scans
 when the new scan omits those reports. Cached results describe the time they were
 measured, not necessarily the current files. Captured screenshot URLs are fetched
 from `/api/screenshots/` and converted to data URLs before persistence so they can
@@ -202,7 +229,7 @@ ownership; async results check their captured version before applying updates.
 When adding a workspace-changing flow, preserve these guards and the existing
 ref-based active checks, which cover the interval before React rerenders.
 
-The preview, audit, outdated, and React Doctor batch hooks snapshot their queue
+The preview, audit, outdated, React Doctor, and Lighthouse batch hooks snapshot their queue
 and process one project at a time. Stop requests take effect after the active
 request finishes; they do not abort helper work already in progress. Each success
 persists the accumulated workspace. A later successful write saves earlier batch

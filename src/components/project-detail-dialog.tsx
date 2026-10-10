@@ -5,6 +5,7 @@ import { ProjectAiBadge } from './project-ai-badge'
 import { ProjectTabs, type ProjectTab } from './project-tabs'
 import { ProjectPackages } from './project-packages'
 import { ProjectReactDoctor } from './project-react-doctor'
+import { ProjectLighthouse } from './project-lighthouse'
 import { ProjectReadme } from './project-readme'
 import { ProjectPreview } from './project-preview'
 import { ProjectHistory } from './project-history'
@@ -15,6 +16,7 @@ import { originUrl } from '@/lib/api'
 import { relativeTime } from '@/lib/relative-time'
 import { tagFilterValue } from '@/lib/project-tags'
 import { isReactProject } from '@/lib/react-doctor'
+import { isLighthouseProject } from '@/lib/lighthouse'
 import type { GitHistory, OpenProjectRequest, RepoProject } from '@/types'
 import { desktopAppName } from '@/lib/desktop-apps'
 
@@ -30,9 +32,10 @@ interface Props {
 export function ProjectDetailDialog({ selected, helper, demo, busy, packageBusy, detailTab, logs, tagsReady, selectedTags, favorite, onTabChange, onClose, onCloseAutoFocus, onTagFilter, onEditTags, onToggleFavorite, onAction, onActivity }: Props) {
   const { settings } = useSettings()
   const hasReact = !!selected && isReactProject(selected)
-  const activeTab = detailTab === 'react-doctor' && !hasReact ? 'overview' : detailTab
+  const hasFrontend = !!selected && (isLighthouseProject(selected) || !!selected.lighthouse)
+  const activeTab = (detailTab === 'react-doctor' && !hasReact) || (detailTab === 'lighthouse' && !hasFrontend) ? 'overview' : detailTab
   return <Dialog open={!!selected} onOpenChange={value => { if (!value) onClose() }}><DialogContent className="project-dialog" onCloseAutoFocus={onCloseAutoFocus}>{selected && <><DetailHeader project={selected} demo={demo} tagsReady={tagsReady} selectedTags={selectedTags} onTagFilter={tag => { onTagFilter(tag); onClose() }} onEditTags={onEditTags} />
-    <ProjectTabs value={activeTab} onChange={onTabChange} react={hasReact}>{activeTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'react-doctor' ? <ProjectReactDoctor key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <DetailOverview onActivity={onActivity} project={selected} helper={helper} demo={demo} busy={busy} logs={logs} onAction={onAction} />}</ProjectTabs>
+    <ProjectTabs value={activeTab} onChange={onTabChange} react={hasReact} frontend={hasFrontend}>{activeTab === 'packages' ? <ProjectPackages key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'react-doctor' ? <ProjectReactDoctor key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'lighthouse' ? <ProjectLighthouse key={selected.id} project={selected} helper={helper} demo={demo} busy={packageBusy} onAction={name => { void onAction(selected, name) }} /> : activeTab === 'readme' ? <ProjectReadme content={selected.readme} /> : <DetailOverview onActivity={onActivity} project={selected} helper={helper} demo={demo} busy={busy} logs={logs} onAction={onAction} />}</ProjectTabs>
     <div className="detail-footer"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => onAction(selected, 'open', { app: settings.editor } satisfies OpenProjectRequest)}><Code2 size={15} />{desktopAppName(settings.editor)}</Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => onAction(selected, 'open', { app: settings.gitClient } satisfies OpenProjectRequest)}><GitBranch size={15} />{desktopAppName(settings.gitClient)}</Button><Button variant="ghost" size="sm" aria-pressed={favorite} onClick={() => onToggleFavorite(selected.id)}><Star size={15} fill={favorite ? 'currentColor' : 'none'} />{favorite ? 'Favorited' : 'Favorite'}</Button></div></>}</DialogContent></Dialog>
 }
 

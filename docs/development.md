@@ -18,7 +18,7 @@ stops both when either exits or the launcher receives a shutdown signal. Ports
 `5180` and `4318` must be free. Keep the same browser origin while developing:
 switching hostnames or ports gives you separate browser storage.
 
-Preview capture needs Playwright's Chromium installation:
+Preview capture and Lighthouse scans need Playwright's Chromium installation:
 
 ```sh
 npx playwright install chromium
@@ -65,8 +65,10 @@ temporary directories, Git repositories, loopback HTTP servers, and fixture
 processes. The package outdated/update integration tests invoke npm against
 local fixture registries with isolated configuration; the update fixture also
 uses `tar` and installs fixture dependencies with lifecycle scripts disabled.
-They do not require a public registry. Preview rendering tests use installed
-Chromium and skip the relevant cases when it is unavailable. A sandbox that
+They do not require a public registry. The Lighthouse integration test audits a
+disposable loopback HTML page with the installed Lighthouse package. Preview and
+Lighthouse browser tests use installed Chromium and skip the relevant cases when
+it is unavailable. A sandbox that
 blocks loopback listeners or subprocesses can therefore prevent the suite from
 running even when application code is correct.
 

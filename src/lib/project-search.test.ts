@@ -63,6 +63,7 @@ describe('smart project search suggestions', () => {
     expect(search('', { templateId: 'audit' }).map(row => row.title)).toEqual(['Alpha', 'Beta'])
     expect(search('beta', { templateId: 'audit' }).map(row => row.title)).toEqual(['Beta'])
     expect(search('', { templateId: 'react-doctor' }).map(row => row.title)).toEqual(['Alpha', 'Beta'])
+    expect(search('', { templateId: 'lighthouse' }).map(row => row.title)).toEqual(['Alpha'])
   })
 
   it('lists named scripts across projects after selecting Run a script', () => {
@@ -102,6 +103,7 @@ describe('smart project search suggestions', () => {
     expect(tag?.intent).toEqual({ kind: 'filter', key: 'tags', value: 'tag:client work' })
     expect(search('uncommitted').find(row => row.intent.kind === 'filter')?.intent).toEqual({ kind: 'filter', key: 'git', value: 'dirty' })
     expect(search('daily summary').find(row => row.intent.kind === 'workspace')?.intent).toEqual({ kind: 'workspace', name: 'summary' })
+    expect(search('lighthouse all').find(row => row.intent.kind === 'workspace')?.intent).toEqual({ kind: 'workspace', name: 'lighthouse-all' })
   })
 
   it('completes package names and declared ranges with deduplicated project counts', () => {

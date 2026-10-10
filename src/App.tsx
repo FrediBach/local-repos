@@ -37,6 +37,7 @@ import { CriticalVulnerabilityDialog } from '@/components/critical-vulnerability
 import { mergeCriticalAlerts, newCriticalVulnerabilities, type CriticalVulnerabilityAlert } from '@/lib/critical-vulnerabilities'
 import { OutdatedBatchProgress } from '@/components/outdated-batch-progress'
 import { ReactDoctorBatchProgress } from '@/components/react-doctor-batch-progress'
+import { LighthouseBatchProgress } from '@/components/lighthouse-batch-progress'
 import { api, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
@@ -84,7 +85,7 @@ function WorkspaceApp() {
   const projectOpener = useRef<HTMLElement | null>(null)
   const workspaceVersion = useRef(0)
   const favoritesVersion = useRef(0)
-  const { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, captureAllPreviews } = useWorkspaceActions({
+  const { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews } = useWorkspaceActions({
     workspace, busy, workspaceVersion, setBusy, setLogs, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
   })
   const rawProjects = workspace?.projects ?? demoProjects
@@ -238,12 +239,13 @@ function WorkspaceApp() {
       'audit-all': () => { void scanAllVulnerabilities() },
       'outdated-all': () => { void scanAllOutdated() },
       'react-doctor-all': () => { void scanAllReactDoctor() },
+      'lighthouse-all': () => { void scanAllLighthouse() },
       'previews-all': () => { void captureAllPreviews() },
     }
     commands[command]()
   }
   async function connect(mode: 'browser' | 'helper') {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     const version = ++workspaceVersion.current
     setBusy('connect'); setConnectError('')
     try {
@@ -260,13 +262,13 @@ function WorkspaceApp() {
       if (workspace?.mode === 'helper' && (next.mode !== 'helper' || next.rootPath !== workspace.rootPath)) await stopWorkspaceServers(workspace)
       auditHistory.current.clear(); setCriticalAlerts([])
       next = preservePreviews(next, workspace)
-      const cached = await persist(next, true, true); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); navigate('all'); setConnectOpen(false)
+      const cached = await persist(next, true, true); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); lighthouseBatch.dismiss(); navigate('all'); setConnectOpen(false)
       if (cached) setNotice({ text: `Connected ${next.rootName}. Found ${next.projects.length} project${next.projects.length === 1 ? '' : 's'}.${next.warnings?.length ? ` ${next.warnings.length} scan note(s) — see workspace info.` : ''}` })
     } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setConnectError(error instanceof Error ? error.message : 'Unable to connect to this directory.') }
     finally { setBusy('') }
   }
   async function resync() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (!workspace) { setConnectOpen(true); return }
     const version = ++workspaceVersion.current
     setBusy('sync')
@@ -285,10 +287,10 @@ function WorkspaceApp() {
     finally { setBusy('') }
   }
   async function forgetWorkspace() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     ++workspaceVersion.current
     setBusy('disconnect')
-    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); auditHistory.current.clear(); setCriticalAlerts([]); setWorkspace(undefined); setHelperWorkspacePath(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
+    try { if (workspace) await stopWorkspaceServers(workspace); await clearWorkspace(); previewBatch.dismiss(); auditBatch.dismiss(); outdatedBatch.dismiss(); reactDoctorBatch.dismiss(); lighthouseBatch.dismiss(); auditHistory.current.clear(); setCriticalAlerts([]); setWorkspace(undefined); setHelperWorkspacePath(undefined); setSelectedId(undefined); navigate('all'); setNotice({ text: 'Directory disconnected. Your files are unchanged.' }) }
     catch (error) { setNotice({ text: error instanceof Error ? error.message : 'Could not disconnect the workspace.', error: true }) }
     finally { setBusy('') }
   }
@@ -319,13 +321,14 @@ function WorkspaceApp() {
         </> : page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={rawProjects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
         <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
           scanAllOutdated={scanAllOutdated}
-          scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} captureAllPreviews={captureAllPreviews} />
+          scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} scanAllLighthouse={scanAllLighthouse} captureAllPreviews={captureAllPreviews} />
 
         {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
         {auditBatch.progress && <AuditBatchProgress progress={auditBatch.progress} onStop={auditBatch.stop} onDismiss={auditBatch.dismiss} />}
         {workspace && <WorkspaceWatcherStatus watcher={watcher} mode={settings.watcherMode} scanning={busy === 'watcher'} />}
         {outdatedBatch.progress && <OutdatedBatchProgress progress={outdatedBatch.progress} onStop={outdatedBatch.stop} onDismiss={outdatedBatch.dismiss} />}
         {reactDoctorBatch.progress && <ReactDoctorBatchProgress progress={reactDoctorBatch.progress} onStop={reactDoctorBatch.stop} onDismiss={reactDoctorBatch.dismiss} />}
+        {lighthouseBatch.progress && <LighthouseBatchProgress progress={lighthouseBatch.progress} onStop={lighthouseBatch.stop} onDismiss={lighthouseBatch.dismiss} />}
 
         <ProjectSearchToolbar key={`${workspace?.mode ?? 'demo'}:${workspace?.rootPath ?? workspace?.rootName ?? ''}:${searchReset}`} searchRef={searchRef} query={query} setQuery={setQuery} searchScope={searchScope} setSearchScope={setSearchScope}
           projects={projects} favorites={favorites} filterGroups={filterGroups} helper={workspace?.mode === 'helper'} busy={!!busy} tagsReady={tagsReady}

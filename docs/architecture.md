@@ -101,6 +101,10 @@ these distinctions for client and helper coordination.
   fetching or pushing. Package registry checks and remote preview capture can
   make network requests. Explicit script and dev-server actions run project
   code; analysis tools can load project configuration.
+- Lighthouse frontend audits use the helper's existing dev-server lifecycle and
+  owned Chromium browsers. Only recognized frontend startup scripts or explicit
+  application URLs qualify, with HTML validation before analysis. Dated results
+  and bounded audit details are cached alongside the other project reports.
 
 Details and extension points are covered in [frontend.md](frontend.md) and
 [local-helper.md](local-helper.md).

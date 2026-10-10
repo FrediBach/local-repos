@@ -6,7 +6,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import type { Browser } from 'playwright'
-import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
+import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, LighthouseReport, PreviewMode, ProjectStorage, RepoProject } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -20,6 +20,7 @@ import { parsePackageJson } from '../src/lib/metadata'
 import { outdatedProject } from './package-outdated'
 import { unusedProject } from './package-unused'
 import { reactDoctorProject } from './react-doctor'
+import { lighthouseProject, validateLighthousePage, validateLighthouseProject } from './lighthouse'
 import { measureProjectStorage, removeProjectNodeModules } from './project-storage'
 import { openScriptTerminal, validateProjectScript } from './project-scripts'
 import { isDesktopAppId, isTerminalId } from '../src/lib/desktop-apps'
@@ -86,6 +87,8 @@ export class ProjectRuntime {
   private readonly outdatedScans = new Map<string, Promise<PackageOutdated>>()
   private readonly unusedScans = new Map<string, Promise<PackageUnused>>()
   private readonly reactDoctorScans = new Map<string, Promise<ReactDoctorReport>>()
+  private readonly lighthouseScans = new Map<string, Promise<LighthouseReport>>()
+  private readonly lighthouseControllers = new Set<AbortController>()
   private readonly updates = new Map<string, Promise<PackageUpdate>>()
   private readonly removals = new Map<string, Promise<ProjectStorage>>()
   private readonly maintenance = new Set<string>()
@@ -191,6 +194,59 @@ export class ProjectRuntime {
     finally { this.reactDoctorScans.delete(id) }
   }
 
+  async lighthouse(id: string): Promise<LighthouseReport> {
+    this.available(id)
+    const pending = this.lighthouseScans.get(id)
+    if (pending) return pending
+    if (this.registry.related(id).some(entry => this.captures.has(entry.project.id) || this.lighthouseScans.has(entry.project.id))) {
+      throw new HelperError('Wait for preview capture and Lighthouse scans in this workspace to finish.', 409)
+    }
+    const controller = new AbortController()
+    this.lighthouseControllers.add(controller)
+    const promise = this.lighthouseOnce(id, controller.signal)
+    // Reserve before validation awaits, including the remote-URL-only case.
+    this.lighthouseScans.set(id, promise)
+    try { return await promise }
+    finally { this.lighthouseScans.delete(id); this.lighthouseControllers.delete(controller) }
+  }
+
+  private async lighthouseOnce(id: string, signal: AbortSignal): Promise<LighthouseReport> {
+    const entry = await this.registry.get(id)
+    let auditedServer: RunningServer | undefined
+    let browser: Browser | undefined
+    try {
+      let url = await validateLighthouseProject(entry)
+      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      if (!url) {
+        const dev = await this.start(id, false)
+        auditedServer = this.running.get(id)
+        if (dev.status !== 'running' || !dev.url) throw new HelperError(dev.error ?? 'The frontend did not start. Check its dependencies and development server logs.', 422)
+        url = dev.url
+      }
+      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      const port = await freePort()
+      const { chromium } = await import('playwright')
+      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      try {
+        browser = await chromium.launch({ headless: true, timeout: 15_000, args: [`--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1'] })
+        this.browsers.add(browser)
+      } catch (error) {
+        throw new HelperError(`Lighthouse browser is unavailable. Run npx playwright install chromium in the Local Repos folder, then try again. ${error instanceof Error ? error.message.split('\n')[0] : ''}`, 503)
+      }
+      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      await validateLighthousePage(browser, url)
+      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      const report = await lighthouseProject(url, port, signal)
+      if (this.closed) throw new HelperError('The local helper is shutting down.', 503)
+      entry.project.lighthouse = report
+      return report
+    } finally {
+      if (browser) { await browser.close().catch(() => undefined); this.browsers.delete(browser) }
+      // Reuse persistent user servers, and honor explicit starts during a scan.
+      if (auditedServer && this.running.get(id) === auditedServer && !this.keepAlive.has(id)) await this.stop(id).catch(() => undefined)
+    }
+  }
+
   async updatePackages(id: string, level: unknown): Promise<PackageUpdate> {
     this.available(id)
     if (level !== 'minor' && level !== 'patch') throw new HelperError('Choose a minor or patch update.', 400)
@@ -198,7 +254,7 @@ export class ProjectRuntime {
     for (const { project } of related) {
       const key = project.id
       if (this.running.has(key) || this.starts.has(key) || this.captures.has(key)
-        || this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key)
+        || this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key)
         || [...this.stoppingChildren.values()].some(child => child.id === key)) {
         throw new HelperError('Stop dev servers and wait for previews and package scans in this repository to finish before updating dependencies.', 409)
       }
@@ -217,6 +273,7 @@ export class ProjectRuntime {
           member.project.outdated = undefined
           member.project.unused = undefined
           member.project.reactDoctor = undefined
+          member.project.lighthouse = undefined
           member.project.storage = undefined
           try {
             const metadata = parsePackageJson(await readFile(path.join(member.directory, 'package.json'), 'utf8'))
@@ -239,7 +296,7 @@ export class ProjectRuntime {
       || [...this.stoppingChildren.values()].some(child => relatedIdSet.has(child.id))) {
       throw new HelperError('Stop the project’s dev server and wait for preview capture and server shutdown to finish before removing dependencies.', 409)
     }
-    if (relatedIds.some(key => this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key))) {
+    if (relatedIds.some(key => this.storageScans.has(key) || this.audits.has(key) || this.outdatedScans.has(key) || this.unusedScans.has(key) || this.reactDoctorScans.has(key) || this.lighthouseScans.has(key))) {
       throw new HelperError('Wait for disk usage measurement and package scans to finish before removing dependencies.', 409)
     }
     // Reserve before any filesystem await so a simultaneous start, screenshot,
@@ -373,6 +430,7 @@ export class ProjectRuntime {
 
   async screenshot(id: string, source: PreviewMode = 'auto'): Promise<string> {
     this.available(id)
+    if (this.registry.related(id).some(entry => this.lighthouseScans.has(entry.project.id))) throw new HelperError('Wait for Lighthouse to finish before capturing a preview in this workspace.', 409)
     const pending = this.captures.get(id)
     if (pending) return pending
     const promise = this.captureOnce(id, source)
@@ -557,6 +615,7 @@ export class ProjectRuntime {
 
   async shutdown(): Promise<void> {
     this.closed = true
+    for (const controller of this.lighthouseControllers) controller.abort()
     this.keepAlive.clear()
     this.starts.clear()
     const servers = [...this.running.values()]
@@ -579,7 +638,7 @@ export class ProjectRuntime {
     // A launch already in flight may resolve after shutdown begins. Capture's
     // closed check immediately closes it, and awaiting here prevents orphaning
     // Chromium when the helper's entry point exits the process.
-    await Promise.allSettled([...this.captures.values()])
+    await Promise.allSettled([...this.captures.values(), ...this.lighthouseScans.values()])
     await Promise.allSettled([...this.storageScans.values(), ...this.audits.values(), ...this.outdatedScans.values(), ...this.unusedScans.values(), ...this.reactDoctorScans.values(), ...this.removals.values(), ...this.updates.values()])
     if (this.screenshotDirectory) await rm(await this.screenshotDirectory, { recursive: true, force: true }).catch(() => undefined)
   }

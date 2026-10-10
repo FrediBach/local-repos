@@ -37,7 +37,7 @@ describe('project command catalog', () => {
 
   it('offers package checks only when the manifest is not explicitly absent, including older cached projects', () => {
     const plain = projectCommands({ ...project, hasPackageJson: false, stack: [], scripts: {} }, defaultSettings, false)
-    expect(plain.some(command => ['audit', 'outdated', 'unused', 'update-packages', 'react-doctor', 'start', 'stop', 'logs'].includes(command.id))).toBe(false)
+    expect(plain.some(command => ['audit', 'outdated', 'unused', 'update-packages', 'react-doctor', 'lighthouse', 'open-lighthouse', 'start', 'stop', 'logs'].includes(command.id))).toBe(false)
     expect(plain.find(command => command.id === 'storage')?.intent).toEqual({ kind: 'action', name: 'storage' })
     const older = projectCommands({ ...project, hasPackageJson: undefined }, defaultSettings, false)
     expect(older.filter(command => ['audit', 'outdated', 'unused'].includes(command.id))).toHaveLength(3)
@@ -46,6 +46,14 @@ describe('project command catalog', () => {
   it('recognizes peer-only React packages for React Doctor', () => {
     const commands = projectCommands({ ...project, stack: [], dependencies: [{ name: 'react', version: '^19.0.0', kind: 'peerDependencies' }] }, defaultSettings, false)
     expect(commands.find(command => command.id === 'react-doctor')?.intent).toEqual({ kind: 'action', name: 'react-doctor' })
+  })
+
+  it('offers Lighthouse for launchable frontends and explicitly configured URLs, but not React libraries', () => {
+    expect(projectCommands(project, defaultSettings, false).find(command => command.id === 'lighthouse')?.intent).toEqual({ kind: 'action', name: 'lighthouse' })
+    expect(projectCommands({ ...project, scripts: {} }, defaultSettings, false).some(command => command.id === 'lighthouse')).toBe(false)
+    const custom = projectCommands({ ...project, scripts: { start: 'node server.js' }, previewUrl: 'http://localhost:3000/' }, defaultSettings, false)
+    expect(custom.find(command => command.id === 'lighthouse')?.intent).toEqual({ kind: 'action', name: 'lighthouse' })
+    expect(custom.find(command => command.id === 'open-lighthouse')).toMatchObject({ helper: false, intent: { kind: 'details', tab: 'lighthouse' } })
   })
 
   it.each(['running', 'starting'] as const)('offers stop instead of start for a %s server', status => {

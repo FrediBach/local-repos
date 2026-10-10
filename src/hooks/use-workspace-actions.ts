@@ -3,12 +3,14 @@ import { usePreviewBatch } from './use-preview-batch'
 import { useAuditBatch } from './use-audit-batch'
 import { useOutdatedBatch } from './use-outdated-batch'
 import { useReactDoctorBatch } from './use-react-doctor-batch'
+import { useLighthouseBatch } from './use-lighthouse-batch'
 import { api, projectAction, scanWithHelper } from '@/lib/api'
 import { canReadDirectory, scanDirectory } from '@/lib/filesystem'
 import { useSettings } from './use-settings'
 import { cachePreview, packageWorkspaceId, preservePreviews } from '@/lib/workspace'
 import { isReactProject } from '@/lib/react-doctor'
-import type { PackageAudit, PackageOutdated, ReactDoctorReport, RepoProject, RunProjectScriptRequest, Workspace } from '@/types'
+import { isLighthouseProject } from '@/lib/lighthouse'
+import type { LighthouseReport, PackageAudit, PackageOutdated, ReactDoctorReport, RepoProject, RunProjectScriptRequest, Workspace } from '@/types'
 
 interface Options {
   workspace?: Workspace
@@ -28,9 +30,10 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   const auditBatch = useAuditBatch()
   const outdatedBatch = useOutdatedBatch()
   const reactDoctorBatch = useReactDoctorBatch()
+  const lighthouseBatch = useLighthouseBatch()
 
   async function scanAllVulnerabilities() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     if (!workspace.projects.length) return
     const version = ++workspaceVersion.current
@@ -40,6 +43,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     previewBatch.dismiss()
     outdatedBatch.dismiss()
     reactDoctorBatch.dismiss()
+    lighthouseBatch.dismiss()
     try {
       await auditBatch.run(workspace.projects, async (project, isCurrent) => {
         const result = await projectAction<{ audit?: PackageAudit }>(project.id, 'audit')
@@ -57,7 +61,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   }
 
   async function scanAllOutdated() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     if (!workspace.projects.length) return
     const version = ++workspaceVersion.current
@@ -67,6 +71,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     previewBatch.dismiss()
     auditBatch.dismiss()
     reactDoctorBatch.dismiss()
+    lighthouseBatch.dismiss()
     try {
       await outdatedBatch.run(workspace.projects, async (project, isCurrent) => {
         const result = await projectAction<{ outdated?: PackageOutdated }>(project.id, 'outdated')
@@ -83,7 +88,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   }
 
   async function scanAllReactDoctor() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     const projects = workspace.projects.filter(isReactProject)
     if (!projects.length) return
@@ -94,6 +99,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     previewBatch.dismiss()
     auditBatch.dismiss()
     outdatedBatch.dismiss()
+    lighthouseBatch.dismiss()
     try {
       await reactDoctorBatch.run(projects, async (project, isCurrent) => {
         const result = await projectAction<{ reactDoctor?: ReactDoctorReport }>(project.id, 'react-doctor')
@@ -109,8 +115,36 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     }
   }
 
+  async function scanAllLighthouse() {
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
+    if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
+    const projects = workspace.projects.filter(isLighthouseProject)
+    if (!projects.length) return
+    const version = ++workspaceVersion.current
+    let nextWorkspace = workspace
+    setBusy('batch-lighthouse')
+    setNotice(undefined)
+    previewBatch.dismiss()
+    auditBatch.dismiss()
+    outdatedBatch.dismiss()
+    reactDoctorBatch.dismiss()
+    try {
+      await lighthouseBatch.run(projects, async (project, isCurrent) => {
+        const result = await projectAction<{ lighthouse?: LighthouseReport }>(project.id, 'lighthouse')
+        if (!isCurrent() || version !== workspaceVersion.current) return
+        if (!result.lighthouse) throw new Error('The helper did not return a Lighthouse report.')
+        const lighthouse = result.lighthouse
+        nextWorkspace = { ...nextWorkspace, projects: nextWorkspace.projects.map(current => current.id === project.id ? { ...current, lighthouse } : current) }
+        const cached = await persist(nextWorkspace, false)
+        return { cacheWarning: !cached, report: lighthouse }
+      }, () => version === workspaceVersion.current)
+    } finally {
+      if (version === workspaceVersion.current) setBusy('')
+    }
+  }
+
   async function captureAllPreviews() {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
     if (!workspace.projects.length) return
     const version = ++workspaceVersion.current
@@ -120,6 +154,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     auditBatch.dismiss()
     outdatedBatch.dismiss()
     reactDoctorBatch.dismiss()
+    lighthouseBatch.dismiss()
     try {
       await previewBatch.run(workspace.projects, async (project, isCurrent) => {
         const result = await projectAction<Partial<RepoProject>>(project.id, 'screenshot', { source: 'auto' })
@@ -137,7 +172,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   }
 
   async function runAutomaticScan(changedIds: string[] | undefined, isCurrent: () => boolean, progress: (message: string) => void) {
-    if (!workspace || busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (!workspace || busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     const version = ++workspaceVersion.current
     const current = () => isCurrent() && version === workspaceVersion.current
     setBusy('watcher')
@@ -182,8 +217,9 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
   }
 
   async function action(project: RepoProject, name: string, body: unknown = {}) {
-    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive()) return
+    if (busy || previewBatch.isActive() || auditBatch.isActive() || outdatedBatch.isActive() || reactDoctorBatch.isActive() || lighthouseBatch.isActive()) return
     if (workspace?.mode !== 'helper') { setConnectOpen(true); return }
+    if (name === 'lighthouse' && !isLighthouseProject(project)) return
     if (name === 'run-script') body = { ...(body as RunProjectScriptRequest), terminal: settings.terminal } satisfies RunProjectScriptRequest
     const updateLevel = name === 'update-minor' ? 'minor' : name === 'update-patches' ? 'patch' : undefined
     const version = ++workspaceVersion.current
@@ -193,6 +229,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       const result = await projectAction<Partial<RepoProject>>(project.id, updateLevel ? 'update-packages' : name, updateLevel ? { level: updateLevel } : body)
       if (name === 'screenshot' && result.screenshot) result.screenshot = await cachePreview(result.screenshot)
       if (version !== workspaceVersion.current) return
+      if (name === 'lighthouse' && !result.lighthouse) throw new Error('The helper did not return a Lighthouse report.')
       if (name === 'react-doctor' && !result.reactDoctor) throw new Error('The helper did not return a React Doctor report.')
       if (name === 'audit' && result.audit) reportCriticalVulnerabilities(project, result.audit)
       const cached = name === 'open' || name === 'run-script' || await persist({ ...workspace, projects: workspace.projects.map(p => p.id === project.id ? { ...p, ...result } : p) })
@@ -206,28 +243,30 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
       if (name === 'unused' && cached) setNotice({ text: `Unused-package scan completed for ${project.name}.` })
       if (name === 'audit' && cached) setNotice({ text: `Package audit completed for ${project.name}.` })
       if (name === 'react-doctor' && cached) setNotice({ text: `React Doctor scan completed for ${project.name}${result.reactDoctor?.warning || result.reactDoctor?.score === null ? ' with limited results. Open the React Doctor tab for details.' : '.'}` })
+      if (name === 'lighthouse' && cached) setNotice({ text: `Lighthouse scan completed for ${project.name}${result.lighthouse?.warnings.length || result.lighthouse?.categories.length !== 4 || result.lighthouse?.categories.some(category => category.score === null) ? ' with limited results. Open the Lighthouse tab for details.' : '.'}` })
       if (updateLevel && result.packageUpdate) setNotice({ text: result.packageUpdate.packages.length ? `Updated ${result.packageUpdate.packages.length} packages in ${project.name}.` : `No eligible ${updateLevel} updates found for ${project.name}.` })
       if (name === 'open') setNotice({ text: 'Open request sent to your computer.' })
       if (name === 'run-script') setNotice({ text: 'Script sent to your terminal. Follow its progress and stop it there.' })
-    } catch (error) { setNotice({ text: error instanceof Error ? error.message : 'The action could not be completed.', error: true }) }
+    } catch (error) { if (version === workspaceVersion.current) setNotice({ text: error instanceof Error ? error.message : 'The action could not be completed.', error: true }) }
     finally {
-      if (updateLevel && workspace.rootPath) {
+      if (updateLevel && workspace.rootPath && version === workspaceVersion.current) {
         const repositoryId = packageWorkspaceId(project)
-        const cleared = { ...workspace, projects: workspace.projects.map(item => packageWorkspaceId(item) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, reactDoctor: undefined, storage: undefined } : item) }
+        const cleared = { ...workspace, projects: workspace.projects.map(item => packageWorkspaceId(item) === repositoryId ? { ...item, outdated: undefined, unused: undefined, audit: undefined, reactDoctor: undefined, lighthouse: undefined, storage: undefined } : item) }
         try {
           const refreshed = await scanWithHelper(workspace.rootPath)
           if (version === workspaceVersion.current) await persist(preservePreviews({ ...refreshed, mode: 'helper' }, cleared), false)
-        } catch { await persist(cleared, false); setNotice({ text: 'Package action finished, but metadata could not be refreshed. Resync before taking another package action.', error: true }) }
+        } catch { if (version === workspaceVersion.current) { await persist(cleared, false); setNotice({ text: 'Package action finished, but metadata could not be refreshed. Resync before taking another package action.', error: true }) } }
       }
-      setBusy('')
+      if (version === workspaceVersion.current) setBusy('')
     }
   }
   function packageBusy(project?: RepoProject) {
     if (project && auditBatch.isActive() && auditBatch.progress?.current?.id === project.id) return `${project.id}:audit`
     if (project && outdatedBatch.isActive() && outdatedBatch.progress?.current?.id === project.id) return `${project.id}:outdated`
     if (project && reactDoctorBatch.isActive() && reactDoctorBatch.progress?.current?.id === project.id) return `${project.id}:react-doctor`
+    if (project && lighthouseBatch.isActive() && lighthouseBatch.progress?.current?.id === project.id) return `${project.id}:lighthouse`
     return busy
   }
 
-  return { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, captureAllPreviews }
+  return { action, packageBusy, runAutomaticScan, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews }
 }

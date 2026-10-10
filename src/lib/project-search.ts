@@ -9,7 +9,7 @@ export interface SearchSelection {
   templateId?: string
 }
 
-export type WorkspaceCommandId = 'all-projects' | 'favorites' | 'running' | 'summary' | 'todos' | 'resync' | 'connect' | 'help' | 'settings' | 'audit-all' | 'outdated-all' | 'react-doctor-all' | 'previews-all' | 'clear-filters'
+export type WorkspaceCommandId = 'all-projects' | 'favorites' | 'running' | 'summary' | 'todos' | 'resync' | 'connect' | 'help' | 'settings' | 'audit-all' | 'outdated-all' | 'react-doctor-all' | 'lighthouse-all' | 'previews-all' | 'clear-filters'
 
 export interface SearchSuggestion {
   id: string
@@ -69,6 +69,7 @@ const workspaceCommands: { id: WorkspaceCommandId; title: string; description: s
   { id: 'audit-all', title: 'Scan all vulnerabilities', description: 'Check every eligible project in the workspace', keywords: 'audit security vulnerability rerun rescan batch all', helper: true },
   { id: 'outdated-all', title: 'Check all outdated packages', description: 'Check package versions across the workspace', keywords: 'outdated dependencies latest lag rerun rescan batch all', helper: true },
   { id: 'react-doctor-all', title: 'Run React Doctor on all projects', description: 'Check React code health across the workspace', keywords: 'react doctor diagnostics performance rerun rescan batch all', helper: true },
+  { id: 'lighthouse-all', title: 'Run Lighthouse on all frontends', description: 'Check performance, accessibility, best practices, and SEO across eligible frontend projects', keywords: 'lighthouse frontend website web vitals performance accessibility seo rerun rescan batch all', helper: true },
   { id: 'previews-all', title: 'Capture all previews', description: 'Refresh project previews across the workspace', keywords: 'screenshot images thumbnails refresh batch all', helper: true },
   { id: 'clear-filters', title: 'Clear search and filters', description: 'Reset the current project refinements', keywords: 'reset remove clear filters search' },
 ]
