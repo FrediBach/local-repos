@@ -27,7 +27,7 @@ export class Operations {
       terminal = terminal.filter(other => other !== entry)
     }
   }
-  admit(principal: string, requestId: string, kind: string, args: unknown, projectIds: string[], work: (context: { operationId: string; progress: (value: ScanProgress) => void; cancelled: () => boolean; invalidated: (count: number) => void }) => Promise<unknown[]>) {
+  admit(principal: string, requestId: string, kind: string, args: unknown, projectIds: string[], work: (context: { operationId: string; progress: (value: ScanProgress) => void; cancelled: () => boolean; invalidated: (count: number) => void }) => Promise<unknown[]>, options: { allowConcurrent?: boolean } = {}) {
     this.prune()
     const key = JSON.stringify([principal, requestId])
     const normalized = JSON.stringify([kind, args])
@@ -39,7 +39,7 @@ export class Operations {
     }
     if (this.closed) throw new McpFailure('HELPER_SHUTTING_DOWN', 'The helper is shutting down.')
     if (this.admissions.size >= 10_000 || this.queuedItems + Math.max(1, projectIds.length) > 100) throw new McpFailure('RESOURCE_LIMIT', 'The helper operation limit was reached.')
-    if ([...this.records.values()].some(entry => entry.principal === principal && !entry.operation.finishedAt)) throw new McpFailure('PROJECT_BUSY', 'Wait for your current operation to finish.', true)
+    if (!options.allowConcurrent && [...this.records.values()].some(entry => entry.principal === principal && !entry.operation.finishedAt)) throw new McpFailure('PROJECT_BUSY', 'Wait for your current operation to finish.', true)
     const operation: Operation = { operationId: `op_${randomUUID()}`, helperInstanceId: this.helperInstanceId, requestId, kind, projectIds, state: 'queued', createdAt: new Date(this.now()).toISOString(), cancellation: 'stop-after-current', cancelRequested: false, resultAvailable: false }
     const entry: RecordEntry = { principal, operation, bytes: 0 }
     this.admissions.set(key, { args: normalized, id: operation.operationId })

@@ -830,6 +830,40 @@ describe('dev server lifecycle', () => {
     expect(await (await fetch(replacement.url!)).text()).toBe('replacement')
   }, 15_000)
 
+  it('publishes unexpected exits without replacing the process identity', async () => {
+    const project = await createProject({ dev: 'node dev.cjs' })
+    await writeFile(path.join(directory, 'project', 'dev.cjs'), `require('node:http').createServer((req,res) => { res.end('ready'); if(req.url === '/exit') setTimeout(() => process.exit(2), 10) }).listen(Number(process.env.PORT), process.env.HOST)`)
+    const started = await helper.runtime.start(project.id)
+    const generation = helper.runtime.devStatus(project.id).processGeneration
+    const revision = helper.application.revision
+    await fetch(new URL('/exit', started.url))
+    await vi.waitFor(() => expect(helper.runtime.devStatus(project.id)).toMatchObject({ status: 'error', owned: false, processGeneration: generation }))
+    expect(helper.application.revision).toBeGreaterThan(revision)
+    expect(helper.registry.lookup(project.id).project.dev?.error).toContain('exited')
+  }, 15_000)
+
+  it('assigns a stable token before filesystem work and rejects a stale stop atomically', async () => {
+    const project = await createProject({ dev: 'node dev.cjs' })
+    const entry = helper.registry.lookup(project.id)
+    let release!: (value: typeof entry) => void
+    vi.spyOn(helper.registry, 'get').mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    const starting = helper.runtime.start(project.id)
+    const first = helper.runtime.devStatus(project.id)
+    expect(first).toMatchObject({ status: 'starting', owned: true, processGeneration: expect.stringMatching(/^proc_/) })
+    const joined = helper.runtime.start(project.id)
+    expect(helper.runtime.devStatus(project.id).processGeneration).toBe(first.processGeneration)
+    await helper.runtime.stop(project.id, first.processGeneration)
+    release(entry)
+    expect(await starting).toEqual({ status: 'stopped' })
+    await joined
+    await writeFile(path.join(entry.directory, 'dev.cjs'), `require('node:http').createServer((req,res) => res.end('ready')).listen(Number(process.env.PORT), process.env.HOST)`)
+    await helper.runtime.start(project.id)
+    const replacement = helper.runtime.devStatus(project.id)
+    expect(replacement.processGeneration).not.toBe(first.processGeneration)
+    await expect(helper.runtime.stop(project.id, first.processGeneration)).rejects.toMatchObject({ status: 409 })
+    expect(helper.runtime.devStatus(project.id)).toEqual(replacement)
+  }, 15_000)
+
   it('can stop a process after the project directory moves', async () => {
     const project = await createProject({ dev: 'node dev.cjs' })
     await writeFile(path.join(directory, 'project', 'dev.cjs'), `require('node:http').createServer((req, res) => res.end('ready')).listen(Number(process.env.PORT), process.env.HOST)`)

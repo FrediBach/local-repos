@@ -18,7 +18,7 @@ export class HelperApplication {
   readonly runtime = new ProjectRuntime(this.registry, (entries, reason) => {
     const revision = ++this.revision
     for (const entry of entries) this.index.invalidate(entry.project, reason, revision)
-  })
+  }, () => { this.revision++ })
   readonly operations: Operations
   readonly workspaces = new Map<string, RegisteredProject[]>()
   readonly roots = new Map<string, RootSnapshot>()

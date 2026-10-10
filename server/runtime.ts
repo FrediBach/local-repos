@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { StringDecoder } from 'node:string_decoder'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
@@ -6,7 +8,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import type { Browser } from 'playwright'
-import type { PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, LighthouseReport, PreviewMode, ProjectStorage, RepoProject, ScanProgressReporter } from '../src/types'
+import type { DevProcessStatus, PackageUpdate, PackageAudit, PackageOutdated, PackageUnused, ReactDoctorReport, LighthouseReport, PreviewMode, ProjectStorage, RepoProject, ScanProgressReporter } from '../src/types'
 import { HelperError, type ProjectRegistry, type RegisteredProject } from './scanner'
 import { selectDevScript } from '../src/lib/dev-script'
 import { configuredServerUrls, devCommand, discoverServerUrls } from './dev-server'
@@ -36,6 +38,7 @@ type CaptureTarget = { url: string; source: 'local' | 'configured' | 'package' |
 interface RunningServer {
   child: ChildProcess
   logs: string
+  logsTruncated: boolean
   entry: RegisteredProject
   port: number
   stopping: boolean
@@ -95,7 +98,8 @@ export class ProjectRuntime {
   private readonly updates = new Map<string, Promise<PackageUpdate>>()
   private readonly removals = new Map<string, Promise<ProjectStorage>>()
   private readonly maintenance = new Set<string>()
-  private readonly logHistory = new Map<string, string>()
+  private readonly logHistory = new Map<string, { text: string; truncated: boolean }>()
+  private readonly processTokens = new Map<string, string>()
   private readonly screenshots = new Map<string, string>()
   private readonly generations = new Map<string, number>()
   private readonly keepAlive = new Set<string>()
@@ -106,7 +110,7 @@ export class ProjectRuntime {
 
   private metadataScan = false
 
-  constructor(private readonly registry: ProjectRegistry, private readonly onInvalidate: (projects: RegisteredProject[], reason: string) => void = () => {}) {}
+  constructor(private readonly registry: ProjectRegistry, private readonly onInvalidate: (projects: RegisteredProject[], reason: string) => void = () => {}, private readonly onDevChange: () => void = () => {}) {}
 
   reserveMetadataScan(): () => void {
     if (this.closed || this.metadataScan || this.maintenance.size) throw new HelperError('Wait for the current scan or maintenance operation.', 409)
@@ -133,7 +137,23 @@ export class ProjectRuntime {
 
   async logs(id: string): Promise<string> {
     this.registry.lookup(id)
-    return this.running.get(id)?.logs ?? this.logHistory.get(id) ?? ''
+    return this.logSnapshot(id).text
+  }
+
+  devStatus(id: string): DevProcessStatus {
+    const entry = this.registry.lookup(id)
+    return { ...entry.project.dev ?? { status: 'stopped' as const }, owned: this.running.has(id) || this.starts.has(id), processGeneration: this.processTokens.get(id) }
+  }
+
+  logSnapshot(id: string) {
+    const status = this.devStatus(id)
+    return { ...this.logHistory.get(id) ?? { text: '', truncated: false }, processGeneration: status.processGeneration }
+  }
+
+  private setDev(entry: RegisteredProject, state: DevState) {
+    entry.project.dev = state
+    this.onDevChange()
+    return state
   }
 
   private available(id: string): void {
@@ -363,6 +383,10 @@ export class ProjectRuntime {
     if (persistent) this.keepAlive.add(id)
     const pending = this.starts.get(id)
     if (pending) return pending
+    if (this.running.has(id)) return this.registry.lookup(id).project.dev ?? { status: 'starting' }
+    this.processTokens.set(id, `proc_${randomUUID()}`)
+    this.logHistory.set(id, { text: '', truncated: false })
+    this.setDev(this.registry.lookup(id), { status: 'starting' })
     const generation = (this.generations.get(id) ?? 0) + 1
     this.generations.set(id, generation)
     const promise = this.startOnce(id, generation)
@@ -370,7 +394,10 @@ export class ProjectRuntime {
     try {
       return await promise
     } catch (error) {
-      if (this.generations.get(id) === generation && !this.running.has(id)) this.keepAlive.delete(id)
+      if (this.generations.get(id) === generation && !this.running.has(id)) {
+        this.keepAlive.delete(id)
+        this.setDev(this.registry.lookup(id), { status: 'error', error: error instanceof Error ? error.message : 'The dev server could not start.' })
+      }
       throw error
     } finally {
       if (this.starts.get(id) === promise) this.starts.delete(id)
@@ -383,7 +410,12 @@ export class ProjectRuntime {
     if (this.running.has(id)) return entry.project.dev ?? { status: 'starting' }
     const port = await freePort()
     if (this.closed || this.generations.get(id) !== generation) return entry.project.dev ?? { status: 'stopped' }
-    const { command, args, env } = devCommand(entry, port)
+    const launchEntry = { ...entry, project: { ...entry.project, scripts: { ...entry.project.scripts } } }
+    const { command, args, env } = devCommand(launchEntry, port)
+    const selected = selectDevScript(launchEntry.project)!
+    await validateProjectScript(launchEntry, selected.name, selected.command)
+    await this.registry.get(id)
+    if (this.closed || this.generations.get(id) !== generation) return entry.project.dev ?? { status: 'stopped' }
     const url = `http://127.0.0.1:${port}`
     const child = spawn(command, args, {
       cwd: entry.directory,
@@ -392,19 +424,26 @@ export class ProjectRuntime {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
     })
-    const running: RunningServer = { child, logs: '', entry, port, stopping: false }
+    const running: RunningServer = { child, logs: '', logsTruncated: false, entry, port, stopping: false }
     this.running.set(id, running)
-    entry.project.dev = { status: 'starting', url }
-    const append = (data: Buffer) => {
-      running.logs = `${running.logs}${data.toString()}`.slice(-40_000)
-      if (this.running.get(id) === running) this.logHistory.set(id, running.logs)
+    this.setDev(entry, { status: 'starting', url })
+    const append = (text: string) => {
+      const combined = running.logs + text
+      running.logsTruncated ||= combined.length > 40_000
+      running.logs = combined.slice(-40_000)
+      // Do not begin a retained tail in the middle of a surrogate pair.
+      if (/^[\uDC00-\uDFFF]/.test(running.logs)) running.logs = running.logs.slice(1)
+      if (this.running.get(id) === running) this.logHistory.set(id, { text: running.logs, truncated: running.logsTruncated })
     }
-    child.stdout?.on('data', append)
-    child.stderr?.on('data', append)
+    for (const stream of [child.stdout, child.stderr]) {
+      const decoder = new StringDecoder('utf8')
+      stream?.on('data', (data: Buffer) => append(decoder.write(data)))
+      stream?.on('end', () => append(decoder.end()))
+    }
     child.once('error', (error) => {
       if (this.running.get(id) !== running || running.stopping) return
       const detail = 'code' in error && error.code === 'ENOENT' ? `${entry.project.packageManager} is not installed or is not on the helper's PATH.` : error.message
-      entry.project.dev = { status: 'error', error: detail }
+      this.setDev(entry, { status: 'error', error: detail })
       this.running.delete(id)
       this.keepAlive.delete(id)
     })
@@ -413,7 +452,7 @@ export class ProjectRuntime {
       this.running.delete(id)
       this.keepAlive.delete(id)
       if (entry.project.dev?.status !== 'error') {
-        entry.project.dev = { status: 'error', error: `The dev server exited${code === null ? '' : ` with code ${code}`}. Check the logs and install project dependencies if needed.` }
+        this.setDev(entry, { status: 'error', error: `The dev server exited${code === null ? '' : ` with code ${code}`}. Check the logs and install project dependencies if needed.` })
       }
     })
     const deadline = Date.now() + 45_000
@@ -428,8 +467,7 @@ export class ProjectRuntime {
       if (this.running.get(id) !== running || running.stopping) return entry.project.dev ?? { status: 'stopped' }
       const ready = responses.find(response => response.ready)
       if (ready) {
-        entry.project.dev = { status: 'running', url: ready.candidate }
-        return entry.project.dev
+        return this.setDev(entry, { status: 'running', url: ready.candidate })
       }
       await delay(250)
     }
@@ -438,13 +476,14 @@ export class ProjectRuntime {
     const stoppedGeneration = this.generations.get(id)
     await stopping
     if (this.generations.get(id) !== stoppedGeneration) return entry.project.dev ?? { status: 'stopped' }
-    entry.project.dev = { status: 'error', error: `The dev server did not become ready within 45 seconds. We checked its configured port and local URLs printed in its logs. Check the logs, or capture from the project's website instead.` }
-    return entry.project.dev
+    return this.setDev(entry, { status: 'error', error: `The dev server did not become ready within 45 seconds. We checked its configured port and local URLs printed in its logs. Check the logs, or capture from the project's website instead.` })
   }
 
-  async stop(id: string): Promise<DevState> {
+  async stop(id: string, expectedGeneration?: string): Promise<DevState> {
     // Stopping a known process must remain possible after its folder moves.
     const entry = this.registry.lookup(id)
+    // Compare and reserve synchronously, before signalling or awaiting anything.
+    if (expectedGeneration !== undefined && expectedGeneration !== this.processTokens.get(id)) throw new HelperError('PROCESS_GENERATION_CHANGED: Read the current process status before stopping it.', 409)
     this.generations.set(id, (this.generations.get(id) ?? 0) + 1)
     this.starts.delete(id)
     this.keepAlive.delete(id)
@@ -466,8 +505,7 @@ export class ProjectRuntime {
       this.stoppingChildren.set(running.child, { id, timer })
       timer.unref()
     }
-    entry.project.dev = { status: 'stopped' }
-    return entry.project.dev
+    return this.setDev(entry, { status: 'stopped' })
   }
 
   async screenshot(id: string, source: PreviewMode = 'auto', onProgress?: ScanProgressReporter): Promise<string> {
@@ -674,6 +712,7 @@ export class ProjectRuntime {
     this.closed = true
     for (const controller of this.lighthouseControllers) controller.abort()
     this.keepAlive.clear()
+    for (const id of this.starts.keys()) this.setDev(this.registry.lookup(id), { status: 'stopped' })
     this.starts.clear()
     const servers = [...this.running.values()]
     const stoppedChildren = [...this.stoppingChildren.keys()]
@@ -682,7 +721,7 @@ export class ProjectRuntime {
     for (const running of servers) {
       running.stopping = true
       terminate(running.child)
-      running.entry.project.dev = { status: 'stopped' }
+      this.setDev(running.entry, { status: 'stopped' })
     }
     this.running.clear()
     await Promise.all([...this.browsers].map((browser) => browser.close().catch(() => undefined)))

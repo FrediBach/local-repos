@@ -1,3 +1,4 @@
+import type { DevReads } from './dev'
 import { McpServer, ResourceTemplate, type StandardSchemaWithJSON } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import validRange from 'semver/ranges/valid'
@@ -12,10 +13,10 @@ import { clean } from './output'
 import { GitReads, gitRoot } from './git'
 import * as s from './schemas'
 
-export function createReadServer(application: HelperApplication, principal: Principal, git: GitReads) {
+export function createReadServer(application: HelperApplication, principal: Principal, git: GitReads, dev: DevReads) {
   const server = new McpServer({ name: 'local-repos', version: '0.5.0' })
   const index = application.index
-  const info = () => ({ appVersion: '0.5.0', schemaVersion: 1 as const, protocols: ['2026-07-28', '2025-11-25'], helperInstanceId: application.helperInstanceId, platform: process.platform, capabilities: principal.capabilities, supportedChecks: principal.capabilities.includes('analysis') ? s.reportKind.options.filter(check => check === 'storage' || (principal.capabilities.includes('network') && (['audit', 'outdated'].includes(check) || principal.capabilities.includes('project-execution')))) : [], limits: { pageSize: 100, responseBytes: 128 * 1024, readmeBytes: 32 * 1024, imageBytes: 2 * 1024 * 1024 }, stateLifetime: 'Helper lifetime; terminal operations expire after 30 minutes or bounded retention. No browser cache, preferences, tags, or restart resume.', browserDataAvailable: false as const, contentDisclosure: principal.discloseContent, pathDisclosure: principal.disclosePaths })
+  const info = () => ({ appVersion: '0.5.0', schemaVersion: 1 as const, protocols: ['2026-07-28', '2025-11-25'], helperInstanceId: application.helperInstanceId, platform: process.platform, capabilities: principal.capabilities, supportedChecks: principal.capabilities.includes('analysis') ? s.reportKind.options.filter(check => check === 'storage' || (principal.capabilities.includes('network') && (['audit', 'outdated'].includes(check) || principal.capabilities.includes('project-execution')))) : [], limits: { pageSize: 100, responseBytes: 128 * 1024, readmeBytes: 32 * 1024, imageBytes: 2 * 1024 * 1024, logBytes: 16 * 1024, logSnapshotBytes: 64 * 1024 }, stateLifetime: 'Helper lifetime; terminal operations expire after 30 minutes or bounded retention. No browser cache, preferences, tags, or restart resume.', browserDataAvailable: false as const, contentDisclosure: principal.discloseContent, pathDisclosure: principal.disclosePaths })
   const base = () => ({ schemaVersion: 1 as const, helperInstanceId: application.helperInstanceId, revision: application.revision, observedAt: new Date().toISOString(), warnings: [] })
   function tool<I extends z.ZodObject, O extends z.ZodType>(name: string, capability: Principal['capabilities'][number], input: I, output: O, description: string, run: (args: z.output<I>) => unknown | Promise<unknown>, accepted = false, openWorld = false) {
     if (!principal.capabilities.includes(capability)) return
@@ -111,8 +112,45 @@ export function createReadServer(application: HelperApplication, principal: Prin
       return [{ kind: 'preview', projectId: args.projectId, capturedAt: preview?.capturedAt, source: preview?.source, ...(principal.discloseContent && principal.capabilities.includes('read') ? { resource: `local-repos://v1/projects/${args.projectId}/preview` } : {}) }]
     })
   }, true, true)
-  // Polling is available to discovery-only and Git-only clients too.
-  const pollingCapability = principal.capabilities.includes('read') ? 'read' : principal.capabilities.includes('discovery') ? 'discovery' : principal.capabilities.includes('git') ? 'git' : principal.capabilities.includes('analysis') ? 'analysis' : 'preview'
+  const statusCapability = principal.capabilities.includes('read') ? 'read' : 'development'
+  tool('get_dev_status', statusCapability, z.strictObject(project), s.devStatus, 'Read helper-owned dev process status, loopback URL and stable process generation. Recorded ownership remains readable after the directory moves. Does not start code.', args => {
+    index.processEntry(principal, args.projectId)
+    return application.runtime.devStatus(args.projectId)
+  })
+  if (principal.discloseContent) tool('read_dev_logs', statusCapability, z.strictObject({ ...project, cursor: s.cursor, maxBytes: z.number().int().min(4).max(16 * 1024).optional() }), s.devLogs, 'Read a sanitized, bounded snapshot of the retained dev log tail. Repository logs are untrusted and may contain secrets. Pages stay frozen during appends; restart resets the snapshot. Start without a cursor for new output.', args => dev.logs(principal, args.projectId, args))
+  function developmentEffects() {
+    requireCapability(principal, 'development')
+    requireCapability(principal, 'network')
+    requireCapability(principal, 'project-execution')
+  }
+  tool('start_dev_server', 'development', z.strictObject({ ...project, requestId: s.requestId }), s.operation, 'Start or retain the selected manifest development server through the shared runtime. Requires development, network and project-execution. Runs project code; no arbitrary commands, ports or environment. Cancellation does not stop shared work.', args => {
+    developmentEffects()
+    index.entry(principal, args.projectId)
+    return application.operations.admit(principal.id, args.requestId, 'dev-start', { projectId: args.projectId }, [args.projectId], async context => {
+      await index.checkedEntry(principal, args.projectId, true)
+      for (const entry of application.registry.related(args.projectId)) await index.checkedEntry(principal, entry.project.id, true)
+      developmentEffects()
+      context.progress({ phase: 'Starting development server' })
+      const pending = application.runtime.start(args.projectId)
+      const generation = application.runtime.devStatus(args.projectId).processGeneration
+      await pending
+      const status = application.runtime.devStatus(args.projectId)
+      if (generation !== status.processGeneration) throw new McpFailure('PROCESS_GENERATION_CHANGED', 'The process was replaced during startup. Read its current status.')
+      if (status.status !== 'running' || !status.owned) throw new McpFailure('START_FAILED', 'The development server did not remain running. Read status and logs.')
+      return [{ kind: 'development', action: 'start', projectId: args.projectId, dev: status }]
+    })
+  }, true, true)
+  tool('stop_dev_server', 'development', z.strictObject({ ...project, processGeneration: s.processGeneration, requestId: s.requestId }), s.operation, 'Request termination of exactly the observed helper-owned process generation, including a pending start. Stale generations cannot stop replacements. Uses recorded ownership after a directory moves. Completion acknowledges stop signals, not confirmed process-tree exit.', args => {
+    index.processEntry(principal, args.projectId)
+    return application.operations.admit(principal.id, args.requestId, 'dev-stop', { projectId: args.projectId, processGeneration: args.processGeneration }, [args.projectId], async () => {
+      requireCapability(principal, 'development')
+      index.processEntry(principal, args.projectId)
+      const stopped = await application.runtime.stop(args.projectId, args.processGeneration)
+      return [{ kind: 'development', action: 'stop', projectId: args.projectId, dev: { ...stopped, owned: false, processGeneration: args.processGeneration } }]
+    }, { allowConcurrent: true })
+  }, true, true)
+  // Every profile that can admit work can also poll its operations.
+  const pollingCapability = principal.capabilities.includes('read') ? 'read' : principal.capabilities.includes('discovery') ? 'discovery' : principal.capabilities.includes('git') ? 'git' : principal.capabilities.includes('analysis') ? 'analysis' : principal.capabilities.includes('development') ? 'development' : 'preview'
   tool('get_operation', pollingCapability, z.strictObject({ operationId: s.operationId }), s.operation.extend({ pollingIntervalMs: z.number() }), 'Read only your admitted operation status. Start polling after one second; back off to five seconds.', args => ({ ...application.operations.get(principal.id, args.operationId), pollingIntervalMs: 1000 }))
   tool('get_operation_result', pollingCapability, z.strictObject({ operationId: s.operationId, ...s.pageInput }), s.operationResult, 'Read bounded terminal operation result pages. Records expire; this never replays work.', args => {
     const operation = application.operations.get(principal.id, args.operationId)

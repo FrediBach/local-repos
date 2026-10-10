@@ -77,6 +77,96 @@ async function scan(client: Client, requestId = 'scan') {
 }
 
 describe('authenticated MCP read release', () => {
+  it('shares development processes across REST/MCP and stops only the observed generation after moves', async () => {
+    policy.clients[0].principal.capabilities.push('development', 'network', 'project-execution')
+    policy.clients[1].principal.discloseContent = true
+    const directory = await project('development')
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'development', scripts: { dev: 'node dev.cjs' } }))
+    await writeFile(path.join(directory, 'dev.cjs'), `console.log('😀'.repeat(6000)); console.log('token=fixture-secret'); require('node:http').createServer((req,res) => { if(req.url === '/append') console.log('later-log-entry'); res.end('ready') }).listen(Number(process.env.PORT), process.env.HOST)`)
+    const client = await connect()
+    await scan(client)
+    const id = (await call(client, 'list_projects')).data.items[0].id
+    const before = helper.application.revision
+    const started = await call(client, 'start_dev_server', { projectId: id, requestId: 'start' })
+    expect((await waitOperation(client, started.data.operationId)).state).toBe('succeeded')
+    const current = (await call(client, 'get_dev_status', { projectId: id })).data
+    expect(current).toMatchObject({ status: 'running', owned: true, processGeneration: expect.stringMatching(/^proc_/) })
+    expect(helper.application.workspaceState(rootId(root))).toMatchObject({ projects: [{ dev: { status: 'running' } }] })
+    expect(new URL(helper.registry.lookup(id).project.dev!.url!).href).toBe(current.url)
+    expect(helper.application.revision).toBeGreaterThan(before)
+    expect((await call(client, 'start_dev_server', { projectId: id, requestId: 'start' })).data.operationId).toBe(started.data.operationId)
+    const retained = await call(client, 'start_dev_server', { projectId: id, requestId: 'retain' })
+    await waitOperation(client, retained.data.operationId)
+    expect((await call(client, 'get_dev_status', { projectId: id })).data.processGeneration).toBe(current.processGeneration)
+    const privateClient = await connect(true, otherToken)
+    expect((await call(privateClient, 'get_dev_status', { projectId: id })).error?.code).toBe('PROJECT_NOT_FOUND')
+    expect((await call(privateClient, 'read_dev_logs', { projectId: id })).error?.code).toBe('PROJECT_NOT_FOUND')
+    let page = (await call(client, 'read_dev_logs', { projectId: id, maxBytes: 512 })).data
+    const firstCursor = page.nextCursor
+    expect(page.truncated).toBe(true)
+    expect(Buffer.byteLength(page.text)).toBeLessThanOrEqual(512)
+    await fetch(new URL('/append', current.url))
+    let text = page.text
+    while (page.nextCursor) {
+      page = (await call(client, 'read_dev_logs', { projectId: id, cursor: page.nextCursor, maxBytes: 16384 })).data
+      text += page.text
+    }
+    expect(text).not.toContain('fixture-secret')
+    expect(text).not.toContain('later-log-entry')
+    expect(text).not.toContain('�')
+    await helper.runtime.stop(id)
+    const replacement = await helper.runtime.start(id)
+    expect(replacement.status).toBe('running')
+    expect((await call(client, 'read_dev_logs', { projectId: id, cursor: firstCursor })).data.resetRequired).toBe(true)
+    const stale = await call(client, 'stop_dev_server', { projectId: id, processGeneration: current.processGeneration, requestId: 'stale-stop' })
+    expect((await waitOperation(client, stale.data.operationId)).error.code).toBe('PROCESS_GENERATION_CHANGED')
+    expect(await (await fetch(replacement.url!)).text()).toBe('ready')
+    const latest = (await call(client, 'get_dev_status', { projectId: id })).data
+    await rename(directory, path.join(temp, 'moved-development'))
+    await scan(client, 'after-move')
+    expect((await call(client, 'list_projects')).data.total).toBe(0)
+    expect((await call(client, 'get_dev_status', { projectId: id })).data.processGeneration).toBe(latest.processGeneration)
+    const stopped = await call(client, 'stop_dev_server', { projectId: id, processGeneration: latest.processGeneration, requestId: 'stop' })
+    expect((await waitOperation(client, stopped.data.operationId)).state).toBe('succeeded')
+    expect((await call(client, 'get_dev_status', { projectId: id })).data).toMatchObject({ status: 'stopped', owned: false })
+    const rows = (await call(client, 'get_operation_result', { operationId: stopped.data.operationId })).data.rows.items
+    expect(rows[0]).toMatchObject({ kind: 'development', action: 'stop', dev: { processGeneration: latest.processGeneration, owned: false } })
+  }, 20_000)
+
+  it('allows an exact-generation stop while the same client has a pending start', async () => {
+    policy.clients[0].principal.capabilities.push('development', 'network', 'project-execution')
+    const directory = await project('slow-start')
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'slow-start', scripts: { dev: 'node dev.cjs' } }))
+    await writeFile(path.join(directory, 'dev.cjs'), `setTimeout(() => require('node:http').createServer((req,res) => res.end('ready')).listen(Number(process.env.PORT), process.env.HOST), 10000)`)
+    const client = await connect()
+    await scan(client)
+    const id = (await call(client, 'list_projects')).data.items[0].id
+    const started = await call(client, 'start_dev_server', { projectId: id, requestId: 'slow' })
+    await vi.waitFor(() => expect(helper.runtime.devStatus(id).owned).toBe(true))
+    const processGeneration = helper.runtime.devStatus(id).processGeneration
+    const stopped = await call(client, 'stop_dev_server', { projectId: id, processGeneration, requestId: 'interrupt' })
+    expect(stopped.outcome).toBe('accepted')
+    expect((await waitOperation(client, stopped.data.operationId)).state).toBe('succeeded')
+    expect((await waitOperation(client, started.data.operationId)).state).toBe('failed')
+    expect(helper.runtime.devStatus(id)).toMatchObject({ status: 'stopped', owned: false, processGeneration })
+  }, 15_000)
+
+  it('requires development execution grants and rejects stale startup scripts before launching', async () => {
+    policy.clients[0].principal.capabilities.push('development')
+    const directory = await project('startup-policy')
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'startup-policy', scripts: { dev: 'node dev.cjs' } }))
+    const client = await connect()
+    await scan(client)
+    const id = (await call(client, 'list_projects')).data.items[0].id
+    expect((await call(client, 'start_dev_server', { projectId: id, requestId: 'denied' })).error?.code).toBe('CAPABILITY_DISABLED')
+    policy.clients[0].principal.capabilities.push('network', 'project-execution')
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'startup-policy', scripts: { dev: 'node changed.cjs' } }))
+    const started = await call(client, 'start_dev_server', { projectId: id, requestId: 'changed' })
+    expect((await waitOperation(client, started.data.operationId)).state).toBe('failed')
+    expect(helper.runtime.devStatus(id)).toMatchObject({ status: 'error', owned: false })
+    expect((await call(client, 'start_dev_server', { projectId: id, requestId: 'changed' })).data.operationId).toBe(started.data.operationId)
+  })
+
   it('gates execution effects and shares fresh checks, progress, deduplication and report state with REST', async () => {
     policy.clients[0].principal.capabilities.push('analysis', 'preview')
     await project('analysis')
@@ -136,7 +226,7 @@ describe('authenticated MCP read release', () => {
     await project('alpha'); await project('beta')
     const client = await connect(modern)
     const catalog = await client.listTools()
-    expect(catalog.tools.length).toBe(16)
+    expect(catalog.tools.length).toBe(18)
     expect(catalog.tools.every(tool => !!tool.outputSchema && tool.inputSchema.additionalProperties === false)).toBe(true)
     expect(catalog.tools.some(tool => /run_check|start_dev|apply_/.test(tool.name))).toBe(false)
     const roots = await call(client, 'list_roots')
@@ -356,7 +446,7 @@ describe('authenticated MCP read release', () => {
     await client.connect(transport)
     const info = await call(client, 'get_server_info')
     expect(info.data.helperInstanceId).toBe(helper.application.helperInstanceId)
-    expect((await client.listTools()).tools.length).toBe(16)
+    expect((await client.listTools()).tools.length).toBe(18)
     expect(diagnostics).toBe('')
   })
 })

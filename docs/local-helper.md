@@ -141,7 +141,13 @@ Individual service modules handle command construction, validation, and parsing.
   `shell: false`, checks configured/logged loopback URLs for up to 45 seconds, and
   keeps the last 40,000 log characters. Stop invalidates pending starts, sends
   SIGTERM, then SIGKILL after two seconds. Generation counters prevent stale
-  starts from overwriting a newer stop/start. Local starts are unsupported on Windows.
+  starts from overwriting a newer stop/start. A separate `proc_` token is allocated
+  synchronously for each new pending start and remains stable across joined or
+  repeated starts. Runtime stop compares an optional expected token before any
+  signal or await. REST callers retain current-process stop behavior; MCP requires
+  the token. Selected startup scripts are revalidated against the current manifest.
+  Lifecycle changes advance the application revision, including unexpected exits
+  and pre-launch failures. Local starts are unsupported on Windows.
 - **Git:** [`git-history.ts`](../server/git-history.ts),
   [`git-daily-summary.ts`](../server/git-daily-summary.ts), and
   [`git-push-status.ts`](../server/git-push-status.ts) read local Git data with
@@ -324,9 +330,9 @@ MCP is absent unless `LOCAL_REPOS_MCP_CONFIG` names a valid, owner-only local
 configuration file outside the configured roots. [`mcp/policy.ts`](../server/mcp/policy.ts)
 canonicalizes roots, validates unique clients and credentials, and loads immutable
 per-client grants. Defaults are `read`, `discovery`, and `git`; `analysis`,
-`preview`, `network`, and `project-execution` require explicit configuration.
+`preview`, `network`, `project-execution`, and `development` require explicit configuration.
 Restart to apply policy changes
-or revoke credentials. README and preview content disclosure defaults off;
+or revoke credentials. README, preview, and log content disclosure defaults off;
 absolute path disclosure defaults off. These settings are disclosure choices,
 not a sandbox or a guarantee that repository text contains no secrets.
 
@@ -372,8 +378,9 @@ and terminal controls are removed on output, with best-effort secret protection.
 The read catalog includes server/root/project metadata, dependency/script pages,
 README chunks, report summaries/rows, actionable findings, Git history/day/push
 reads, and operation polling/cancellation. Resources expose matching metadata,
-reports, READMEs, previews, and authorized operation status. Optional `run_check` and `capture_preview` tools use the shared runtime. There
-are no process-control, desktop, script-launch, or dependency mutation MCP tools.
+reports, READMEs, previews, and authorized operation status. Optional `run_check`
+and `capture_preview` tools use the shared runtime. There are also status/log reads and generation-safe dev start/stop tools. Desktop,
+script-launch, and dependency mutation MCP tools remain unavailable.
 
 Report snapshots belong to the current helper. Reads distinguish missing,
 unsupported, invalidated, and available reports; null scores, skipped declarations,
@@ -386,8 +393,9 @@ Findings use the shared todo rules and default outdated scoring, without claimin
 access to browser dismissals, settings, or tags.
 
 Operation admission reserves `(principal, requestId)` before work and binds it to
-the normalized request. There is one active operation per principal and at most
-100 admitted work items across the helper. Terminal records retain results for
+the normalized request. There is one active operation per principal, except that
+exact-generation stops may interrupt pending work. At most 100 work items may
+be admitted across the helper. Terminal records retain results for
 30 minutes, up to 200 records/32 MiB, with an 8 MiB per-result cap. Compact retry
 keys persist for the helper lifetime, capped at 10,000; expired admissions cannot
 be replayed. Cancellation stops queued work or stops after the current repository;
@@ -417,3 +425,27 @@ contents retain existing pagination and limits. Optional MCP batches are deferre
 The protocol tests exercise official SDK HTTP and stdio clients under both
 2026-07-28 and 2025-11-25. External host application interoperability and OAuth
 flows have not been verified or advertised.
+
+
+### Development control through MCP
+
+`get_dev_status` and `read_dev_logs` use recorded directory ownership rather than
+current scan membership or filesystem checks, preserving access after a directory
+moves. This exception does not authorize a new launch. Reads require `read` or
+`development`; logs additionally require `discloseContent`. Startup requires
+`development`, `network`, and `project-execution`, validates the effective workspace
+and related packages, and runs through the same runtime as REST and previews.
+Stop requires `development` and an exact process-generation token, checked inside
+the runtime atomically. It may be admitted while that principal has a pending
+start. Cancellation alone never kills shared startup work. Startup completion
+requires the observed generation to remain running; stop results describe the
+signalled generation, not any replacement that starts before the response arrives.
+
+[`mcp/dev.ts`](../server/mcp/dev.ts) retains at most 32 sanitized log snapshots,
+one per principal/project, capped at 64 KiB each and expiring after five minutes.
+Pages are UTF-8 aligned, at most 16 KiB, and frozen across appends. Cursors bind
+the principal, project, generation and snapshot. Expired/incompatible cursors
+require a fresh first read; a valid cursor across a process replacement returns
+`resetRequired: true` with the new generation. Fresh reads refresh the retained
+tail. Runtime logs retain at most 40,000 characters, are reset for new starts,
+and cannot receive late output from an older child. Redaction remains best-effort.

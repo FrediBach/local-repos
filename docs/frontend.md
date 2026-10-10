@@ -376,3 +376,8 @@ restoring invalidated reports. Helper restarts re-register the root and retained
 cached reports are labeled as having unknown freshness. Changed preview images
 are downloaded into the durable cache. Cache failures retain the existing visible
 warning. No MCP access to browser preferences or durable storage is introduced.
+
+Process lifecycle changes (pending start, readiness, stop, failure, and unexpected
+exit) advance the helper revision too. The same reconciliation updates project
+server buttons and running filters for work started by MCP, including when the
+browser previously knew no server was running. Process logs remain on demand.

@@ -23,6 +23,20 @@ describe('helper workspace synchronization', () => {
     expect(props.persist).toHaveBeenCalledWith(expect.objectContaining({ revision: 2 }))
     expect(result.current.operations[0].progress?.phase).toBe('Auditing')
   })
+  it('reconciles a server started by another client and its later exit', async () => {
+    const props = options()
+    const project = { id: 'project', name: 'Project', dirName: 'project', relativePath: 'project', description: '', stack: [], scripts: {}, packageManager: 'npm' as const, scannedAt: '' }
+    mocks.api.mockResolvedValue({ ...snapshot, projects: [{ ...project, dev: { status: 'running', url: 'http://127.0.0.1:12345' } }] })
+    const { rerender } = renderHook(useHelperState, { initialProps: props })
+    await advance()
+    const running = props.persist.mock.calls[0][0]
+    expect(running.projects[0].dev.status).toBe('running')
+    rerender({ ...props, workspace: running })
+    mocks.api.mockResolvedValue({ ...snapshot, revision: 3, projects: [{ ...project, dev: { status: 'error', error: 'Process exited' } }] })
+    await advance()
+    expect(props.persist.mock.calls.at(-1)![0].projects[0].dev).toEqual({ status: 'error', error: 'Process exited' })
+  })
+
   it('rejects late responses after a generation change and lower revisions', async () => {
     const props = options()
     let resolve!: (value: WorkspaceState) => void

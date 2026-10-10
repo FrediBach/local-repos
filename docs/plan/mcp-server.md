@@ -1,7 +1,7 @@
 # MCP server plan
 
-Status: phases 0–1 and single-project phase 2 implemented on 2026-10-10.
-Optional phase 2 batches and phases 3–5 remain planned.
+Status: phases 0–1, single-project phase 2, and core phase 3 implemented on 2026-10-10.
+Optional batches, desktop/script launches, and phases 4–5 remain planned.
 This document preserves the design proposal below. For shipped configuration,
 contracts, limits, and verification status, see [README](../../README.md#optional-mcp-access)
 and [helper architecture](../local-helper.md#optional-mcp-read-service).
@@ -11,8 +11,9 @@ Git tools, resources, bounded operation polling, and shared root/scope guards.
 Official SDK clients cover both transport modes and protocol revisions. External
 host application interoperability remains unverified; no universal OAuth support
 is claimed. Single-project checks, preview capture, and revisioned browser
-reconciliation are shipped with explicit effect capabilities. Process controls,
-mutations, prompts, and optional protocol extensions are not shipped.
+reconciliation are shipped with explicit effect capabilities. Generation-safe
+development-server controls and bounded log reads are shipped. Desktop/script
+launches, mutations, prompts, and optional protocol extensions are not shipped.
 
 ## 1. Recommended direction
 

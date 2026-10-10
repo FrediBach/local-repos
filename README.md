@@ -410,8 +410,8 @@ The manifest includes a stable app ID, root scope, language, categories, theme c
 The local helper can expose project discovery, bounded project context, cached
 reports, and local Git history to MCP clients without opening the browser UI.
 MCP is **disabled by default**. Optional fresh checks and preview capture require
-explicit capabilities. There are no server-control, script-launch, or dependency
-mutation tools. Reports exist only if this helper
+explicit capabilities. Development-server controls also require explicit grants.
+There are no desktop-launch, script-launch, or dependency mutation MCP tools. Reports exist only if this helper
 has them; MCP cannot read your browser cache, favorites, tags, or settings.
 
 Create a JSON configuration outside all directories you intend to scan, for
@@ -437,7 +437,7 @@ Replace both example paths and the token placeholder:
 
 `read` permits metadata/report reads, `discovery` permits explicit root scans,
 and `git` permits local Git queries. `discloseContent` permits scanned README
-chunks and existing preview images; it defaults to `false`. Absolute root paths
+chunks, existing preview images, and dev logs; it defaults to `false`. Absolute root paths
 are omitted unless `disclosePaths` is enabled. Repository content remains
 untrusted; URL credential stripping and terminal-control removal are best-effort
 redaction, not a guarantee that content contains no secrets.
@@ -477,7 +477,8 @@ Git inspection never fetches, commits, or pushes.
 
 Pages default to 25 rows, with a maximum of 100 and additional byte limits.
 Cursors expire when their snapshot changes. Each client has one active
-operation, at most 100 admitted work items across the helper, and
+operation (exact-generation stops may interrupt a pending operation), at most
+100 admitted work items across the helper, and
 bounded terminal-result retention (30 minutes, 200 records, 32 MiB). Daily roots
 with more than 100 projects require a smaller configured scan root. Reusing a
 request ID with identical arguments returns the admitted operation; changed
@@ -509,8 +510,28 @@ checks return dated report summaries and report resource URIs. Cancellation does
 not abort shared work already running. Simultaneous preview requests for different
 sources return a busy error.
 
+`local_repos_get_dev_status` reads status, the helper-owned flag, and a stable
+`processGeneration` token. `local_repos_read_dev_logs` requires content disclosure
+and returns sanitized UTF-8 pages from a frozen tail snapshot (8 KiB by default,
+16 KiB maximum per page). Start without a cursor to refresh output; pages do not
+shift as output arrives. A changed generation resets the snapshot explicitly.
+Log redaction is best-effort; logs remain untrusted and may contain secrets.
+
+Grant `development`, `network`, and `project-execution` to enable
+`local_repos_start_dev_server({ projectId, requestId })`. It revalidates the selected
+`dev`, `start`, or `serve` script against the current manifest and shares an
+existing helper-owned server when present. Grant `development` to enable
+`local_repos_stop_dev_server({ projectId, processGeneration, requestId })`.
+Obtain the generation from status; stale tokens cannot stop replacement processes.
+Stops can interrupt the same client's pending start. Completion acknowledges
+termination signals, while process-tree cleanup may still be running. Status,
+logs, and stopping remain available for a known process after its directory moves;
+starting code requires fresh filesystem and workspace validation.
+
+
 Visible helper-connected browser tabs reconcile reports and externally active
-work every three seconds and on focus. After a helper restart, the browser
+work every three seconds and on focus. Development-server starts, stops, and
+unexpected exits also update that shared revision. After a helper restart, the browser
 re-registers its connected directory, including in manual watcher mode. Successful
 cached reports remain visible with unknown freshness; explicit helper invalidations
 remove stale reports from the browser cache. Browser-directory and hosted modes

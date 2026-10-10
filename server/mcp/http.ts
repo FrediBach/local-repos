@@ -1,3 +1,4 @@
+import { DevReads } from './dev'
 import express, { type Express } from 'express'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import { toNodeHandler } from '@modelcontextprotocol/node'
@@ -8,7 +9,8 @@ import { GitReads } from './git'
 
 export function mountMcp(app: Express, application: HelperApplication, policy: McpPolicy) {
   const git = new GitReads(application.index)
-  const handlers = new Map(policy.clients.map(({ principal }) => [principal.id, toNodeHandler(createMcpHandler(() => createReadServer(application, principal, git), { legacy: 'stateless', maxRequestBodySize: 16 * 1024 }))]))
+  const dev = new DevReads(application)
+  const handlers = new Map(policy.clients.map(({ principal }) => [principal.id, toNodeHandler(createMcpHandler(() => createReadServer(application, principal, git, dev), { legacy: 'stateless', maxRequestBodySize: 16 * 1024 }))]))
   const active = new Map<string, number>()
   app.all('/mcp', (request, response, next) => {
     const principal = authenticate(policy, request.get('authorization'))

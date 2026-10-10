@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { isWithin } from '../scanner'
 import { McpFailure } from './errors'
 
-const capability = z.enum(['read', 'discovery', 'git', 'analysis', 'preview', 'network', 'project-execution'])
+const capability = z.enum(['read', 'discovery', 'git', 'analysis', 'preview', 'network', 'project-execution', 'development'])
 const configSchema = z.strictObject({
   enabled: z.literal(true),
   roots: z.array(z.string().min(1).max(4096)).min(1).max(32),

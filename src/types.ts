@@ -205,6 +205,13 @@ export interface HelperReportState {
   validity: 'available' | 'missing' | 'invalidated' | 'unknown'
   reason?: string
 }
+export interface DevProcessStatus {
+  status: 'stopped' | 'starting' | 'running' | 'error'
+  url?: string
+  error?: string
+  owned: boolean
+  processGeneration?: string
+}
 export interface HelperActivity {
   operationId: string
   kind: string
