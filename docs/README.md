@@ -11,6 +11,9 @@ the architecture overview, then read the guide for the area you are changing.
   processes, maintenance, and concurrency safeguards.
 - [Development](development.md): setup, commands, testing, and build workflow.
 
+[Implementation plans](plan/README.md) describe proposed work separately from the
+current implementation, starting with the [MCP server plan](plan/mcp-server.md).
+
 The root [README](../README.md) is the user guide. [AGENTS.md](../AGENTS.md)
 contains instructions for agents working on the repository. Keep these documents
 aligned with code changes; implementation links identify the source of truth for
