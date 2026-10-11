@@ -8,6 +8,8 @@ import { aiInstructionFileNames, extractReadmeIntro, normalizeGitOrigin, parsePa
 import { matchesWorkspace, workspacePatterns } from '../src/lib/monorepo'
 import type { RepoProject, ScanProgress, ScanProgressReporter, ScanResult } from '../src/types'
 import { packageFingerprint, repositoryFingerprint } from './package-fingerprint'
+import { documentationFolders } from '../src/lib/documentation'
+import { readProjectDocumentation } from './documentation'
 
 const execFileAsync = promisify(execFile)
 const MAX_METADATA_BYTES = 256 * 1024
@@ -105,6 +107,10 @@ async function inspectProject(directory: string, root: string, names: string[], 
   const readmeName = names.find((name) => /^readme(?:\.(?:md|mdx|markdown|txt))?$/i.test(name))
   onProgress?.({ phase: 'Reading the project README', detail })
   const readme = readmeName ? await readBounded(directory, readmeName) : undefined
+  const docRoots = documentationFolders.filter(name => filenames.has(name))
+  if (docRoots.length) onProgress?.({ phase: 'Reading project documentation', detail })
+  const documentation = await readProjectDocumentation(directory, docRoots)
+  warnings.push(...documentation.warnings.map(warning => `${detail}: ${warning}`))
   if (filenames.has('.git')) onProgress?.({ phase: 'Reading Git branch, commit, and working-tree status', detail })
   const gitInfo = filenames.has('.git') ? await readGit(directory) : undefined
   onProgress?.({ phase: 'Checking project instruction files', detail })
@@ -124,6 +130,7 @@ async function inspectProject(directory: string, root: string, names: string[], 
     relativePath: path.relative(root, directory) || '.',
     description: (readme && extractReadmeIntro(readme)) || metadata?.description || 'No project description yet.',
     readme,
+    documentation,
     version: metadata?.version,
     author: metadata?.author,
     license: metadata?.license,

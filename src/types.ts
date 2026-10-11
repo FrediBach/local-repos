@@ -237,6 +237,18 @@ export interface WorkspaceState {
   warnings: string[]
 }
 
+export interface ProjectDocument {
+  /** Path relative to the project root, using forward slashes. */
+  path: string
+  content?: string
+  unavailable?: string
+}
+
+export interface ProjectDocumentation {
+  files: ProjectDocument[]
+  warnings: string[]
+}
+
 export interface RepoProject {
   reportState?: Partial<Record<HelperReportKind, HelperReportState>>
   id: string
@@ -251,6 +263,7 @@ export interface RepoProject {
   workspacePackageCount?: number
   description: string
   readme?: string
+  documentation?: ProjectDocumentation
   version?: string
   author?: string
   license?: string

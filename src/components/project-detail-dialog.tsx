@@ -11,7 +11,7 @@ import { ProjectOutdated } from './project-outdated'
 import { ProjectUnused } from './project-unused'
 import { ProjectReactDoctor } from './project-react-doctor'
 import { ProjectLighthouse } from './project-lighthouse'
-import { ProjectReadme } from './project-readme'
+import { ProjectDocumentation } from './project-documentation'
 import { ProjectPreview } from './project-preview'
 import { ProjectHistory } from './project-history'
 import { ProjectControls } from './project-controls'
@@ -64,8 +64,7 @@ function DetailContent({ tab, project, helper, demo, busy, packageBusy, logs, on
     case 'unused': return <ProjectUnused {...maintenance} />
     case 'react-doctor': return <ProjectReactDoctor {...maintenance} />
     case 'lighthouse': return <ProjectLighthouse {...maintenance} />
-    case 'readme': return <ProjectReadme content={project.readme} />
-    case 'overview': return <><DetailOverview project={project} /><ProjectStoragePanel project={project} helper={helper} demo={demo} busy={busy} onAction={action} /></>
+    case 'overview': return <><DetailOverview project={project} /><ProjectDocumentation project={project} /><ProjectStoragePanel project={project} helper={helper} demo={demo} busy={busy} onAction={action} /></>
   }
 }
 

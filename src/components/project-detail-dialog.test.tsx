@@ -15,6 +15,8 @@ const project: RepoProject = {
   id: 'fixture', name: 'Fixture', dirName: 'fixture', relativePath: '.', description: 'A local project.',
   version: '1.2.3', stack: [], scripts: { dev: 'vite', test: 'vitest' }, packageManager: 'npm',
   scannedAt: '2026-10-10T12:00:00Z', dependencies: [{ name: 'vite', version: '^8.0.0', kind: 'devDependencies' }],
+  readme: '# Fixture guide\n\nA quick introduction.\n\n## Setup\n\nInstall the packages.',
+  git: { message: 'Latest fixture commit' },
 }
 
 function Detail({ onAction = vi.fn() }: { onAction?: ReturnType<typeof vi.fn> }) {
@@ -34,6 +36,12 @@ describe('project detail sections', () => {
     expect(screen.queryByText('Development server')).toBeNull()
     expect(screen.queryByRole('region', { name: 'Commit history' })).toBeNull()
     expect(screen.getByRole('region', { name: 'Project disk usage' })).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: 'README' })).toBeNull()
+    const docs = screen.getByRole('region', { name: 'Project documentation' })
+    expect(screen.getByText('Latest fixture commit').compareDocumentPosition(docs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(docs.compareDocumentPosition(screen.getByRole('region', { name: 'Project disk usage' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(docs).getByRole('heading', { name: 'Fixture guide' })).toBeTruthy()
+    expect(within(docs).queryByRole('heading', { name: 'Setup' })).toBeNull()
     expect(screen.queryByRole('tab', { name: 'Storage' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Measure disk usage' }))
     expect(onAction).toHaveBeenLastCalledWith(project, 'storage', undefined)
@@ -73,12 +81,12 @@ describe('project detail sections', () => {
     expect(projectHistory).toHaveBeenCalledExactlyOnceWith(project.id, { branch: '', author: '', offset: 0 })
 
     await user.keyboard('{End}')
-    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'README', selected: true }))
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Lighthouse', selected: true }))
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(document.activeElement?.id)
     await user.keyboard('{ArrowRight}')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Overview', selected: true }))
     await user.keyboard('{ArrowLeft}')
-    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'README', selected: true }))
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Lighthouse', selected: true }))
     await user.keyboard('{Home}')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Overview', selected: true }))
   })

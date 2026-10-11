@@ -1,4 +1,5 @@
 import { matchesWorkspace, workspacePatterns } from './monorepo'
+import { documentationFolders, scanDocumentation } from './documentation'
 import type { RepoProject, ScanProgressReporter, ScanResult } from '../types'
 import { aiInstructionFileNames, extractReadmeIntro, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
 
@@ -144,6 +145,26 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle, onProgres
           modifiedAt = Math.max(modifiedAt, readmeFile?.modifiedAt ?? 0)
         } catch { warn(`${relativePath}: README could not be read.`) }
       }
+      const docRoots = documentationFolders.filter(name => entries.get(name)?.kind === 'directory')
+      if (docRoots.length) onProgress?.({ phase: 'Reading project documentation', detail: folderName })
+      const docDirectory = async (path: string) => {
+        let parent = directory
+        for (const segment of path.split('/')) parent = await parent.getDirectoryHandle(segment)
+        return parent
+      }
+      const documentation = await scanDocumentation(docRoots, {
+        async *entries(path) {
+          for await (const entry of (await docDirectory(path)).values()) yield entry
+        },
+        async read(path, maxBytes) {
+          const segments = path.split('/')
+          const name = segments.pop()!
+          const parent = await docDirectory(segments.join('/'))
+          const file = await (await parent.getFileHandle(name)).getFile()
+          return file.size > maxBytes ? undefined : file.slice(0, maxBytes).text()
+        },
+      })
+      documentation.warnings.forEach(warning => warn(`${relativePath}: ${warning}`))
       const stack = [...new Set([...(pkg?.stack ?? []), ...Object.entries(markerStack).filter(([name]) => entries.has(name)).map(([, name]) => name)])]
       if (entries.has('components.json') && !stack.includes('shadcn/ui')) stack.push('shadcn/ui')
       if (entries.has('tsconfig.json') && !stack.includes('TypeScript')) stack.push('TypeScript')
@@ -159,6 +180,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle, onProgres
         relativePath,
         description: extractReadmeIntro(readme ?? '') || pkg?.description || '',
         readme,
+        documentation,
         version: pkg?.version,
         author: pkg?.author,
         license: pkg?.license,

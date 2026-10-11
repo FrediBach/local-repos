@@ -25,3 +25,13 @@ it('shows a helpful empty state', () => {
   render(<ProjectReadme content="  " />)
   expect(screen.getByText('No README found in this project.')).toBeTruthy()
 })
+
+it('previews parsed headings and prose while retaining reference links and skipping badges and code', () => {
+  render(<ProjectReadme preview content={'[![Build](https://example.com/badge.svg)](https://example.com)\n\nProject title\n=============\n\n```md\n# A fake title\n\nA fake paragraph.\n```\n\nRead **this** [guide][docs].\n\n## More\n\nAnother paragraph.\n\n[docs]: https://example.com/guide'} />)
+  expect(screen.getByRole('heading', { name: 'Project title' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'guide' }).getAttribute('href')).toBe('https://example.com/guide')
+  expect(screen.queryByRole('img')).toBeNull()
+  expect(screen.queryByText(/fake paragraph/)).toBeNull()
+  expect(screen.queryByRole('heading', { name: 'More' })).toBeNull()
+  expect(screen.queryByText('Another paragraph.')).toBeNull()
+})

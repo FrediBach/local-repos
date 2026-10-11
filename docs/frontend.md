@@ -205,14 +205,22 @@ newer history. Forgetting the workspace clears this separate activity cache.
 ## Project details and action menus
 
 The project dialog keeps the preview, metadata, and latest commit in **Overview**,
-followed by disk usage and dependency cleanup. **History** contains the commit
+followed by documentation, disk usage, and dependency cleanup. **History** contains the commit
 log, and **Development** holds the server, scripts, preview capture, and logs.
 **Packages** lists declared dependencies; **Vulnerabilities**, **Updates**, and
 **Unused** contain the audit, outdated-package and minor/patch update controls,
 and Knip reports.
-Eligible projects also show **React Doctor** and **Lighthouse**; **README** remains
-available for every project. `ProjectHistory` mounts only when **History** is
+Eligible projects also show **React Doctor** and **Lighthouse**. `ProjectHistory` mounts only when **History** is
 selected, so opening the overview does not load its commit log.
+
+[`project-documentation.tsx`](../src/components/project-documentation.tsx) shows
+the first parsed README heading and prose paragraph with a keyboard-accessible
+disclosure. A Radix menu lists cached Markdown documents in their directory
+hierarchy, with README first; choosing a document opens its full content.
+Selection and expansion are local to the current project view. Markdown rendering
+retains GFM and safe links, skips raw HTML, and never executes MDX components.
+The README command opens Overview. Older caches without `documentation` still
+show their README; resync discovers docs without a storage migration.
 
 [`project-tabs.tsx`](../src/components/project-tabs.tsx) keeps readable labels in
 a single horizontally scrolling row, reveals the active tab, and provides scroll

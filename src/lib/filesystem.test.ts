@@ -28,6 +28,22 @@ function directory(name: string, tree: Tree): FileSystemDirectoryHandle {
 }
 
 describe('read-only folder scan', () => {
+  it('caches Markdown from all documentation roots, preserving nested paths and excluding generated folders', async () => {
+    const result = await scanDirectory(directory('project', {
+      'package.json': '{}', 'README.md': '# Home',
+      doc: { 'api.MD': '# API' },
+      docs: { setup: { 'install.markdown': '# Install' }, 'image.png': 'image', node_modules: { 'ignored.md': 'ignored' }, '.hidden': { 'ignored.md': 'ignored' } },
+      documentation: { 'guide.mdx': '# Guide', 'large.md': 'x'.repeat(128 * 1024 + 1) },
+      other: { 'ignored.md': 'ignored' },
+    }))
+    const docs = result.projects[0].documentation!
+    expect(docs.files.map(file => file.path)).toEqual(['doc/api.MD', 'docs/setup/install.markdown', 'documentation/guide.mdx', 'documentation/large.md'])
+    expect(docs.files[1].content).toBe('# Install')
+    expect(docs.files[3].content).toBeUndefined()
+    expect(docs.files[3].unavailable).toBeTruthy()
+    expect(result.warnings?.some(warning => warning.includes('128 KiB'))).toBe(true)
+  })
+
   it('reports the current metadata operation and folder during discovery', async () => {
     const progress = vi.fn()
     const root = directory('Projects', { web: { 'package.json': '{"name":"web"}', 'README.md': '# Web', '.git': { HEAD: 'ref: refs/heads/main\n' } } })

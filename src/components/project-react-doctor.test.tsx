@@ -164,6 +164,6 @@ describe('React Doctor project tab', () => {
     expect(screen.getByRole('tab', { name: 'React Doctor' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(screen.getByRole('tab', { name: 'React Doctor' }).id)
     await user.keyboard('{ArrowRight}')
-    expect(onChange).toHaveBeenLastCalledWith('readme')
+    expect(onChange).toHaveBeenLastCalledWith('overview')
   })
 })

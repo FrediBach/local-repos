@@ -108,6 +108,20 @@ generated directories, and directory symlinks are skipped. Traversal limits,
 unreadable folders, and parse failures produce scan warnings; unavailable or
 oversized metadata files can be silently omitted.
 
+Project documentation discovery is shared with the browser scanner through
+[`src/lib/documentation.ts`](../src/lib/documentation.ts). The helper adapter in
+[`server/documentation.ts`](../server/documentation.ts) reads `.md`, `.mdx`, and
+`.markdown` files below project-root `doc`, `docs`, and `documentation` folders,
+preserving relative paths. It skips hidden/generated folders and symlinks,
+revalidates canonical paths, and opens regular files with no-follow protection.
+Per-project limits are 200 files, 100 folders, 2,000 entries, eight directory
+levels, 128 KiB per file, and 512 KiB of cached document content. Unreadable or
+oversized files retain their names with an unavailable message; discovery and
+content limits produce warnings in both scan results and the documentation
+snapshot. Rescans replace this snapshot, including clearing removed files.
+The existing REST scan carries it to the browser; MCP content resources remain
+limited to their existing explicitly disclosed README/preview/log projections.
+
 Declared workspace members inherit the workspace package manager and record a
 `workspaceDirectory`. Members without their own `.git` inherit parent Git
 metadata; nested Git checkouts are separate repositories. Direct child packages

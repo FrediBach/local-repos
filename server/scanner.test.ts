@@ -27,6 +27,37 @@ async function fixture(name: string, metadata: unknown = { name }): Promise<stri
 }
 
 describe('local directory scanning', () => {
+  it('caches nested Markdown in documentation folders, skips symlinks, and refreshes removed docs', async () => {
+    const directory = await fixture('documented')
+    for (const folder of ['doc', 'docs/setup', 'documentation', 'docs/node_modules', 'docs/.hidden']) await mkdir(path.join(directory, folder), { recursive: true })
+    for (const [name, content] of Object.entries({ 'doc/api.MD': '# API', 'docs/setup/install.markdown': '# Install', 'documentation/guide.mdx': '# Guide', 'docs/image.png': 'image', 'docs/node_modules/ignored.md': 'ignored', 'docs/.hidden/ignored.md': 'ignored', 'docs/large.md': 'x'.repeat(128 * 1024 + 1) })) await writeFile(path.join(directory, name), content)
+    await writeFile(path.join(temporary, 'outside.md'), 'Outside secret')
+    await symlink(path.join(temporary, 'outside.md'), path.join(directory, 'docs/outside.md'))
+    await symlink(path.join(directory, 'docs/setup'), path.join(directory, 'docs/linked'))
+    await symlink(path.join(directory, 'doc/api.MD'), path.join(directory, 'docs/internal.md'))
+    const registry = new ProjectRegistry()
+    const first = (await scanDirectory(directory)).registered
+    registry.register(first)
+    const docs = first[0].project.documentation!
+    expect(docs.files.map(file => file.path)).toEqual(['doc/api.MD', 'docs/large.md', 'docs/setup/install.markdown', 'documentation/guide.mdx'])
+    expect(docs.files[2].content).toBe('# Install')
+    expect(docs.files[1].content).toBeUndefined()
+    expect(docs.files[1].unavailable).toBeTruthy()
+    expect(docs.warnings).toHaveLength(1)
+    for (const folder of ['doc', 'docs', 'documentation']) await rm(path.join(directory, folder), { recursive: true })
+    registry.register((await scanDirectory(directory)).registered)
+    expect(registry.lookup(first[0].project.id).project.documentation?.files).toEqual([])
+  })
+
+  it('does not follow a documentation root symlink outside the project', async () => {
+    const directory = await fixture('documented')
+    await mkdir(path.join(temporary, 'external'))
+    await writeFile(path.join(temporary, 'external/secret.md'), 'Outside secret')
+    await symlink(path.join(temporary, 'external'), path.join(directory, 'docs'))
+    const { result } = await scanDirectory(directory)
+    expect(result.projects[0].documentation?.files).toEqual([])
+  })
+
   it('rejects a new workspace membership while its registered parent is busy', async () => {
     const directory = await fixture('studio', { name: 'studio' })
     await fixture('studio/child', { name: 'child' })

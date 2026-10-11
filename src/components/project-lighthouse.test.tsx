@@ -162,7 +162,7 @@ describe('Lighthouse badge and tab', () => {
     rerender(<ProjectTabs value="lighthouse" onChange={onChange} frontend><p>Details</p></ProjectTabs>)
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(screen.getByRole('tab', { name: 'Lighthouse' }).id)
     await user.keyboard('{ArrowRight}')
-    expect(onChange).toHaveBeenLastCalledWith('readme')
+    expect(onChange).toHaveBeenLastCalledWith('overview')
   })
 })
 

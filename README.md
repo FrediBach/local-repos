@@ -61,6 +61,25 @@ The browser cannot reveal an absolute path or launch local processes. To enable 
 
 Only one workspace is displayed at a time. Metadata, captured previews, favorites, project tags, and the browser directory handle are stored in IndexedDB for this browser and app origin. Tags are saved independently of scanned metadata and survive rescans, helper restarts, and reconnecting the same directory using the same connection method. They belong to individual projects, including workspace members; repository files are never edited. Switching between `localhost` and `127.0.0.1`, or between development and preview ports, creates separate browser storage.
 
+### Read project documentation
+
+The **Overview** tab shows the README below the latest commit and above disk
+usage. Its first heading and first prose paragraph appear immediately; choose
+**Read more** to expand the document or **Show less** to collapse it.
+
+When a project has Markdown files (`.md`, `.mdx`, or `.markdown`) inside its root
+`doc`, `docs`, or `documentation` folder, a document dropdown lists them with
+their folder structure. Choose a file to read it in full; **README** stays first
+in the dropdown for returning to the project introduction. Embedded HTML and MDX
+components are not executed.
+
+Both connection methods cache documentation for offline reading. Resync to
+discover files after upgrading or changing project docs. Discovery skips hidden
+and generated folders and helper symlinks, with limits of 200 files, 100 folders,
+2,000 entries, and eight levels per project. Content reads are limited to 128 KiB
+per file and 512 KiB per project; incomplete discovery and unavailable files are
+labeled in the documentation section.
+
 ## Search and launch actions
 
 Focus search or press **⌘K / Ctrl+K** to discover projects, actions, scripts,

@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-const allTabs = ['overview', 'history', 'development', 'packages', 'vulnerabilities', 'updates', 'unused', 'react-doctor', 'lighthouse', 'readme'] as const
+const allTabs = ['overview', 'history', 'development', 'packages', 'vulnerabilities', 'updates', 'unused', 'react-doctor', 'lighthouse'] as const
 export type ProjectTab = typeof allTabs[number]
-const labels: Record<ProjectTab, string> = { overview: 'Overview', history: 'History', development: 'Development', packages: 'Packages', vulnerabilities: 'Vulnerabilities', updates: 'Updates', unused: 'Unused', 'react-doctor': 'React Doctor', lighthouse: 'Lighthouse', readme: 'README' }
+const labels: Record<ProjectTab, string> = { overview: 'Overview', history: 'History', development: 'Development', packages: 'Packages', vulnerabilities: 'Vulnerabilities', updates: 'Updates', unused: 'Unused', 'react-doctor': 'React Doctor', lighthouse: 'Lighthouse' }
 
 export function ProjectTabs({ value, onChange, children, react = false, frontend = false }: { value: ProjectTab; onChange: (tab: ProjectTab) => void; children: ReactNode; react?: boolean; frontend?: boolean }) {
   const id = useId()

@@ -73,6 +73,13 @@ connection mode and, for browser access, the directory handle. Both scanners use
 [metadata.ts](../src/lib/metadata.ts) and [monorepo.ts](../src/lib/monorepo.ts), so
 package parsing and workspace matching are shared across modes.
 
+Both scanners also use [`documentation.ts`](../src/lib/documentation.ts) to
+discover Markdown under each project's `doc`, `docs`, and `documentation`
+directories. The optional `RepoProject.documentation` snapshot carries relative
+paths, bounded content, unavailable-file messages, and discovery warnings through
+the existing scan and workspace cache flow. Reading a document in the overview
+does not issue filesystem or API requests. Older caches can omit this field.
+
 The browser owns one displayed workspace and its durable cache. The helper keeps
 an in-memory registry of scanned projects and runtime resources. A helper action
 resolves a registered project ID to a directory, validates it, runs the relevant

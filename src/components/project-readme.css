@@ -1,5 +1,4 @@
 .readme-content {
-  min-height: 230px;
   min-width: 0;
   color: var(--color-foreground);
   font-family: var(--font-sans);
@@ -38,3 +37,16 @@
 .readme-content img { display: inline-block; max-width: 100%; height: auto; vertical-align: middle; border-radius: 3px; }
 .readme-content .task-list-item { list-style: none; }
 .readme-content .task-list-item input { margin: 0 .5em 0 -1.4em; accent-color: var(--accent); }
+
+.project-documentation { margin-top: 25px; padding: 18px; border: 1px solid var(--border); border-radius: 5px; min-width: 0; }
+.documentation-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.documentation-heading h3 { display: flex; align-items: center; gap: 7px; font-size: .875rem; font-weight: 500; }
+.documentation-picker { min-width: 0; max-width: 100%; }
+.documentation-picker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.documentation-picker svg, .documentation-menu svg { flex-shrink: 0; }
+.documentation-menu { width: max-content; max-width: min(440px, calc(100vw - 32px)); }
+.documentation-menu .dropdown-item > span, .documentation-folder > span { overflow-wrap: anywhere; min-width: 0; }
+.documentation-menu .dropdown-item > svg:last-child:not(:first-child) { margin-left: auto; }
+.documentation-folder { display: flex; align-items: center; gap: 9px; padding: 9px 10px 5px; font-size: .8125rem; color: var(--muted-foreground); }
+.documentation-toggle { margin-top: 12px; }
+.documentation-note { margin: 12px 0 0; font-size: .8125rem; line-height: 1.6; color: var(--muted-foreground); }

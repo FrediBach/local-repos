@@ -17,7 +17,7 @@ export interface CommandTemplate {
 export interface ProjectCommand extends CommandTemplate {
   helper: boolean
   intent: { kind: 'action'; name: string; body?: unknown }
-    | { kind: 'details'; tab?: 'overview' | 'packages' | 'updates' | 'react-doctor' | 'lighthouse' | 'readme' }
+    | { kind: 'details'; tab?: 'overview' | 'packages' | 'updates' | 'react-doctor' | 'lighthouse' }
     | { kind: 'tags' }
     | { kind: 'favorite' }
     | { kind: 'todos' }
@@ -61,7 +61,7 @@ export function projectCommands(project: RepoProject, settings: Applications, fa
   const devScript = selectDevScript(project)
   const commands = commandTemplates(settings).flatMap((template): ProjectCommand[] => {
     const action = (name: string, body?: unknown): ProjectCommand[] => [{ ...template, helper: true, intent: { kind: 'action', name, ...(body === undefined ? {} : { body }) } }]
-    const details = (tab: 'overview' | 'packages' | 'updates' | 'lighthouse' | 'readme'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
+    const details = (tab: 'overview' | 'packages' | 'updates' | 'lighthouse'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
     switch (template.id) {
       case 'folder': return action('open', { app: 'folder' })
       case 'editor': return action('open', { app: settings.editor })
@@ -82,7 +82,7 @@ export function projectCommands(project: RepoProject, settings: Applications, fa
       case 'cleanup': return details('overview')
       case 'packages': return details('packages')
       case 'update-packages': return project.hasPackageJson === false ? [] : details('updates')
-      case 'readme': return details('readme')
+      case 'readme': return details('overview')
       case 'tags': return [{ ...template, helper: false, intent: { kind: 'tags' } }]
       case 'favorite': return [{ ...template, title: favorite ? 'Remove favorite' : template.title, helper: false, intent: { kind: 'favorite' } }]
       case 'todos': return [{ ...template, helper: false, intent: { kind: 'todos' } }]
