@@ -105,6 +105,7 @@ function WorkspaceApp() {
     { title: 'Capturing preview', progress: previewBatch.progress },
   ])
   const { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchReset, searchScope, setSearchScope, sort, setSort, page, setPage,
+    activeCustomFilter, applyCustomFilter, saveCustomFilter,
     filterContext, filterGroups, searched, filtered, hasFilters, hasRefinements, clearFilters, toggleTechnology, toggleTag, navigate } = useProjectFiltering(projects, favorites)
   const { connect, resync, forgetWorkspace, metadataProgress } = useWorkspaceConnection({
     workspace, busy, path, workspaceVersion, setBusy, setConnectError, setConnectOpen, setHelper, setNotice, persist,
@@ -278,6 +279,7 @@ function WorkspaceApp() {
   return <div className="app-shell">
     <a className="skip-link" href="#projects">{skipLabels[page]}</a>
     <WorkspaceSidebar workspaceStatus={workspaceStatus} workspace={workspace} projects={projects} stacks={stacks} busy={!!busy} page={page} filter={filter} filters={filters}
+      customFilters={settings.customFilters} activeCustomFilter={activeCustomFilter} onCustomFilter={applyCustomFilter}
       hasFilters={hasFilters} favoriteCount={favoriteCount} running={running} navigate={navigate} onSummary={() => setPage('summary')}
       onTodos={() => openTodos()} todoCount={projectTodos.todos.length}
       toggleTechnology={toggleTechnology} onConnect={() => setConnectOpen(true)} onHelp={() => setHelpOpen(true)}
@@ -285,6 +287,7 @@ function WorkspaceApp() {
 
     <main className="main-content" id="projects" tabIndex={-1}>
       <WorkspaceTopbar activity={commitActivity.activity} settingsTriggerRef={settingsTriggerRef} page={page} stack={stack} filter={filter} hasFilters={hasFilters} hosted={hosted} online={online}
+        customFilterName={activeCustomFilter?.name}
         connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
@@ -305,7 +308,7 @@ function WorkspaceApp() {
           projects={projects} favorites={favorites} filterGroups={filterGroups} helper={workspace?.mode === 'helper'} busy={!!busy} tagsReady={tagsReady}
           onCommand={runCommand} onWorkspaceCommand={runWorkspaceCommand} onFilter={(key, value) => setFilters(current => ({ ...current, [key]: filterGroups.find(group => group.key === key)?.multiple ? [...new Set([...(current[key] ?? []), value])] : [value] }))}
           sort={sort} setSort={setSort} view={view} setView={setView} />
-        <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
+        <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} onSave={saveCustomFilter} />
 
         <ProjectResults ignoredProjects={ignoredProjects} onIgnore={workspace ? toggleIgnored : undefined} projects={filtered} allProjects={projects} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
           projectActivity={commitActivity.projectActivity}

@@ -40,6 +40,8 @@ svg { flex-shrink: 0; }
 .main-nav button { display: flex; align-items: center; gap: 12px; font-size: 0.9375rem; padding: 12px 12px; border-radius: 5px; color: var(--foreground); text-align: left; min-height: 42px; }
 .main-nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .main-nav button:hover { background: var(--hover); }
+.custom-filter-button { min-width: 0; }
+.custom-filter-button > span { min-width: 0; overflow-wrap: anywhere; }
 .nav-count { margin-left: auto; color: var(--muted-foreground); font-size: 0.875rem; font-weight: 400; font-variant-numeric: tabular-nums; }
 .main-nav button.active .nav-count { background: var(--accent-soft); padding: 2px 6px; border-radius: 3px; color: var(--accent); }
 .running-icon { width: 17px; height: 17px; display: flex; justify-content: center; align-items: center; }
@@ -560,7 +562,11 @@ select:is(.search-scope, .preview-source-controls select, .filter-field select, 
 
 @media (min-width: 961px) {
   .sidebar { width: 15.375rem; padding-inline: 20px; overflow: hidden; }
+  .sidebar:has(.has-custom-filters) { overflow-y: auto; }
+  .sidebar:has(.has-custom-filters) .stack-nav:not(:empty) { min-height: 100px; }
   .sidebar > :not(.stack-nav) { flex-shrink: 0; }
+  .sidebar > .main-nav.has-custom-filters { max-height: 50dvh; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; padding: 4px; margin: -4px; scroll-padding-block: 4px; }
+  .main-nav.has-custom-filters > button { flex-shrink: 0; }
   .stack-nav { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: var(--control-border) transparent; padding: 7px; margin-inline: -7px; scroll-padding-block: 7px; }
   .stack-nav > button { flex-shrink: 0; }
   .main-content { margin-left: 15.375rem; }

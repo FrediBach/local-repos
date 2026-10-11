@@ -1,7 +1,8 @@
-import { ArrowUpRight, CalendarDays, ChevronDown, CircleHelp, Download, FolderOpen, LayoutGrid, ListTodo, Play, Star } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, ChevronDown, CircleHelp, Download, Filter, FolderOpen, LayoutGrid, ListTodo, Play, Star } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Logo } from './brand-logo'
 import type { ProjectFilters } from '@/lib/project-filters'
+import type { CustomFilter } from '@/lib/project-filter-state'
 import type { RepoProject, Workspace } from '@/types'
 
 interface NavigationProps {
@@ -16,6 +17,9 @@ interface NavigationProps {
   onSummary: () => void
   onTodos: () => void
   todoCount: number
+  activeCustomFilter?: CustomFilter
+  customFilters: CustomFilter[]
+  onCustomFilter: (filter: CustomFilter) => void
 }
 
 interface Props extends Omit<NavigationProps, 'projectCount'> {
@@ -30,12 +34,12 @@ interface Props extends Omit<NavigationProps, 'projectCount'> {
   onInstall?: () => Promise<void>
 }
 
-export function WorkspaceSidebar({ workspaceStatus = 'ready', workspace, projects, stacks, busy, page, filter, filters, hasFilters, favoriteCount, running, navigate, onSummary, onTodos, todoCount, toggleTechnology, onConnect, onHelp, onInstall }: Props) {
+export function WorkspaceSidebar({ workspaceStatus = 'ready', workspace, projects, stacks, busy, page, filter, filters, hasFilters, favoriteCount, running, navigate, onSummary, onTodos, todoCount, toggleTechnology, onConnect, onHelp, onInstall, customFilters, activeCustomFilter, onCustomFilter }: Props) {
   const isDemo = !workspace
   return <aside className="sidebar">
       <button type="button" className="brand" onClick={() => navigate('all')}><Logo /><span>local repos<span className="brand-period">.</span></span></button>
       <div className="sidebar-section-label">WORKSPACE</div>
-      <WorkspaceNavigation page={page} filter={filter} filters={filters} hasFilters={hasFilters} projectCount={projects.length} favoriteCount={favoriteCount} running={running} navigate={navigate} onSummary={onSummary} onTodos={onTodos} todoCount={todoCount} />
+      <WorkspaceNavigation page={page} filter={filter} filters={filters} hasFilters={hasFilters} projectCount={projects.length} favoriteCount={favoriteCount} running={running} navigate={navigate} onSummary={onSummary} onTodos={onTodos} todoCount={todoCount} activeCustomFilter={activeCustomFilter} customFilters={customFilters} onCustomFilter={onCustomFilter} />
       <div className="sidebar-divider" />
       <div className="sidebar-section-label technology-label">TECHNOLOGIES <span>{stacks.length.toString().padStart(2, '0')}</span></div>
       <nav className="stack-nav" aria-label="Filter by technology">{stacks.map(tech => <button key={tech} aria-pressed={filters.stack?.includes(tech) ?? false} className={filters.stack?.includes(tech) ? 'active' : ''} onClick={() => toggleTechnology(tech)}><span className={`tech-dot tech-${tech.toLowerCase().replace(/[^a-z]/g, '')}`} /><span>{tech}</span><span className="tech-count">{projects.filter(p => p.stack.includes(tech)).length}</span></button>)}</nav>
@@ -47,26 +51,28 @@ export function WorkspaceSidebar({ workspaceStatus = 'ready', workspace, project
     </aside>
 }
 
-function WorkspaceNavigation({ page, filter, filters, hasFilters, projectCount, favoriteCount, running, navigate, onSummary, onTodos, todoCount }: NavigationProps) {
-  const allActive = page === 'projects' && !hasFilters
-  const favoritesActive = page === 'projects' && filter === 'favorites'
-  const runningActive = page === 'projects' && filters.server?.includes('running')
+function WorkspaceNavigation({ page, filter, filters, hasFilters, projectCount, favoriteCount, running, navigate, onSummary, onTodos, todoCount, activeCustomFilter, customFilters, onCustomFilter }: NavigationProps) {
+  const allActive = page === 'projects' && !activeCustomFilter && !hasFilters
+  const favoritesActive = page === 'projects' && !activeCustomFilter && filter === 'favorites'
+  const runningActive = page === 'projects' && !activeCustomFilter && filters.server?.includes('running')
   const summaryActive = page === 'summary'
-  return <nav className="main-nav" aria-label="Workspace">
+  return <nav className={`main-nav${customFilters.length ? ' has-custom-filters' : ''}`} aria-label="Workspace">
         <NavigationButton active={allActive} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projectCount}</span></NavigationButton>
         <NavigationButton active={favoritesActive} onClick={() => navigate('favorites')}><Star size={17} /><span>Favorites</span><span className="nav-count">{favoriteCount.toString().padStart(2, '0')}</span></NavigationButton>
         <NavigationButton active={runningActive} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</NavigationButton>
         <NavigationButton active={summaryActive} onClick={onSummary}><CalendarDays size={17} /><span>Daily summary</span></NavigationButton>
         <NavigationButton label="Todos" title={todoCount ? `${todoCount} important ${todoCount === 1 ? 'todo' : 'todos'}` : 'Todos'} active={page === 'todos'} onClick={onTodos}><ListTodo size={17} /><span>Todos</span>{todoCount > 0 && <span className="todo-nav-count" aria-hidden="true">{todoCount}</span>}</NavigationButton>
+        {customFilters.map(item => <NavigationButton key={item.id} className="custom-filter-button" active={activeCustomFilter?.id === item.id} title={item.name} onClick={() => onCustomFilter(item)}><Filter size={17} aria-hidden="true" /><span>{item.name}</span></NavigationButton>)}
       </nav>
 }
 
-function NavigationButton({ active, onClick, label, title, children }: {
+function NavigationButton({ active, onClick, label, title, className = '', children }: {
   active?: boolean
   onClick: () => void
   label?: string
   title?: string
+  className?: string
   children: ReactNode
 }) {
-  return <button type="button" aria-label={label} title={title} aria-current={active ? 'page' : undefined} className={active ? 'active' : ''} onClick={onClick}>{children}</button>
+  return <button type="button" aria-label={label} title={title} aria-current={active ? 'page' : undefined} className={`${active ? 'active ' : ''}${className}`} onClick={onClick}>{children}</button>
 }

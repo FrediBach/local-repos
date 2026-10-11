@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { filterOptionCounts, type FilterContext, type FilterGroup, type FilterOption, type FilterKey, type ProjectFilters as Filters } from '@/lib/project-filters'
 import type { RepoProject } from '@/types'
 import './project-filters.css'
+import { SaveFilterDialog } from './save-filter-dialog'
 
 interface Props {
   filters: Filters
@@ -17,6 +18,7 @@ interface Props {
   onChange: (filters: Filters) => void
   onClearSearch: () => void
   onClear: () => void
+  onSave: (name: string) => void
 }
 
 const shortcuts = [
@@ -27,7 +29,7 @@ const shortcuts = [
   { key: 'server', value: 'running', label: 'Running servers', icon: Play },
 ] satisfies { key: FilterKey; value: string; label: string; icon: typeof Star }[]
 
-export function ProjectFilters({ filters, groups, projects, context, query, packageSearch, total, matching, onChange, onClearSearch, onClear }: Props) {
+export function ProjectFilters({ filters, groups, projects, context, query, packageSearch, total, matching, onChange, onClearSearch, onClear, onSave }: Props) {
   const [open, setOpen] = useState(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const close = () => { setOpen(false); toggleRef.current?.focus() }
@@ -55,6 +57,7 @@ export function ProjectFilters({ filters, groups, projects, context, query, pack
         <Icon size={14} aria-hidden="true" /><span>{label}</span><span className="filter-count" aria-hidden="true">{counts[key][value]}</span>
       </button>)}
       <button type="button" className="filter-expand" ref={toggleRef} aria-expanded={open} aria-controls="project-filter-panel" onClick={() => setOpen(!open)}><SlidersHorizontal size={15} />All filters{active.length > 0 && <span className="filter-count">{active.length}</span>}<ChevronDown size={13} className={open ? 'is-open' : ''} /></button>
+      <SaveFilterDialog onSave={onSave} />
     </div>
 
     <ActiveFilters active={active} query={query} packageSearch={packageSearch} matching={matching} total={total}

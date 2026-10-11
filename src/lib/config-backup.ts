@@ -3,6 +3,7 @@ import type { ThemePreference } from '@/hooks/use-theme'
 import { normalizeGitOrigin } from './metadata'
 import { normalizeTags, readProjectTags, tagNameLimit, type ProjectTags } from './project-tags'
 import { normalizeSettings, type AppSettings } from './settings'
+import { validCustomFilters } from './project-filter-state'
 
 export const configFileSizeLimit = 5 * 1024 * 1024
 
@@ -72,7 +73,9 @@ export function parseConfigBackup(text: string): ConfigBackup {
   const settings = normalizeSettings(value.settings)
   for (const key of Object.keys(settings) as (keyof AppSettings)[]) {
     if (!Object.hasOwn(value.settings, key)) continue
-    if (key === 'auditColors') {
+    if (key === 'customFilters') {
+      if (!validCustomFilters(value.settings.customFilters)) throw new Error('This configuration has invalid custom filters.')
+    } else if (key === 'auditColors') {
       const colors = value.settings.auditColors
       if (!isRecord(colors) || Object.entries(settings.auditColors).some(([severity, color]) => Object.hasOwn(colors, severity) && colors[severity] !== color)) throw new Error('This configuration has invalid vulnerability colors.')
     } else if (value.settings[key] !== settings[key]) throw new Error(`This configuration has an invalid setting: ${key}.`)

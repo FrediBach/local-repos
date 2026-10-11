@@ -6,14 +6,15 @@ import { useSettings } from '@/hooks/use-settings'
 import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type SettingsErrorKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
 import { SettingsInterface } from './settings-interface'
+import { SettingsCustomFilters } from './settings-custom-filters'
 import { desktopPlatforms, editors, gitClients, terminals, type TerminalId, type EditorId, type GitClientId } from '@/lib/desktop-apps'
 import { ConfigBackupPanel, type ConfigBackupControls } from './config-backup'
 import './settings-dialog.css'
 
-const tabs = ['badges', 'filters', 'watcher', 'interface', 'applications', 'backup'] as const
+const tabs = ['badges', 'filters', 'customFilters', 'watcher', 'interface', 'applications', 'backup'] as const
 type SettingsTab = typeof tabs[number]
-const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', watcher: 'Watcher', interface: 'Interface', applications: 'Applications', backup: 'Backup' }
-const fieldTabs = (key: SettingsErrorKey): SettingsTab => key === 'pushReminderTime' || key === 'commitActivityAuthor' ? 'interface' : key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
+const labels = { badges: 'Badges & scores', filters: 'Filter thresholds', customFilters: 'Custom filters', watcher: 'Watcher', interface: 'Interface', applications: 'Applications', backup: 'Backup' }
+const fieldTabs = (key: SettingsErrorKey): SettingsTab => key === 'customFilters' ? 'customFilters' : key === 'pushReminderTime' || key === 'commitActivityAuthor' ? 'interface' : key.startsWith('watcher') ? 'watcher' : key.includes('Activity') || key === 'largeProjectGiB' || key === 'heavyNodeModulesMiB' ? 'filters' : key.endsWith('Limit') || key.endsWith('Seconds') ? 'interface' : 'badges'
 
 export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupControls; triggerRef?: Ref<HTMLButtonElement> }) {
   const { settings, saveSettings } = useSettings()
@@ -67,6 +68,7 @@ export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupCon
             }}>{labels[value]}</button>)}
         </div>
         <div className="settings-body" role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`} tabIndex={0} key={tab}>
+          {tab === 'customFilters' && <SettingsCustomFilters filters={draft.customFilters} submitted={submitted} onChange={customFilters => { setDraft(current => ({ ...current, customFilters })); setSaveError('') }} />}
           {tab === 'backup' && <ConfigBackupPanel {...backup} onWorkingChange={setTransferring} onImported={value => { setDraft(value.settings); setSubmitted(false); setSaveError('') }} />}
           {tab === 'applications' && <fieldset className="settings-section"><legend>Open projects with</legend>
             <p>Choose the editor and Git client for project menus and detail buttons, and the terminal for running scripts. Applications must be installed on the computer running the local helper.</p>

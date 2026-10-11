@@ -1,5 +1,6 @@
 import type { AuditSeverity, PackageAudit } from '../types'
 import { normalizeColorScheme, type ColorScheme } from './color-schemes'
+import { normalizeCustomFilters, validCustomFilters, type CustomFilter } from './project-filter-state'
 import { isEditorId, isGitClientId, isTerminalId, type TerminalId, type EditorId, type GitClientId } from './desktop-apps'
 
 export type BadgeColor = 'red' | 'orange' | 'blue' | 'neutral'
@@ -36,10 +37,11 @@ export const numericSettings = {
 } as const
 
 export type NumericSettingKey = keyof typeof numericSettings
-export type SettingsErrorKey = NumericSettingKey | 'pushReminderTime' | 'commitActivityAuthor'
+export type SettingsErrorKey = NumericSettingKey | 'pushReminderTime' | 'commitActivityAuthor' | 'customFilters'
 export const validReminderTime = (value: unknown): value is string => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 export const validCommitAuthor = (value: unknown): value is string => typeof value === 'string' && value.length <= 1024 && !/[\u0000-\u001f\u007f]/.test(value)
 export type AppSettings = Record<NumericSettingKey, number> & {
+  customFilters: CustomFilter[]
   commitActivityAuthor: string
   terminal: TerminalId
   editor: EditorId
@@ -58,6 +60,7 @@ export type AppSettings = Record<NumericSettingKey, number> & {
   watcherLighthouse: boolean
 }
 export const defaultSettings: AppSettings = {
+  customFilters: [],
   commitActivityAuthor: '',
   terminal: 'auto',
   editor: 'vscode',
@@ -85,8 +88,9 @@ function validNumber(key: NumericSettingKey, value: unknown): value is number {
 
 /** Older, partial or malformed preferences retain safe defaults for unknown fields. */
 export function normalizeSettings(value: unknown): AppSettings {
-  const result = { ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }
+  const result: AppSettings = { ...defaultSettings, customFilters: [], auditColors: { ...defaultSettings.auditColors } }
   if (!isRecord(value)) return result
+  result.customFilters = normalizeCustomFilters(value.customFilters)
   if (validCommitAuthor(value.commitActivityAuthor)) result.commitActivityAuthor = value.commitActivityAuthor.trim()
   if (isTerminalId(value.terminal)) result.terminal = value.terminal
   if (isEditorId(value.editor)) result.editor = value.editor
@@ -127,6 +131,7 @@ const orderedSettings: [NumericSettingKey, NumericSettingKey][] = [
 
 export function validateSettings(settings: AppSettings): Partial<Record<SettingsErrorKey, string>> {
   const errors: Partial<Record<SettingsErrorKey, string>> = {}
+  if (!validCustomFilters(settings.customFilters)) errors.customFilters = 'Custom filters must have valid names, unique IDs, and supported filter values.'
   if (!validCommitAuthor(settings.commitActivityAuthor)) errors.commitActivityAuthor = 'Enter an author email of at most 1024 characters without control characters.'
   if (settings.pushReminderEnabled && !validReminderTime(settings.pushReminderTime)) errors.pushReminderTime = 'Choose a valid reminder time.'
   for (const key of Object.keys(numericSettings) as NumericSettingKey[]) {

@@ -47,6 +47,12 @@
 .filter-chip span { overflow-wrap: anywhere; min-width: 0; }
 .filter-chip svg { flex-shrink: 0; }
 .filter-chip:hover { border-color: var(--accent); }
+.dialog-content.save-filter-dialog { max-width: 440px; }
+.save-filter-dialog h2 { margin: 0 0 8px; font-size: 1.25rem; }
+.save-filter-dialog > p { color: var(--muted-foreground); font-size: .875rem; line-height: 1.6; margin: 0 0 20px; }
+.save-filter-dialog input { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--foreground); background: var(--surface); font: inherit; }
+.save-filter-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.save-filter-error { color: var(--danger); font-size: .875rem; }
 @media (max-width: 1100px) { .filter-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }.filter-section:last-child { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; }.filter-section:last-child h3 { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .filter-shortcuts { gap: 6px; }.filter-shortcut, .filter-expand { min-height: 42px; }.filter-expand { margin-left: 0; }.filter-sections, .filter-section:last-child { display: block; }.filter-section + .filter-section { margin-top: 24px; }.filter-field select, .filter-select, .filter-select-search { min-height: 42px; font-size: 1rem; }.filter-select-menu .dropdown-item { min-height: 42px; }.filter-chip { min-height: 36px; }.active-project-filters .filter-summary { flex-wrap: wrap; } }
 @media (forced-colors: active) { .filter-shortcut[aria-pressed="true"], .filter-field select[data-active="true"], .filter-select[data-active="true"] { outline: 2px solid Highlight; } }

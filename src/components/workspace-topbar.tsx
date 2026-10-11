@@ -14,6 +14,7 @@ interface Props {
   stack: string | null
   filter: 'all' | 'favorites' | 'running'
   hasFilters: boolean
+  customFilterName?: string
   hosted: boolean
   online: boolean
   connected: boolean
@@ -23,9 +24,9 @@ interface Props {
   backup: ComponentProps<typeof SettingsDialog>['backup']
 }
 
-export function WorkspaceTopbar({ activity, settingsTriggerRef, page, stack, filter, hasFilters, hosted, online, connected, busy, onConnect, onHelp, backup }: Props) {
+export function WorkspaceTopbar({ activity, settingsTriggerRef, page, stack, filter, hasFilters, hosted, online, connected, busy, onConnect, onHelp, backup, customFilterName }: Props) {
   return <header className="topbar">
-    <WorkspaceBreadcrumb page={page} stack={stack} filter={filter} hasFilters={hasFilters} />
+    <WorkspaceBreadcrumb page={page} stack={stack} filter={filter} hasFilters={hasFilters} customFilterName={customFilterName} />
     <div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>
       <WorkspaceConnectionStatus online={online} />
       {activity && <GlobalCommitHeatmap activity={activity} />}
@@ -41,9 +42,9 @@ export function WorkspaceTopbar({ activity, settingsTriggerRef, page, stack, fil
   </header>
 }
 
-function WorkspaceBreadcrumb({ page, stack, filter, hasFilters }: Pick<Props, 'page' | 'stack' | 'filter' | 'hasFilters'>) {
+function WorkspaceBreadcrumb({ page, stack, filter, hasFilters, customFilterName }: Pick<Props, 'page' | 'stack' | 'filter' | 'hasFilters' | 'customFilterName'>) {
   const projectNames = { all: hasFilters ? 'Filtered projects' : 'All projects', favorites: 'Favorites', running: 'Running' }
-  const pageNames = { todos: 'Todos', summary: 'Daily summary', projects: stack ?? projectNames[filter] }
+  const pageNames = { todos: 'Todos', summary: 'Daily summary', projects: customFilterName ?? stack ?? projectNames[filter] }
   return <div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageNames[page]}</h1></div>
 }
 

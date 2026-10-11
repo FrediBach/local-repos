@@ -56,11 +56,11 @@ export function ConfigBackupPanel({ ready, busy, connected, onExport, onImport, 
 
   return <>
     <fieldset className="settings-section"><legend>Export configuration</legend>
-      <p>Download your saved settings, color theme, favorites, and project tags as JSON. Save any pending settings changes before exporting.</p>
+      <p>Download your saved settings, custom filters, color theme, favorites, and project tags as JSON. Save any pending settings changes before exporting.</p>
       <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={exportFile}><Download size={15} />Export JSON</Button>
     </fieldset>
     <fieldset className="settings-section"><legend>Import configuration</legend>
-      <p>Choose an export to apply its settings and theme immediately. Favorites and tags merge with your current projects. Missing projects, conflicting repositories, and uncertain matches are skipped; additional local projects keep their preferences.</p>
+      <p>Choose an export to apply its settings and theme immediately, replacing your custom filters. Favorites and tags merge with your current projects. Missing projects, conflicting repositories, and uncertain matches are skipped; additional local projects keep their preferences.</p>
       <p>Connect the destination directory before importing project preferences. You can import the file again after adding missing repositories.</p>
       <input ref={input} type="file" accept=".json,application/json" aria-label="Configuration JSON file" hidden disabled={disabled} onChange={event => {
         const file = event.target.files?.[0]

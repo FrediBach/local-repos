@@ -120,6 +120,24 @@ open the connection flow; running operations disable further helper actions.
 Script names and displayed commands are checked against the current manifest by
 the helper before launch. Search text itself is never executed.
 
+## Custom filters
+
+Choose filters, enter an optional search, and select a sort order, then click
+**Save filter** above the project list. Name the shortcut to add it directly below
+**Todos** in the sidebar's workspace list, marked with a filter icon. Selecting it restores
+the saved filter combination, search text, search scope, and sort order against
+the current workspace. Later changes to the live filters do not change the saved
+shortcut; selected tags and technologies remain restrictive even when no current
+project matches them.
+
+Under **Settings → Custom filters**, edit a name to rename its shortcut, use the
+up/down arrows to reorder shortcuts, or the remove button to delete them, then
+choose **Save settings**. Names must contain 1–80 characters. **Cancel**
+discards those edits. Custom filters are saved in this browser, shared across
+directories, and included in configuration exports and imports. Importing settings
+replaces the saved filter list; older exports without custom filters restore an
+empty list. Resetting settings to defaults also clears custom filters when saved.
+
 ## Daily summary
 
 Choose **Daily summary** in the workspace sidebar to review a workday across all connected projects, including projects hidden by library filters. This feature needs a **local helper** connection. It opens on today; choose another date, use the previous/next arrows, or choose **Today** to return. **Refresh** reads new commits without a full workspace rescan.

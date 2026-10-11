@@ -3,9 +3,9 @@ import { selectDevScript } from './dev-script'
 import { packageMatches } from './packages'
 import { tagFilterValue } from './project-tags'
 import { defaultSettings, highestAuditSeverity, type AppSettings } from './settings'
+import type { FilterKey, ProjectFilters, ProjectSort } from './project-filter-state'
+export { projectSortOptions, type FilterKey, type ProjectFilters, type ProjectSort } from './project-filter-state'
 
-export type FilterKey = 'tags' | 'stars' | 'audit' | 'outdated' | 'git' | 'server' | 'activity' | 'structure' | 'storage' | 'preview' | 'readme' | 'stack' | 'manager' | 'branch' | 'license'
-export type ProjectFilters = Partial<Record<FilterKey, string[]>>
 export interface FilterContext { favorites: readonly string[]; now: number }
 export interface FilterOption {
   value: string
@@ -19,14 +19,6 @@ export interface FilterGroup {
   options: FilterOption[]
   multiple?: boolean
 }
-export type ProjectSort = 'updated' | 'oldest' | 'name' | 'stack' | 'vulnerabilities' | 'outdated' | 'size' | 'dependencies' | 'favorites'
-export const projectSortOptions: { value: ProjectSort; label: string }[] = [
-  { value: 'updated', label: 'Last updated' }, { value: 'oldest', label: 'Least recently updated' },
-  { value: 'name', label: 'Name A–Z' }, { value: 'stack', label: 'Technology' },
-  { value: 'vulnerabilities', label: 'Vulnerability severity' }, { value: 'outdated', label: 'Package lag' },
-  { value: 'size', label: 'Largest on disk' }, { value: 'dependencies', label: 'Largest node_modules' },
-  { value: 'favorites', label: 'Starred first' },
-]
 
 const severities = ['info', 'low', 'moderate', 'high', 'critical'] as const
 export const vulnerabilityCount = (p: RepoProject) => severities.reduce((sum, severity) => sum + (p.audit?.counts[severity] ?? 0), 0)
