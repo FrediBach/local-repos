@@ -18,28 +18,38 @@ export function advisoryIdentifiers(value: Record<string, unknown>): string[] {
   return [...new Set(values.filter((item): item is string => typeof item === 'string' && identifier.test(item)).map(item => item.toUpperCase()))]
 }
 
+async function readAuditIgnoreFile(directory: string, source: string): Promise<string | undefined> {
+  const filename = path.join(directory, source)
+  let contents: string
+  try {
+    const info = await lstat(filename)
+    if (!info.isFile() || info.size > 64 * 1024) throw new Error('unsafe file')
+    const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    try {
+      const opened = await file.stat()
+      if (!opened.isFile() || opened.ino !== info.ino || opened.dev !== info.dev) throw new Error('changed file')
+      const buffer = Buffer.alloc(64 * 1024 + 1)
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+      if (bytesRead > 64 * 1024) throw new Error('oversized file')
+      contents = buffer.subarray(0, bytesRead).toString('utf8')
+    } finally { await file.close() }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new HelperError(`Cannot read ${source}. Audit ignore files must be readable regular files, not symlinks, and at most 64 KB.`)
+  }
+  return contents
+}
+
 export async function readAuditIgnores(directory: string, now = new Date()) {
   const rules = new Map<string, Rule>()
   const warnings: string[] = []
-  for (const source of auditIgnoreFiles) {
-    const filename = path.join(directory, source)
-    let contents: string
-    try {
-      const info = await lstat(filename)
-      if (!info.isFile() || info.size > 64 * 1024) throw new Error('unsafe file')
-      const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
-      try {
-        const opened = await file.stat()
-        if (!opened.isFile() || opened.ino !== info.ino || opened.dev !== info.dev) throw new Error('changed file')
-        const buffer = Buffer.alloc(64 * 1024 + 1)
-        const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-        if (bytesRead > 64 * 1024) throw new Error('oversized file')
-        contents = buffer.subarray(0, bytesRead).toString('utf8')
-      } finally { await file.close() }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
-      throw new HelperError(`Cannot read ${source}. Audit ignore files must be readable regular files, not symlinks, and at most 64 KB.`)
-    }
+  // Drain both fixed reads before returning, retaining file precedence and errors.
+  const reads = await Promise.allSettled(auditIgnoreFiles.map(source => readAuditIgnoreFile(directory, source)))
+  for (const [index, source] of auditIgnoreFiles.entries()) {
+    const result = reads[index]
+    if (result.status === 'rejected') throw result.reason
+    const contents = result.value
+    if (contents === undefined) continue
     for (const [index, line] of contents.split(/\r?\n/).entries()) {
       const [entry, ...comment] = line.split('#')
       if (!entry.trim()) continue

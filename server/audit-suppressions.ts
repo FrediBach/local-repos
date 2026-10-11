@@ -5,67 +5,67 @@ export interface ParsedAuditFinding extends AuditFinding {
   via?: string[]
 }
 export type ParsedAudit = { counts: PackageAudit['counts']; findings: ParsedAuditFinding[] }
+type Suppression = NonNullable<AuditFinding['suppression']>
+interface PendingSuppression { name: string; remaining: number; causes: Suppression[] }
+
 const severities: AuditSeverity[] = ['info', 'low', 'moderate', 'high', 'critical']
 
-export function suppressAuditFindings(report: ParsedAudit, rules: Map<string, NonNullable<AuditFinding['suppression']>>): Pick<PackageAudit, 'counts' | 'findings' | 'originalCounts'> {
+export function suppressAuditFindings(report: ParsedAudit, rules: Map<string, Suppression>): Pick<PackageAudit, 'counts' | 'findings' | 'originalCounts'> {
   const match = (finding: AuditFinding) => finding.identifiers?.map(id => rules.get(id)).find(Boolean)
   if (!report.findings.some(finding => (finding.advisories ?? [finding]).some(match))) {
     return { counts: report.counts, findings: report.findings.map(({ advisories: _advisories, via: _via, ...finding }) => finding) }
   }
-  const combine = (items: NonNullable<AuditFinding['suppression']>[]): NonNullable<AuditFinding['suppression']> => ({
+  const combine = (items: Suppression[]): Suppression => ({
     source: [...new Set(items.map(item => item.source))].join(', '),
     ids: [...new Set(items.flatMap(item => item.ids))],
     reason: [...new Set(items.flatMap(item => item.reason ? [item.reason] : []))].join('; ') || undefined,
   })
-  const causes = new Map<string, NonNullable<AuditFinding['suppression']>[]>()
-  const suppressed = new Map<string, NonNullable<AuditFinding['suppression']>>()
-  const remaining = new Map<string, number>()
-  const parents = new Map<string, string[]>()
-  const queue: string[] = []
+  const suppressed = new Map<string, Suppression>()
+  const parents = new Map<string, PendingSuppression[]>()
+  const queue: { name: string; suppression: Suppression }[] = []
+  const enqueue = (name: string, causes: Suppression[]) => {
+    const suppression = combine(causes)
+    suppressed.set(name, suppression)
+    queue.push({ name, suppression })
+  }
   // Only prove a transitive package suppressed when every cause is known to be
   // suppressed. Missing references and cycles without a proven cause stay active.
   for (const finding of report.findings) {
     if (!finding.advisories) continue
-    const own = finding.advisories
+    const own = finding.advisories.flatMap(item => match(item) ?? [])
     const via = finding.via ?? []
-    if (own.some(item => !match(item)) || (!own.length && !via.length)) continue
-    if (!via.length) {
-      suppressed.set(finding.name, combine(own.map(item => match(item)!)))
-      queue.push(finding.name)
-    } else {
-      remaining.set(finding.name, via.length)
-      causes.set(finding.name, own.map(item => match(item)!))
-      for (const child of via) parents.set(child, [...parents.get(child) ?? [], finding.name])
+    if (own.length !== finding.advisories.length || (!own.length && !via.length)) continue
+    if (!via.length) enqueue(finding.name, own)
+    else {
+      const parent = { name: finding.name, remaining: via.length, causes: own }
+      for (const child of via) parents.set(child, [...parents.get(child) ?? [], parent])
     }
   }
   for (let index = 0; index < queue.length; index++) {
     const child = queue[index]
-    for (const parent of parents.get(child) ?? []) {
-      causes.get(parent)!.push(suppressed.get(child)!)
-      const count = remaining.get(parent)! - 1
-      remaining.set(parent, count)
-      if (!count) {
-        suppressed.set(parent, combine(causes.get(parent)!))
-        queue.push(parent)
-      }
+    for (const parent of parents.get(child.name) ?? []) {
+      parent.causes.push(child.suppression)
+      parent.remaining -= 1
+      if (!parent.remaining) enqueue(parent.name, parent.causes)
     }
   }
 
   const nodes = new Map(report.findings.filter(item => item.advisories).map(item => [item.name, item]))
   const activeSeverity = new Map<string, AuditSeverity>()
   const dependents = new Map<string, string[]>()
-  const severityQueue: string[] = []
+  const severityQueue: { name: string; severity: AuditSeverity }[] = []
   const raise = (name: string, severity: AuditSeverity) => {
     const current = activeSeverity.get(name)
     if (!current || severities.indexOf(severity) > severities.indexOf(current)) {
       activeSeverity.set(name, severity)
-      severityQueue.push(name)
+      severityQueue.push({ name, severity })
     }
   }
   for (const [name, finding] of nodes) {
-    if (suppressed.has(name)) continue
-    for (const item of finding.advisories!) if (!match(item)) raise(name, item.severity)
-    if (!finding.advisories!.length && !finding.via?.length) raise(name, finding.severity)
+    const advisories = finding.advisories
+    if (suppressed.has(name) || !advisories) continue
+    for (const item of advisories) if (!match(item)) raise(name, item.severity)
+    if (!advisories.length && !finding.via?.length) raise(name, finding.severity)
     for (const child of finding.via ?? []) {
       if (!nodes.has(child)) raise(name, finding.severity)
       else dependents.set(child, [...dependents.get(child) ?? [], name])
@@ -74,7 +74,7 @@ export function suppressAuditFindings(report: ParsedAudit, rules: Map<string, No
   const propagate = () => {
     for (let index = 0; index < severityQueue.length; index++) {
       const child = severityQueue[index]
-      for (const parent of dependents.get(child) ?? []) raise(parent, activeSeverity.get(child)!)
+      for (const parent of dependents.get(child.name) ?? []) raise(parent, child.severity)
     }
     severityQueue.length = 0
   }

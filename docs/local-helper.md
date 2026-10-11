@@ -187,14 +187,18 @@ Individual service modules handle command construction, validation, and parsing.
   Audit suppression is handled by [`audit-ignore.ts`](../server/audit-ignore.ts)
   and [`audit-suppressions.ts`](../server/audit-suppressions.ts). Regular ignore
   files are read only from `workspaceDirectory ?? directory`, bounded to 64 KB
-  each with no-follow opens. CVE/GHSA IDs and optional UTC expiry dates are
+  each with no-follow opens. The two fixed files are read concurrently and both
+  reads finish and close their handles before returning. Parsing and errors retain
+  filename order, so duplicate rules keep the same precedence. CVE/GHSA IDs and optional UTC expiry dates are
   matched against structured advisory identifiers. Missing CVE aliases can be
   resolved through unauthenticated, redirect-free requests to GitHub's fixed
   public advisory endpoint (40 IDs, four workers, ten seconds total, 256 KB per
   response). Failures add report warnings and leave unmatched findings active.
   npm package causes are retained internally to distinguish mixed advisories and
   propagate full suppression only through proven dependency causes; unresolved
-  cycles and missing references remain active. Returned `counts` exclude matched
+  cycles and missing references remain active. Propagation queues carry proven
+  suppression or severity data; each pending parent keeps its remaining-cause
+  count and collected rules together. Returned `counts` exclude matched
   suppressions, `originalCounts` retains the manager summary when changed, and
   findings retain suppression provenance. Unknown summary-only counts remain
   active. Ignore decisions are dated audit snapshots, not metadata scan results.
