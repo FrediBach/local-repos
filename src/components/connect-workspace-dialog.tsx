@@ -22,18 +22,22 @@ export function ConnectWorkspaceDialog({ open, busy, hosted, helper, path, error
         <h3>Want to run servers or manage packages?</h3>
         <p>Run Local Repos and its helper on your computer, then open the local address. This hosted page cannot connect to the helper.</p>
         <Button asChild variant="outline"><a href={installationUrl} target="_blank" rel="noopener noreferrer">Installation on GitHub<ArrowUpRight size={16} /></a></Button>
-      </div> : <>
-        <div className="or-divider"><span />FOR DEV SERVERS & LOCAL ACTIONS<span /></div>
-        <label className="input-label" htmlFor="directory-path">Connect with the local helper <span className={`helper-status ${helper ? 'connected' : ''}`}><span className="status-dot" />{helper ? 'Available' : 'Not connected'}</span></label>
-        <form onSubmit={event => { event.preventDefault(); void onConnect('helper') }}>
-          <div className="path-input"><Folder size={16} /><input id="directory-path" placeholder="/Users/you/Projects" value={path} onChange={event => onPathChange(event.target.value)} autoComplete="off" spellCheck={false} /></div>
-          <p className="field-hint">Enter an absolute path. The helper enables previews, dev servers, disk cleanup, package scans, and editor shortcuts.</p>
-          {!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run app</code>.</p>}
-          <Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button>
-        </form>
-      </>}
+      </div> : <HelperConnectionForm busy={busy} helper={helper} path={path} onPathChange={onPathChange} onConnect={onConnect} />}
       {scanProgress && <ScanProgressPanel progress={scanProgress} />}
       {error && <p className="inline-error" role="alert">{error}</p>}
       <div className="dialog-privacy"><ShieldCheck size={14} />{hosted ? 'Read-only access. Your workspace stays in this browser.' : 'Local workspace. Package scans contact your package registry.'}</div>
     </DialogContent></Dialog>
+}
+
+function HelperConnectionForm({ busy, helper, path, onPathChange, onConnect }: Pick<Props, 'busy' | 'helper' | 'path' | 'onPathChange' | 'onConnect'>) {
+  return <>
+    <div className="or-divider"><span />FOR DEV SERVERS & LOCAL ACTIONS<span /></div>
+    <label className="input-label" htmlFor="directory-path">Connect with the local helper <span className={`helper-status ${helper ? 'connected' : ''}`}><span className="status-dot" />{helper ? 'Available' : 'Not connected'}</span></label>
+    <form onSubmit={event => { event.preventDefault(); void onConnect('helper') }}>
+      <div className="path-input"><Folder size={16} /><input id="directory-path" placeholder="/Users/you/Projects" value={path} onChange={event => onPathChange(event.target.value)} autoComplete="off" spellCheck={false} /></div>
+      <p className="field-hint">Enter an absolute path. The helper enables previews, dev servers, disk cleanup, package scans, and editor shortcuts.</p>
+      {!helper && <p className="helper-instruction">Start the app and helper together with <code>npm run app</code>.</p>}
+      <Button className="connect-submit" disabled={!!busy || !path.trim()} type="submit">{busy === 'connect' ? <><LoaderCircle size={16} className="spinning" />Reading your projects…</> : <>Connect directory<ArrowRight size={16} /></>}</Button>
+    </form>
+  </>
 }

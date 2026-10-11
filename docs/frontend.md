@@ -87,6 +87,11 @@ browser's local day and configured reminder time.
 
 ## Workspace controls and project browsing
 
+The topbar composes separate breadcrumb and connection-status displays alongside
+its actions. The connection dialog owns hosted/browser mode selection and
+composes a helper form only in local mode; all connection callbacks and state
+remain owned by `App`.
+
 [`workspace-toolbar.tsx`](../src/components/workspace-toolbar.tsx) keeps directory
 identity and workspace actions together. **Run checks** opens the existing Radix
 menu for public repository activity, outdated packages, vulnerabilities, React

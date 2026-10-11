@@ -24,17 +24,10 @@ interface Props {
 }
 
 export function WorkspaceTopbar({ activity, settingsTriggerRef, page, stack, filter, hasFilters, hosted, online, connected, busy, onConnect, onHelp, backup }: Props) {
-  const pageName = page === 'todos' ? 'Todos' : page === 'summary' ? 'Daily summary' : stack ?? (filter === 'favorites' ? 'Favorites' : filter === 'running' ? 'Running' : hasFilters ? 'Filtered projects' : 'All projects')
-  const statusLabel = online ? 'All local. All yours.' : 'Offline · cached workspace'
   return <header className="topbar">
-    <div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageName}</h1></div>
+    <WorkspaceBreadcrumb page={page} stack={stack} filter={filter} hasFilters={hasFilters} />
     <div className={`topbar-actions ${hosted ? 'hosted-topbar-actions' : ''}`}>
-      <div className={`local-indicator ${online ? '' : 'is-offline'}`} role="status" title={statusLabel}>
-        <span className="sr-only">{statusLabel}</span>
-        <span className={`status-dot ${online ? '' : 'neutral'}`} aria-hidden="true" />
-        <span className="local-label" aria-hidden="true">{statusLabel}</span>
-        <span className="local-label-compact" aria-hidden="true">{online ? 'Local' : 'Offline'}</span>
-      </div>
+      <WorkspaceConnectionStatus online={online} />
       {activity && <GlobalCommitHeatmap activity={activity} />}
       <Button className="topbar-directory-button" variant={connected ? 'outline' : 'default'} size="sm" disabled={busy} onClick={onConnect}><FolderOpen size={16} aria-hidden="true" />{connected ? 'Change directory' : 'Connect directory'}</Button>
       {hosted && <HostedNotice />}
@@ -46,4 +39,20 @@ export function WorkspaceTopbar({ activity, settingsTriggerRef, page, stack, fil
       </div>
     </div>
   </header>
+}
+
+function WorkspaceBreadcrumb({ page, stack, filter, hasFilters }: Pick<Props, 'page' | 'stack' | 'filter' | 'hasFilters'>) {
+  const projectNames = { all: hasFilters ? 'Filtered projects' : 'All projects', favorites: 'Favorites', running: 'Running' }
+  const pageNames = { todos: 'Todos', summary: 'Daily summary', projects: stack ?? projectNames[filter] }
+  return <div className="breadcrumbs"><span>Workspace</span><span className="breadcrumb-slash">/</span><h1>{pageNames[page]}</h1></div>
+}
+
+function WorkspaceConnectionStatus({ online }: Pick<Props, 'online'>) {
+  const statusLabel = online ? 'All local. All yours.' : 'Offline · cached workspace'
+  return <div className={`local-indicator ${online ? '' : 'is-offline'}`} role="status" title={statusLabel}>
+    <span className="sr-only">{statusLabel}</span>
+    <span className={`status-dot ${online ? '' : 'neutral'}`} aria-hidden="true" />
+    <span className="local-label" aria-hidden="true">{statusLabel}</span>
+    <span className="local-label-compact" aria-hidden="true">{online ? 'Local' : 'Offline'}</span>
+  </div>
 }
