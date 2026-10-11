@@ -20,6 +20,39 @@ function setup(value = project, busy = '') {
 }
 
 describe('project action menu', () => {
+  it('opens scripts with the keyboard and launches the selected script in its project', async () => {
+    const value = { ...project, scripts: { dev: 'vite', 'test:watch': 'vitest', utility: 'node utility.js', prepare: 'husky', pretest: 'echo setup', test: 'vitest run' } }
+    const { user, onAction } = setup(value)
+    const trigger = screen.getByRole('button', { name: 'Actions for Fixture' })
+    await user.click(trigger)
+    screen.getByRole('menuitem', { name: 'Scripts', exact: true }).focus()
+    await user.keyboard('{ArrowRight}')
+    const script = await screen.findByRole('menuitem', { name: 'test:watch', exact: true })
+    for (const name of ['dev', 'prepare', 'pretest']) expect(screen.queryByRole('menuitem', { name, exact: true })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'utility', exact: true })).toBeTruthy()
+    expect(script.title).toBe('npm run test:watch: vitest')
+    script.focus()
+    await user.keyboard('{Enter}')
+    expect(onAction).toHaveBeenCalledExactlyOnceWith(value, 'run-script', { name: 'test:watch', command: 'vitest' })
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+  })
+
+  it('offers scripts without a dev server and disables the submenu while busy', async () => {
+    const { user, onAction } = setup({ ...project, scripts: { test: 'vitest run' } }, 'other:audit')
+    await user.click(screen.getByRole('button', { name: 'Actions for Fixture' }))
+    const submenu = screen.getByRole('menuitem', { name: 'Scripts', exact: true })
+    expect(submenu.getAttribute('data-disabled')).not.toBeNull()
+    await user.click(submenu)
+    expect(screen.queryByRole('menuitem', { name: 'test', exact: true })).toBeNull()
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  it('omits the scripts submenu when only the primary server is available', async () => {
+    const { user } = setup()
+    await user.click(screen.getByRole('button', { name: 'Actions for Fixture' }))
+    expect(screen.queryByRole('menuitem', { name: 'Scripts', exact: true })).toBeNull()
+  })
+
   it.each(scans)('reruns %s for the selected project and restores focus', async (label, action) => {
     const { user, onAction } = setup()
     const trigger = screen.getByRole('button', { name: 'Actions for Fixture' })

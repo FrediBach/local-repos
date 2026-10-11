@@ -278,6 +278,12 @@ Actions delegate through the existing workspace action hook, preserving helper
 connection prompts, busy checks, stale-response guards, caching, and notices.
 An individual preview capture shows the same card progress badge as batch capture.
 
+Project action menus expose the Development tab’s additional scripts through a
+**Scripts** submenu, reusing script discovery and excluding the primary server
+script. Selections send the displayed name and command through the existing
+workspace action hook, preserving terminal preferences, helper connection flow,
+and busy guards.
+
 ## Lighthouse frontend reports
 
 [`lighthouse.ts`](../src/lib/lighthouse.ts) shares frontend eligibility between

@@ -1,9 +1,11 @@
-import { Code2, Ellipsis, EyeOff, FolderGit2, FolderOpen, Gauge, GitBranch, GitPullRequest, HardDrive, Monitor, PackageSearch, Play, ShieldCheck, Square, Star, Stethoscope, Tag, Trash2 } from 'lucide-react'
+import { Code2, Ellipsis, EyeOff, FolderGit2, FolderOpen, Gauge, GitBranch, GitPullRequest, HardDrive, Monitor, PackageSearch, Play, ShieldCheck, Square, Star, Stethoscope, Tag, Terminal, Trash2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { useSettings } from '@/hooks/use-settings'
 import { desktopAppName } from '@/lib/desktop-apps'
 import { projectCommands } from '@/lib/project-commands'
-import type { OpenProjectRequest, PreviewMode, RepoProject } from '@/types'
+import { selectDevScript } from '@/lib/dev-script'
+import { discoverProjectScripts, scriptRunCommand } from '@/lib/project-scripts'
+import type { OpenProjectRequest, PreviewMode, RepoProject, RunProjectScriptRequest } from '@/types'
 
 interface Props {
   project: RepoProject
@@ -27,6 +29,8 @@ const previewSources: { source: PreviewMode; label: string }[] = [
 export function ProjectActionMenu({ project, tagsReady, favorite, busy, onOpen, onEditTags, onToggleFavorite, onIgnore, onAction }: Props) {
   const { settings } = useSettings()
   const commands = projectCommands(project, settings, favorite)
+  const primaryScript = selectDevScript(project)?.name
+  const scripts = discoverProjectScripts(project).filter(script => script.name !== primaryScript)
   return <DropdownMenu modal={false}>
     <DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger>
     <DropdownMenuContent align="end">
@@ -52,6 +56,12 @@ export function ProjectActionMenu({ project, tagsReady, favorite, busy, onOpen, 
         </DropdownMenuSubContent>
       </DropdownMenuSub>
       {commands.filter(command => command.id === 'start' || command.id === 'stop').map(command => <DropdownMenuItem key={command.id} disabled={!!busy} onSelect={() => onAction(project, command.id)}>{command.id === 'start' ? <Play size={14} /> : <Square size={14} />}{command.title}</DropdownMenuItem>)}
+      {scripts.length > 0 && <DropdownMenuSub>
+        <DropdownMenuSubTrigger disabled={!!busy}><Terminal size={14} />Scripts</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {scripts.map(script => <DropdownMenuItem key={script.name} disabled={!!busy} title={scriptRunCommand(project.packageManager, script.name) + ': ' + script.command} onSelect={() => onAction(project, 'run-script', { name: script.name, command: script.command } satisfies RunProjectScriptRequest)}><Terminal size={14} />{script.name}</DropdownMenuItem>)}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>}
     </DropdownMenuContent>
   </DropdownMenu>
 }

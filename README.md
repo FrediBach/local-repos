@@ -375,6 +375,8 @@ an older helper can still return results without reporting intermediate steps.
 
 ## Frontend project scripts
 
+The project action menu also offers a **Scripts** submenu with the same scripts as the Development tab. Select a script to run it in your configured terminal. The submenu is hidden when no additional scripts are available; the primary development server retains its separate start/stop action.
+
 Open a project’s **Development** tab to find **Project scripts**, grouped into development, Storybook, tests, checks and formatting, builds, previews, scaffolding/code generation, and documentation. All variants remain available, such as `test:watch`, `test:e2e`, `lint:fix`, and `generate:component`. Unrecognized commands appear under **Other scripts**. The primary development server keeps its existing start, stop, and log controls.
 
 The heuristic uses whole words in colon, dash, underscore, and camelCase script names, then recognizes commands for custom names. It understands common frontend tools and simple environment/package-runner wrappers. Task modifiers distinguish `build:storybook` from `storybook` and `test-storybook`. Empty scripts, npm’s placeholder test, lifecycle hooks, and pre/post hooks paired with another script are omitted. Discovery only reads metadata; it never runs scripts or installs tools.
