@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { useSettings } from '@/hooks/use-settings'
 import { auditSeverities, badgeColors, defaultSettings, normalizeSettings, numericSettings, validateSettings, type BadgeColor, type NumericSettingKey, type SettingsErrorKey, type WatcherMode } from '@/lib/settings'
 import { formatOutdatedScore, outdatedLevel, scoreVersionGap } from '@/lib/outdated'
-import { colorSchemes } from '@/lib/color-schemes'
+import { SettingsInterface } from './settings-interface'
 import { desktopPlatforms, editors, gitClients, terminals, type TerminalId, type EditorId, type GitClientId } from '@/lib/desktop-apps'
 import { ConfigBackupPanel, type ConfigBackupControls } from './config-backup'
 import './settings-dialog.css'
@@ -111,44 +111,7 @@ export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupCon
             <fieldset className="settings-section"><legend>Project activity</legend><p>Adjust the four Last activity filter windows. Values must increase from recent to long inactive.</p><div className="settings-grid">{field('recentActivityDays')}{field('activeActivityDays')}{field('inactiveActivityDays')}{field('dormantActivityDays')}</div></fieldset>
             <fieldset className="settings-section"><legend>Disk usage</legend><p>Thresholds for the large-project and large-node_modules filters.</p><div className="settings-grid">{field('largeProjectGiB')}{field('heavyNodeModulesMiB')}</div></fieldset>
           </>}
-          {tab === 'interface' && <>
-            <fieldset className="settings-section"><legend>Global commit heatmap</legend>
-              <div className="settings-field"><label htmlFor={`${id}-commitActivityAuthor`}>Author email (optional)</label>
-                <input id={`${id}-commitActivityAuthor`} type="text" value={draft.commitActivityAuthor} maxLength={1024} placeholder="All authors" autoComplete="off" spellCheck={false}
-                  aria-invalid={!!(submitted && errors.commitActivityAuthor)} aria-describedby={`${id}-commitActivityAuthor-hint`}
-                  onChange={event => { setDraft(current => ({ ...current, commitActivityAuthor: event.target.value })); setSaveError('') }} />
-                <small id={`${id}-commitActivityAuthor-hint`} className={submitted && errors.commitActivityAuthor ? 'settings-field-error' : ''}>{submitted && errors.commitActivityAuthor || 'Leave blank for all authors, or enter the exact Git author email. Saving refreshes the heatmap when connected to the local helper.'}</small>
-              </div>
-            </fieldset>
-            <fieldset className="settings-section" aria-describedby={`${id}-scheme-hint`}><legend>Color scheme</legend>
-              <p id={`${id}-scheme-hint`}>Make this space your own. Every scheme works with the System, Light, and Dark modes in the top bar.</p>
-              <div className="scheme-options">{colorSchemes.map(scheme => <label className="scheme-option" key={scheme.id}>
-                <span className="scheme-option-heading"><input type="radio" name="colorScheme" value={scheme.id} checked={draft.colorScheme === scheme.id}
-                  aria-labelledby={`${id}-scheme-${scheme.id}`} aria-describedby={`${id}-scheme-${scheme.id}-description`}
-                  onChange={() => { setDraft(current => ({ ...current, colorScheme: scheme.id })); setSaveError('') }} />
-                  <strong id={`${id}-scheme-${scheme.id}`}>{scheme.name}</strong>
-                </span>
-                <span className="scheme-description" id={`${id}-scheme-${scheme.id}-description`}>{scheme.description}</span>
-                <span className="scheme-preview-pair" aria-hidden="true">{(['light', 'dark'] as const).map(mode => <span className="scheme-preview" data-color-scheme={scheme.id} data-theme={mode} key={mode}>
-                  <span className="scheme-preview-sidebar"><i /><i /><i /></span>
-                  <span className="scheme-preview-content"><span>{mode === 'light' ? 'Light' : 'Dark'}</span><i /><b /></span>
-                </span>)}</span>
-              </label>)}</div>
-            </fieldset>
-            <fieldset className="settings-section"><legend>Project display</legend><div className="settings-grid">{field('sidebarTechnologyLimit')}{field('projectTagLimit', '0 = hide technology tags.')}{field('packageMatchLimit')}</div></fieldset>
-            <fieldset className="settings-section"><legend>End-of-day push reminder</legend>
-              <label className="settings-checkbox"><input type="checkbox" checked={draft.pushReminderEnabled} onChange={event => setDraft(current => ({ ...current, pushReminderEnabled: event.target.checked }))} />Remind me to push changes to origin</label>
-              <div className="settings-field"><label htmlFor={`${id}-pushReminderTime`}>Reminder time</label>
-                <input id={`${id}-pushReminderTime`} type="time" value={draft.pushReminderTime} disabled={!draft.pushReminderEnabled}
-                  aria-invalid={!!(submitted && errors.pushReminderTime)} aria-describedby={`${id}-pushReminderTime-hint`}
-                  onChange={event => { setDraft(current => ({ ...current, pushReminderTime: event.target.value })); setSaveError('') }} />
-                <small id={`${id}-pushReminderTime-hint`} className={submitted && errors.pushReminderTime ? 'settings-field-error' : ''}>{submitted && errors.pushReminderTime || `Your local time (${Intl.DateTimeFormat().resolvedOptions().timeZone}).`}</small>
-              </div>
-              <p>While the app is open, the local helper checks for unpushed commits and uncommitted changes at this time and every five minutes afterward. Returning to the app later that day also triggers the check. Dismiss the reminder to silence it for today.</p>
-              <p>Uses locally known origin branches. Fetch origin if needed for an up-to-date comparison. Browser folder connections cannot check push status.</p>
-            </fieldset>
-            <fieldset className="settings-section"><legend>Refresh & notifications</legend><div className="settings-grid">{field('statusPollSeconds', 'While development servers are running.')}{field('notificationSeconds', '0 = keep notifications until dismissed. Errors always stay visible.')}</div></fieldset>
-          </>}
+          {tab === 'interface' && <SettingsInterface id={id} draft={draft} setDraft={setDraft} submitted={submitted} errors={errors} field={field} onEdit={() => setSaveError('')} />}
           {tab === 'watcher' && <>
             <fieldset className="settings-section"><legend>Rescan your workspace</legend>
               <p>Automatic scans run while this app is open and online. They wait for other actions to finish. Manual scan buttons remain available in every mode.</p>
@@ -166,12 +129,26 @@ export function SettingsDialog({ backup, triggerRef }: { backup: ConfigBackupCon
             </fieldset>
           </>}
         </div>
-        {tab === 'backup' ? <div className="settings-footer"><Button type="button" variant="outline" size="sm" disabled={transferring} onClick={() => changeOpen(false)}>Close</Button><p>Backups contain preferences and repository identifiers. Project files, previews, and scan results stay on this device.</p></div> : <div className="settings-footer">
-          {(saveError || submitted && Object.keys(errors).length > 0) && <p role="alert" className="settings-save-error">{saveError || 'Correct the highlighted values before saving.'}</p>}
-          <div className="settings-footer-actions"><Button type="button" variant="ghost" size="sm" onClick={() => { setDraft({ ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }); setSubmitted(false); setSaveError('') }}><RotateCcw size={14} />Reset defaults</Button><div><Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" size="sm">Save settings</Button></div></div>
-          <p>Saved in this browser. Changes apply immediately after saving.</p>
-        </div>}
+        <SettingsFooter backup={tab === 'backup'} transferring={transferring} saveError={saveError} invalid={submitted && Object.keys(errors).length > 0}
+          onClose={() => changeOpen(false)} onCancel={() => setOpen(false)}
+          onReset={() => { setDraft({ ...defaultSettings, auditColors: { ...defaultSettings.auditColors } }); setSubmitted(false); setSaveError('') }} />
       </form>
     </DialogContent>
   </Dialog>
+}
+
+function SettingsFooter({ backup, transferring, saveError, invalid, onClose, onCancel, onReset }: {
+  backup: boolean
+  transferring: boolean
+  saveError: string
+  invalid: boolean
+  onClose: () => void
+  onCancel: () => void
+  onReset: () => void
+}) {
+  return backup ? <div className="settings-footer"><Button type="button" variant="outline" size="sm" disabled={transferring} onClick={onClose}>Close</Button><p>Backups contain preferences and repository identifiers. Project files, previews, and scan results stay on this device.</p></div> : <div className="settings-footer">
+    {(saveError || invalid) && <p role="alert" className="settings-save-error">{saveError || 'Correct the highlighted values before saving.'}</p>}
+    <div className="settings-footer-actions"><Button type="button" variant="ghost" size="sm" onClick={onReset}><RotateCcw size={14} />Reset defaults</Button><div><Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button><Button type="submit" size="sm">Save settings</Button></div></div>
+    <p>Saved in this browser. Changes apply immediately after saving.</p>
+  </div>
 }

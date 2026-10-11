@@ -101,6 +101,10 @@ Sidebar navigation shares a button component for active-page semantics and
 styling while keeping navigation callbacks and count badges in the parent.
 Project cards delegate disk usage to a storage-summary component, including the
 measurement timestamp and lower-bound indicators for partial reports.
+The settings dialog owns its draft, validation, tab selection, and persistence.
+Its Interface tab and footer render through separate components; Interface edits
+still change only the draft until save, and backup transfers retain their close
+guard.
 
 [`workspace-toolbar.tsx`](../src/components/workspace-toolbar.tsx) keeps directory
 identity and workspace actions together. **Run checks** opens the existing Radix
