@@ -78,6 +78,29 @@ async function scan(client: Client, requestId = 'scan') {
 }
 
 describe('authenticated MCP read release', () => {
+  it('preserves omitted, empty, and combined project and finding filters', async () => {
+    await project('alpha'); await project('beta')
+    const client = await connect()
+    await scan(client)
+    const all = await call(client, 'list_projects')
+    expect(all.data.total).toBe(2)
+    const id = all.data.items[0].id
+    const p = helper.registry.lookup(id).project
+    p.packageManager = 'pnpm'
+    p.dev = { status: 'running' }
+    p.audit = { manager: 'pnpm', scannedAt: p.scannedAt, counts: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 }, findings: [] }
+    const filtered = await call(client, 'list_projects', { filters: { stack: p.stack, packageManager: ['pnpm'], devStatus: ['running'], reportKind: 'audit', reportAvailability: ['available'] } })
+    expect(filtered.data.items.map((item: { id: string }) => item.id)).toEqual([id])
+    expect((await call(client, 'list_projects', { filters: { devStatus: ['stopped'], reportKind: 'audit', reportAvailability: ['missing'] } })).data.total).toBe(1)
+    for (const key of ['stack', 'packageManager', 'devStatus', 'reportAvailability']) {
+      expect((await call(client, 'list_projects', { filters: { [key]: [] } })).data.total).toBe(0)
+    }
+    expect((await call(client, 'list_findings')).data.rows.total).toBe(1)
+    expect((await call(client, 'list_findings', { kinds: ['security', 'security'] })).data.rows.total).toBe(1)
+    expect((await call(client, 'list_findings', { kinds: [] })).data.rows.total).toBe(0)
+    expect((await call(client, 'list_findings', { kinds: ['reactDoctor'] })).data.rows.total).toBe(0)
+  })
+
   it.each([true, false])('prepares and applies cleanup with explicit grants and retry protection (modern=%s)', async modern => {
     const principal = policy.clients[0].principal
     principal.capabilities.push('maintenance')

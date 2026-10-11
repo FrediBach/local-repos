@@ -118,6 +118,10 @@ can be shown as monorepo members without being declared workspace members, so
 when a project is rescanned. This keeps process ownership and previously captured
 previews and reports attached to the same object. Registration is additive;
 projects absent from a subsequent scan are not pruned from the registry.
+Registration indexes incoming entries by canonical directory for workspace-scope
+validation. Project and finding queries prepare filter membership sets once per
+request; omitted filters remain unrestricted, while empty filter lists match
+nothing. These temporary indexes do not change registry or report persistence.
 
 [`package-fingerprint.ts`](../server/package-fingerprint.ts) hashes stat metadata
 for a fixed list of manifests, lockfiles, package configuration files, and

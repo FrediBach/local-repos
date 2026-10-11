@@ -140,14 +140,18 @@ export class ProjectIndex {
   }
   list(principal: Principal, query: ListQuery) {
     const f = query.filters
+    const stacks = f?.stack && new Set(f.stack)
+    const managers = f?.packageManager && new Set(f.packageManager)
+    const devStatuses = f?.devStatus && new Set(f.devStatus)
+    const availability = f?.reportAvailability && new Set(f.reportAvailability)
     let entries = this.entries(principal, query.rootId).filter(({ project: p }) => {
-      if (f?.stack && !f.stack.some(stack => p.stack.includes(stack))) return false
-      if (f?.packageManager && !f.packageManager.includes(p.packageManager)) return false
+      if (stacks && !p.stack.some(stack => stacks.has(stack))) return false
+      if (managers && !managers.has(p.packageManager)) return false
       if (f?.hasPackageJson !== undefined && !!p.hasPackageJson !== f.hasPackageJson) return false
       if (f?.gitDirty !== undefined && p.git?.dirty !== f.gitDirty) return false
-      if (f?.devStatus && !f.devStatus.includes(p.dev?.status ?? 'stopped')) return false
+      if (devStatuses && !devStatuses.has(p.dev?.status ?? 'stopped')) return false
       if (f?.dependency && !packageMatches(p, `${f.dependency.name}${f.dependency.version ? `@${f.dependency.version}` : ''}`).length) return false
-      if (f?.reportAvailability && !(f.reportKind ? [f.reportKind] : s.reportKind.options).some(kind => f.reportAvailability!.includes(this.reportSummary(p, kind).availability))) return false
+      if (availability && !(f?.reportKind ? [f.reportKind] : s.reportKind.options).some(kind => availability.has(this.reportSummary(p, kind).availability))) return false
       if (f?.reportKind && !f.reportAvailability && this.reportSummary(p, f.reportKind).availability !== 'available') return false
       const q = query.query?.toLowerCase().trim()
       return !q || [p.name, p.dirName, p.description, ...p.stack, p.git?.branch, p.git?.origin, p.author, p.license, p.homepage, p.packageManager, ...p.aiInstructionFiles ?? [], ...this.summary(principal, { ...this.application.registry.lookup(p.id), project: p }, query.rootId).rootMemberships.map(member => member.relativePath), ...(p.dependencies ?? []).map(d => `${d.name}@${d.version}`)].some(value => value?.toLowerCase().includes(q))
@@ -214,6 +218,7 @@ export class ProjectIndex {
     return clean({ ...summary, report: data, rows: this.page(principal, ['report', projectId, kind], rows, query, this.coverage([p], [kind])) }, principal)
   }
   findings(principal: Principal, query: PageQuery & { rootId?: string; projectId?: string; kinds?: string[]; minimumSeverity?: string }) {
+    const kinds = query.kinds && new Set(query.kinds)
     const entries = query.projectId ? [this.entry(principal, query.projectId)].filter(entry => !query.rootId || this.entries(principal, query.rootId).some(other => other.project.id === entry.project.id)) : this.entries(principal, query.rootId)
     const projects = entries.map(({ project, directory, workspaceDirectory }) => {
       const p = { ...project }
@@ -223,7 +228,7 @@ export class ProjectIndex {
       if (query.minimumSeverity === 'critical' && p.audit) p.audit = { ...p.audit, counts: { ...p.audit.counts, high: 0 }, findings: p.audit.findings.filter(finding => finding.severity === 'critical') }
       return p
     })
-    const rows = projectTodos(projects).map(todo => ({ ...todo, kind: todo.kind === 'react-doctor' ? 'reactDoctor' : todo.kind, findingKeys: todo.findingKeys.slice(0, 25), findingKeysOmitted: Math.max(0, todo.findingKeys.length - 25) })).filter(todo => !query.kinds || query.kinds.includes(todo.kind))
+    const rows = projectTodos(projects).map(todo => ({ ...todo, kind: todo.kind === 'react-doctor' ? 'reactDoctor' : todo.kind, findingKeys: todo.findingKeys.slice(0, 25), findingKeysOmitted: Math.max(0, todo.findingKeys.length - 25) })).filter(todo => !kinds || kinds.has(todo.kind))
     const { cursor: _cursor, limit: _limit, ...key } = query
     return { rows: this.page(principal, ['findings', key], rows, query, this.coverage(entries.map(entry => entry.project), ['audit', 'outdated', 'reactDoctor'])), dismissalsAvailable: false as const, scoringPolicy: `Local Repos default settings: ${OUTDATED_SCORE_EXPLANATION}` }
   }

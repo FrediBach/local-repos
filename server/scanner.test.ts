@@ -27,6 +27,26 @@ async function fixture(name: string, metadata: unknown = { name }): Promise<stri
 }
 
 describe('local directory scanning', () => {
+  it('rejects a new workspace membership while its registered parent is busy', async () => {
+    const directory = await fixture('studio', { name: 'studio' })
+    await fixture('studio/child', { name: 'child' })
+    const registry = new ProjectRegistry()
+    const initial = (await scanDirectory(root)).registered
+    registry.register(initial)
+    const parent = initial.find(entry => entry.project.name === 'studio')!
+    const child = initial.find(entry => entry.project.name === 'child')!
+    expect(child.workspaceDirectory).toBeUndefined()
+
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'studio', workspaces: ['child'] }))
+    const next = (await scanDirectory(root)).registered
+    expect(() => registry.register(next, id => id === parent.project.id)).toThrow('SCOPE_CONFLICT')
+    expect(registry.lookup(child.project.id).workspaceDirectory).toBeUndefined()
+    expect(registry.related(child.project.id)).toHaveLength(1)
+
+    registry.register(next, () => false)
+    expect(registry.related(child.project.id)).toHaveLength(2)
+  })
+
   it.each(['AGENTS.md', 'AGENTS.m', 'CLAUDE.md'])('detects a root %s file, including empty files', async filename => {
     const directory = await fixture('assisted')
     await writeFile(path.join(directory, filename), '')

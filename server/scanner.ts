@@ -290,6 +290,7 @@ export class ProjectRegistry {
   }
 
   register(entries: RegisteredProject[], scopeBusy?: (id: string) => boolean): void {
+    const byDirectory = new Map(entries.map(entry => [entry.directory, entry]))
     // Validate the entire scan before changing any live object. Membership paths
     // belong to the index; a narrower scan cannot discard known workspace scope.
     for (const entry of entries) {
@@ -300,7 +301,7 @@ export class ProjectRegistry {
         entry.project.monorepo = previous.project.monorepo
       }
       if (previous.gitDirectory && !entry.gitDirectory && previous.gitDirectory !== entry.root && isWithin(previous.gitDirectory, entry.root)) entry.gitDirectory = previous.gitDirectory
-      const nextWorkspace = entries.find(other => other.directory === entry.workspaceDirectory)
+      const nextWorkspace = entry.workspaceDirectory ? byDirectory.get(entry.workspaceDirectory) : undefined
       const nextWorkspaceKnown = nextWorkspace && this.projects.has(nextWorkspace.project.id)
       if ((previous.workspaceDirectory !== entry.workspaceDirectory || previous.gitDirectory !== entry.gitDirectory) && (scopeBusy?.(entry.project.id) || (nextWorkspaceKnown && scopeBusy?.(nextWorkspace.project.id)))) {
         throw new HelperError('SCOPE_CONFLICT: Workspace context changed while the project is busy. Rescan when idle.', 409)
