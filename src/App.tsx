@@ -1,3 +1,4 @@
+import { WorkspaceStatus } from '@/components/workspace-status'
 import { WorkspacePage } from '@/components/workspace-page'
 import { useWorkspaceProjects } from '@/hooks/use-workspace-projects'
 import { WorkspaceBatchProgress } from '@/components/workspace-batch-progress'
@@ -10,14 +11,12 @@ import { WorkspaceWatcherStatus } from '@/components/workspace-watcher-status'
 import { WorkspaceNotice } from '@/components/workspace-notice'
 import { WorkspaceSidebar } from '@/components/workspace-sidebar'
 import { WorkspaceToolbar } from '@/components/workspace-toolbar'
-import { WorkspaceReportNote } from '@/components/workspace-report-note'
 import { ProjectSearchToolbar } from '@/components/project-search-toolbar'
 import { ProjectDetailDialog } from '@/components/project-detail-dialog'
 import type { ProjectTab } from '@/components/project-tabs'
 import { ConnectWorkspaceDialog } from '@/components/connect-workspace-dialog'
 import { WorkspaceHelpDialog } from '@/components/workspace-help-dialog'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { SettingsProvider, useSettings } from '@/hooks/use-settings'
 import { readThemePreference } from '@/hooks/use-theme'
 import { PREFERENCES_CHANGED_EVENT } from '@/lib/settings'
@@ -34,7 +33,6 @@ import type { WorkspaceCommandId } from '@/lib/project-search'
 import { useProjectFiltering } from '@/hooks/use-project-filtering'
 import { useWorkspaceActions } from '@/hooks/use-workspace-actions'
 import { useScanProgress } from '@/hooks/use-scan-progress'
-import { ScanProgressPanel } from '@/components/scan-progress-panel'
 import { useWorkspaceWatcher } from '@/hooks/use-workspace-watcher'
 import { CriticalVulnerabilityDialog } from '@/components/critical-vulnerability-dialog'
 import { mergeCriticalAlerts, newCriticalVulnerabilities, type CriticalVulnerabilityAlert } from '@/lib/critical-vulnerabilities'
@@ -44,6 +42,8 @@ import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveConf
 import { preservePreviews, protectReportRevisions } from '@/lib/workspace'
 import { isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, RepoProject, Workspace } from '@/types'
+
+const skipLabels = { projects: 'Skip to projects', summary: 'Skip to daily summary', todos: 'Skip to todos' }
 
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
 
@@ -331,7 +331,7 @@ function WorkspaceApp() {
   }
 
   return <div className="app-shell">
-    <a className="skip-link" href="#projects">{page === 'todos' ? 'Skip to todos' : page === 'summary' ? 'Skip to daily summary' : 'Skip to projects'}</a>
+    <a className="skip-link" href="#projects">{skipLabels[page]}</a>
     <WorkspaceSidebar workspaceStatus={workspaceStatus} workspace={workspace} projects={projects} stacks={stacks} busy={!!busy} page={page} filter={filter} filters={filters}
       hasFilters={hasFilters} favoriteCount={favoriteCount} running={running} navigate={navigate} onSummary={() => setPage('summary')}
       onTodos={() => openTodos()} todoCount={projectTodos.todos.length}
@@ -343,10 +343,7 @@ function WorkspaceApp() {
         connected={!!workspace} busy={!!busy} onConnect={() => { setConnectError(''); setConnectOpen(true) }}
         onHelp={() => setHelpOpen(true)} backup={{ ready: tagsReady && cacheReady, busy: !!busy, connected: !!workspace, onExport: () => createConfigBackup(settings, readThemePreference(), workspace?.projects ?? [], favorites, projectTags), onImport: importConfig }} />
       <div className="page-content">
-        {helperState.operations.length > 0 && <p role="status">Helper work: {helperState.operations.map(operation => operation.progress?.phase ?? operation.kind).join(', ')}</p>}
-        {helperState.error && <p role="status">{helperState.error}</p>}
-        {page !== 'projects' && <WorkspaceReportNote workspace={workspace} />}
-        {activeScanProgress && <ScanProgressPanel progress={activeScanProgress} />}
+        <WorkspaceStatus operations={helperState.operations} error={helperState.error} workspace={workspace} showReportNote={page !== 'projects'} scanProgress={activeScanProgress} />
         <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
           onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />
         <WorkspacePage workspace={workspace} workspaceStatus={workspaceStatus} page={page} projects={projects} projectTodos={projectTodos}

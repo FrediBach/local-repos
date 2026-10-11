@@ -66,6 +66,9 @@ imports and tag editing from racing initial preference restoration.
 technology counts from the cached workspace and preferences. `WorkspacePage`
 selects the loading/error state, todos, daily summary, or project browser; action
 callbacks and workspace ownership remain in `App`.
+`WorkspaceStatus` groups helper activity, synchronization errors, cached-report
+guidance, and active scan progress above the selected page. It only renders the
+state supplied by the existing hooks; it does not own polling or scan lifecycles.
 
 The rendering pipeline is:
 
