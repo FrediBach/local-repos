@@ -99,6 +99,8 @@ composes a helper form only in local mode; all connection callbacks and state
 remain owned by `App`.
 Sidebar navigation shares a button component for active-page semantics and
 styling while keeping navigation callbacks and count badges in the parent.
+Project cards delegate disk usage to a storage-summary component, including the
+measurement timestamp and lower-bound indicators for partial reports.
 
 [`workspace-toolbar.tsx`](../src/components/workspace-toolbar.tsx) keeps directory
 identity and workspace actions together. **Run checks** opens the existing Radix
@@ -146,6 +148,9 @@ when projects, preferences, or filter options change; keystrokes reuse that inde
 Script discovery reuses `discoverProjectScripts`; fuzzy and partial
 matching never generates commands. The list renders suggestions in pages while
 keeping all matches reachable by keyboard or the show-more control.
+The search component owns selection, keyboard handling, placement, and action
+availability. Separate popover and scope components render those values and
+delegate interactions back to that owner, preserving focus and listbox IDs.
 
 Selections delegate to `App` callbacks and the existing workspace action hook,
 tag editor, settings trigger, and filter state. `App` resolves the selected

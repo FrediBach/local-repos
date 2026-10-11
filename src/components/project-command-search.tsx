@@ -154,10 +154,37 @@ export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, 
         {input ? <button aria-label="Clear search" onClick={() => { changeInput(''); searchRef.current?.focus() }}><X size={14} /></button> : <kbd aria-hidden="true">⌘ K</kbd>}
       </div>
     </div>
-    {scoped && <div className="command-scope"><button type="button" onClick={back} aria-label="Back to all commands"><ArrowLeft size={14} /><span>{scopeLabel ?? 'All commands'}</span><X size={12} /></button><span>{selectedProject ? selectedProject.relativePath : selectedTemplate?.id === 'scripts' ? 'Choose a script and project' : 'Choose a project'}</span></div>}
+    {scoped && <SearchScope label={scopeLabel} project={selectedProject} template={selectedTemplate} onBack={back} />}
     <span id={`${id}-hint`} className="sr-only">Search projects, actions, scripts, tags, technologies, or packages. Arrow keys browse suggestions. Enter selects. Tab completes a project or action. Escape dismisses. Backspace in an empty search goes back.</span>
-    {open && <div className={`command-popover${placement.above ? ' command-popover-above' : ''}`} style={{ '--command-height': `${placement.height}px` } as CSSProperties}>
-      <div className="command-heading"><span>{scopeLabel ?? (searchScope === 'packages' ? 'Find a dependency' : input ? 'Search your workspace' : 'What would you like to do?')}</span><button type="button" aria-label="Close suggestions" onClick={() => setOpen(false)}><X size={15} /></button></div>
+    {open && <SearchPopover id={id} scopeLabel={scopeLabel} searchScope={searchScope} input={input} scoped={scoped} placement={placement}
+      visible={visible} suggestionCount={suggestions.length} limit={limit} activeIndex={activeIndex} options={options} helper={helper}
+      unavailable={unavailable} choose={choose} onClose={() => setOpen(false)} onActive={setActive} onMore={() => setLimit(value => value + pageSize)} />}
+  </div>
+}
+
+interface SearchPopoverProps {
+  id: string
+  scopeLabel?: string
+  searchScope: ProjectCommandSearchProps['searchScope']
+  input: string
+  scoped: boolean
+  placement: { above: boolean; height: number }
+  visible: SearchSuggestion[]
+  suggestionCount: number
+  limit: number
+  activeIndex: number
+  options: RefObject<HTMLDivElement | null>
+  helper: boolean
+  unavailable: (suggestion: SearchSuggestion) => string | undefined
+  choose: (suggestion: SearchSuggestion) => void
+  onClose: () => void
+  onActive: (index: number) => void
+  onMore: () => void
+}
+
+function SearchPopover({ id, scopeLabel, searchScope, input, scoped, placement, visible, suggestionCount, limit, activeIndex, options, helper, unavailable, choose, onClose, onActive, onMore }: SearchPopoverProps) {
+  return <div className={`command-popover${placement.above ? ' command-popover-above' : ''}`} style={{ '--command-height': `${placement.height}px` } as CSSProperties}>
+      <div className="command-heading"><span>{scopeLabel ?? (searchScope === 'packages' ? 'Find a dependency' : input ? 'Search your workspace' : 'What would you like to do?')}</span><button type="button" aria-label="Close suggestions" onClick={onClose}><X size={15} /></button></div>
       {!scoped && !input && searchScope === 'all' && <div className="command-shortcuts" role="group" aria-label="Explore actions">
         {[['scripts', 'Run a script'], ['folder', 'Open folder'], ['tags', 'Add tags']].map(([templateId, title]) => <button key={templateId} type="button" onClick={() => choose({ id: templateId, title, description: '', group: 'Actions', intent: { kind: 'template', templateId } })}>{title}<ChevronRight size={12} /></button>)}
       </div>}
@@ -170,7 +197,7 @@ export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, 
           return <div key={suggestion.id} role="presentation">
             {(!index || visible[index - 1].group !== suggestion.group) && <div className="command-group" role="presentation">{suggestion.group}</div>}
             <div id={`${id}-option-${index}`} role="option" aria-selected={index === activeIndex} aria-disabled={!!disabled}
-              className="command-option" onPointerMove={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(suggestion)}>
+              className="command-option" onPointerMove={() => onActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(suggestion)}>
               <span className="command-icon"><Icon size={17} aria-hidden="true" /></span>
               <span className="command-copy"><strong>{suggestion.title}</strong><span>{suggestion.description}</span>{(disabled || needsHelper) && <small>{disabled ?? 'Connect the local helper to use this action'}</small>}</span>
               {drill ? <ChevronRight size={15} aria-hidden="true" /> : <ArrowRight size={14} aria-hidden="true" />}
@@ -179,9 +206,19 @@ export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, 
         })}
         {!visible.length && <div className="command-empty">No suggestions match{input ? ` “${input}”` : ' this selection'}.<span>{scoped ? 'Go back to choose another project or action.' : 'Try a project name, “run script”, “tags”, or “Finder”.'}</span></div>}
       </div>
-      {suggestions.length > limit && <button type="button" className="command-more" onClick={() => setLimit(value => value + pageSize)}>Show more suggestions ({suggestions.length - limit})</button>}
+      {suggestionCount > limit && <button type="button" className="command-more" onClick={onMore}>Show more suggestions ({suggestionCount - limit})</button>}
       <div className="command-footer"><span><kbd>↑</kbd><kbd>↓</kbd> browse <kbd>↵</kbd> select <kbd>Tab</kbd> complete</span><span><kbd>Esc</kbd> close</span></div>
-      <span className="sr-only" role="status">{suggestions.length} suggestions{scopeLabel ? ` for ${scopeLabel}` : ''}</span>
-    </div>}
-  </div>
+      <span className="sr-only" role="status">{suggestionCount} suggestions{scopeLabel ? ` for ${scopeLabel}` : ''}</span>
+    </div>
+}
+
+
+function SearchScope({ label, project, template, onBack }: {
+  label?: string
+  project?: RepoProject
+  template?: ReturnType<typeof commandTemplates>[number]
+  onBack: () => void
+}) {
+  const description = project ? project.relativePath : template?.id === 'scripts' ? 'Choose a script and project' : 'Choose a project'
+  return <div className="command-scope"><button type="button" onClick={onBack} aria-label="Back to all commands"><ArrowLeft size={14} /><span>{label ?? 'All commands'}</span><X size={12} /></button><span>{description}</span></div>
 }
