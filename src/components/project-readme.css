@@ -38,6 +38,15 @@
 .readme-content .task-list-item { list-style: none; }
 .readme-content .task-list-item input { margin: 0 .5em 0 -1.4em; accent-color: var(--accent); }
 
+.mermaid-diagram { min-width: 0; margin: 0 0 1.2em; padding: 16px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
+.mermaid-image { min-width: 0; overflow-x: auto; }
+.mermaid-image img { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+.mermaid-source { margin-top: 12px; font-size: .8125rem; }
+.mermaid-source summary { width: fit-content; cursor: pointer; color: var(--muted-foreground); }
+.mermaid-source[open] summary { margin-bottom: 12px; }
+.mermaid-diagram pre { margin-bottom: 0; }
+.readme-content .mermaid-status { margin-bottom: 12px; font-size: .8125rem; color: var(--muted-foreground); }
+
 .project-documentation { margin-top: 25px; padding: 18px; border: 1px solid var(--border); border-radius: 5px; min-width: 0; }
 .documentation-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .documentation-heading h3 { display: flex; align-items: center; gap: 7px; font-size: .875rem; font-weight: 500; }

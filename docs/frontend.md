@@ -222,6 +222,19 @@ retains GFM and safe links, skips raw HTML, and never executes MDX components.
 The README command opens Overview. Older caches without `documentation` still
 show their README; resync discovers docs without a storage migration.
 
+The shared Markdown viewer turns `mermaid` fences into
+[`mermaid-diagram.tsx`](../src/components/mermaid-diagram.tsx). Mermaid is imported
+only when a visible diagram needs rendering, so collapsed introductions do not
+load it. [`use-mermaid.ts`](../src/hooks/use-mermaid.ts) follows the resolved DOM
+theme, discards stale results, and releases image URLs on changes or unmount.
+[`mermaid.ts`](../src/lib/mermaid.ts) serializes initialization/rendering around
+Mermaid's global configuration, applies locked strict security settings and
+50,000-character/500-edge limits, and removes its temporary render container.
+Rendered SVGs are displayed as static blob images, with an accessible title and
+source disclosure; failed diagrams retain readable source. No remote rendering,
+new helper endpoint, or workspace-cache schema is involved. The production PWA
+precaches the bundled diagram chunks for offline use.
+
 [`project-tabs.tsx`](../src/components/project-tabs.tsx) keeps readable labels in
 a single horizontally scrolling row, reveals the active tab, and provides scroll
 arrows when tabs overflow. Left/Right and Home/End keys retain tab selection and

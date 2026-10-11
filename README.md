@@ -73,6 +73,11 @@ their folder structure. Choose a file to read it in full; **README** stays first
 in the dropdown for returning to the project introduction. Embedded HTML and MDX
 components are not executed.
 
+Fenced code blocks marked `mermaid` render as diagrams in both README and docs.
+Diagrams follow light/dark mode, and **Diagram source** reveals their original
+text. Invalid or oversized diagrams show the source with a message. Rendering
+happens locally in the browser; diagram links and scripts are disabled.
+
 Both connection methods cache documentation for offline reading. Resync to
 discover files after upgrading or changing project docs. Discovery skips hidden
 and generated folders and helper symlinks, with limits of 200 files, 100 folders,
