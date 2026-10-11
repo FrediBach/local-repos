@@ -1,4 +1,5 @@
-import { RemoteActivityBatchProgress } from '@/components/remote-activity-batch-progress'
+import { WorkspaceBatchProgress } from '@/components/workspace-batch-progress'
+import { projectScanProgress } from '@/lib/scan-progress'
 import { useHelperState } from '@/hooks/use-helper-state'
 import { useCommitActivity } from '@/hooks/use-commit-activity'
 import { WorkspaceTopbar } from '@/components/workspace-topbar'
@@ -33,17 +34,12 @@ import { isRunning } from '@/lib/project-filters'
 import { projectCommands, type ProjectCommand } from '@/lib/project-commands'
 import type { WorkspaceCommandId } from '@/lib/project-search'
 import { useProjectFiltering } from '@/hooks/use-project-filtering'
-import { PreviewBatchProgress } from '@/components/preview-batch-progress'
 import { useWorkspaceActions } from '@/hooks/use-workspace-actions'
-import { useScanProgress, type ActiveScanProgress } from '@/hooks/use-scan-progress'
+import { useScanProgress } from '@/hooks/use-scan-progress'
 import { ScanProgressPanel } from '@/components/scan-progress-panel'
-import { AuditBatchProgress } from '@/components/audit-batch-progress'
 import { useWorkspaceWatcher } from '@/hooks/use-workspace-watcher'
 import { CriticalVulnerabilityDialog } from '@/components/critical-vulnerability-dialog'
 import { mergeCriticalAlerts, newCriticalVulnerabilities, type CriticalVulnerabilityAlert } from '@/lib/critical-vulnerabilities'
-import { OutdatedBatchProgress } from '@/components/outdated-batch-progress'
-import { ReactDoctorBatchProgress } from '@/components/react-doctor-batch-progress'
-import { LighthouseBatchProgress } from '@/components/lighthouse-batch-progress'
 import { api, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
 import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
@@ -111,20 +107,15 @@ function WorkspaceApp() {
   const tagProject = projects.find(p => p.id === tagProjectId)
   const availableTags = useMemo(() => normalizeTags(projects.flatMap(project => project.tags)), [projects])
   const selected = projects.find(p => p.id === selectedId)
-  const selectedBatch = [
+  const activeScanProgress = metadataProgress.progress ?? scanProgress
+  const selectedScanProgress = projectScanProgress(selectedId, selected?.name, scanProgress, [
     { title: 'Scanning vulnerabilities', progress: auditBatch.progress },
     { title: 'Checking outdated packages', progress: outdatedBatch.progress },
     { title: 'Running React Doctor', progress: reactDoctorBatch.progress },
     { title: 'Checking issues and pull requests', progress: remoteActivityBatch.progress },
     { title: 'Running Lighthouse', progress: lighthouseBatch.progress },
     { title: 'Capturing preview', progress: previewBatch.progress },
-  ].find(batch => batch.progress?.current?.id === selectedId && batch.progress?.stage)
-  const activeScanProgress = metadataProgress.progress ?? scanProgress
-  const selectedScanProgress: ActiveScanProgress | undefined = scanProgress?.projectId === selectedId ? scanProgress
-    : selectedBatch?.progress?.stage && selectedBatch.progress.stageStartedAt !== undefined && selectedBatch.progress.startedAt !== undefined ? {
-      title: selectedBatch.title, projectId: selectedId, projectName: selected?.name, stage: selectedBatch.progress.stage,
-      stageStartedAt: selectedBatch.progress.stageStartedAt, startedAt: selectedBatch.progress.startedAt,
-    } : undefined
+  ])
   const isDemo = !workspace && workspaceStatus === 'ready'
   const running = rawProjects.filter(isRunning).length
   const favoriteIds = useMemo(() => new Set(favorites), [favorites])
@@ -385,12 +376,8 @@ function WorkspaceApp() {
           scanAllRemoteActivity={scanAllRemoteActivity} scanAllOutdated={scanAllOutdated}
           scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} scanAllLighthouse={scanAllLighthouse} captureAllPreviews={captureAllPreviews} />
 
-        {remoteActivityBatch.progress && <RemoteActivityBatchProgress progress={remoteActivityBatch.progress} onStop={remoteActivityBatch.stop} onDismiss={remoteActivityBatch.dismiss} />}
-        {previewBatch.progress && <PreviewBatchProgress progress={previewBatch.progress} onStop={previewBatch.stop} onDismiss={previewBatch.dismiss} />}
-        {auditBatch.progress && <AuditBatchProgress progress={auditBatch.progress} onStop={auditBatch.stop} onDismiss={auditBatch.dismiss} />}
-        {outdatedBatch.progress && <OutdatedBatchProgress progress={outdatedBatch.progress} onStop={outdatedBatch.stop} onDismiss={outdatedBatch.dismiss} />}
-        {reactDoctorBatch.progress && <ReactDoctorBatchProgress progress={reactDoctorBatch.progress} onStop={reactDoctorBatch.stop} onDismiss={reactDoctorBatch.dismiss} />}
-        {lighthouseBatch.progress && <LighthouseBatchProgress progress={lighthouseBatch.progress} onStop={lighthouseBatch.stop} onDismiss={lighthouseBatch.dismiss} />}
+        <WorkspaceBatchProgress remoteActivityBatch={remoteActivityBatch} previewBatch={previewBatch} auditBatch={auditBatch}
+          outdatedBatch={outdatedBatch} reactDoctorBatch={reactDoctorBatch} lighthouseBatch={lighthouseBatch} />
 
         <ProjectSearchToolbar key={`${workspace?.mode ?? 'demo'}:${workspace?.rootPath ?? workspace?.rootName ?? ''}:${searchReset}`} searchRef={searchRef} query={query} setQuery={setQuery} searchScope={searchScope} setSearchScope={setSearchScope}
           projects={projects} favorites={favorites} filterGroups={filterGroups} helper={workspace?.mode === 'helper'} busy={!!busy} tagsReady={tagsReady}

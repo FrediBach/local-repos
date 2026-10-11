@@ -313,7 +313,12 @@ persists the accumulated workspace. A later successful write saves earlier batch
 results too, so it clears accumulated cache-write warnings. Individual failures
 are recorded while remaining queued projects continue.
 
-All five batch panels share the current-step display in
+The workspace renders its batch panels through `WorkspaceBatchProgress`, keeping
+the batch hooks and their stop/dismiss actions in the operation coordinator.
+`projectScanProgress` selects individual or matching batch progress for project
+details without fabricating missing stage timestamps.
+
+All batch panels share the current-step display in
 [`scan-progress-panel.tsx`](../src/components/scan-progress-panel.tsx), including
 the active project, helper-reported stage and details, time in that stage, and
 total elapsed time. Their progress bars count completed projects; stages do not

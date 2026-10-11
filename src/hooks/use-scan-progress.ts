@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ScanProgress, ScanProgressReporter } from '@/types'
+import type { ScanProgressReporter } from '@/types'
+import type { ActiveScanProgress } from '@/lib/scan-progress'
 
-export interface ActiveScanProgress {
-  title: string
-  projectId?: string
-  projectName?: string
-  stage: ScanProgress
-  stageStartedAt: number
-  startedAt: number
-}
+export type { ActiveScanProgress } from '@/lib/scan-progress'
 
 /** Keep late progress from a finished request or an old workspace out of the UI. */
 export function useScanProgress() {
