@@ -23,12 +23,15 @@ describe('project outdated badge', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('shows the summed update score with muted styling for ordinary patch updates', () => {
+  it('shows the summed update score with muted styling for ordinary patch updates', async () => {
+    const user = userEvent.setup()
     render(<ProjectOutdatedBadge project={{ ...project, outdated: report }} onClick={vi.fn()} />)
     const badge = screen.getByRole('button', { name: 'Fixture: 1 outdated package, update score 0.3. View outdated package details' })
     expect(badge.textContent).toBe('0.3')
     expect(badge.classList.contains('outdated-level-low')).toBe(true)
-    expect(badge.title).toContain(`Last scan: ${new Date(report.scannedAt).toLocaleString()}`)
+    await user.hover(badge)
+    expect((await screen.findByRole('tooltip')).textContent).toContain('Last scan')
+    expect(badge.hasAttribute('title')).toBe(false)
   })
 
   it('reflects the calculated moderate or high level and clears resolved results', () => {

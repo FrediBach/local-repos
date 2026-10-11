@@ -284,6 +284,13 @@ script. Selections send the displayed name and command through the existing
 workspace action hook, preserving terminal preferences, helper connection flow,
 and busy guards.
 
+Scan and public activity badges share `ScanBadgeTooltip`, built on Radix Tooltip
+with portal positioning, keyboard focus, Escape dismissal, and hoverable content.
+Theme tokens and reduced-motion styles cover the tooltip surface. Report ages
+use `scanRelativeTime`, refresh on opening and every 30 seconds while open, and
+keep invalid or future dates explicit. Accessible badge names and click actions
+remain on the original buttons and links.
+
 ## Lighthouse frontend reports
 
 [`lighthouse.ts`](../src/lib/lighthouse.ts) shares frontend eligibility between
@@ -538,7 +545,7 @@ browser previously knew no server was running. Process logs remain on demand.
 `remoteActivity` is an optional dated report containing a canonical repository URL
 and complete open issue / pull request ID lists. Older caches omit it. The project
 card shows linked counts (including known zeroes), with the last successful check
-in each badge's accessible label and tooltip. A changed Git origin clears the
+in each badge's accessible label and a relative age in its tooltip. A changed Git origin clears the
 old report; metadata rescans, helper restarts and failed checks preserve matching
 successful reports. Package mutations do not invalidate remote activity.
 

@@ -1,3 +1,4 @@
+import { ScanBadgeTooltip } from './scan-badge-tooltip'
 import { Gauge } from 'lucide-react'
 import { lighthousePerformanceScore, lighthouseScoreLevel } from '@/lib/lighthouse'
 import type { RepoProject } from '@/types'
@@ -9,7 +10,7 @@ export function ProjectLighthouseBadge({ project, onClick }: { project: RepoProj
   if (!report) return null
   const score = lighthousePerformanceScore(report)
   const label = `${project.name}: Lighthouse performance ${score === null ? 'score unavailable' : `score ${score} out of 100`}${report.warnings.length ? ', scan notes available' : ''}. View Lighthouse analysis`
-  return <button type="button" className={`project-lighthouse-badge react-doctor-level-${lighthouseScoreLevel(score)}`} aria-label={label} title={`${label}\nLast scan: ${new Date(report.scannedAt).toLocaleString()}`} onClick={onClick}>
+  return <ScanBadgeTooltip heading="Lighthouse" details={<>{score === null ? 'Performance score unavailable' : `Performance score ${score} out of 100`}{report.warnings.length > 0 && <><br />Scan notes available</>}</>} scannedAt={report.scannedAt}><button type="button" className={`project-lighthouse-badge react-doctor-level-${lighthouseScoreLevel(score)}`} aria-label={label} onClick={onClick}>
     <Gauge size={15} aria-hidden="true" /><span aria-hidden="true">Perf {score ?? '—'}</span>
-  </button>
+  </button></ScanBadgeTooltip>
 }

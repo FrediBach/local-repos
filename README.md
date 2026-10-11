@@ -373,6 +373,11 @@ stopping the batch. Successful results and failure details remain available.
 Restart the local helper after updating Local Repos to enable live step details;
 an older helper can still return results without reporting intermediate steps.
 
+Scan badges show styled tooltips on hover or keyboard focus, with result details
+and readable ages such as **2 minutes ago**, **2½ hours ago**, **yesterday**, or
+**last week**. This applies to vulnerabilities, package updates, React Doctor,
+Lighthouse, and public issues/PRs. Press Escape to dismiss a tooltip.
+
 ## Frontend project scripts
 
 The project action menu also offers a **Scripts** submenu with the same scripts as the Development tab. Select a script to run it in your configured terminal. The submenu is hidden when no additional scripts are available; the primary development server retains its separate start/stop action.
@@ -474,8 +479,8 @@ helper clears its local cooldown but does not reset the provider's quota.
 See [GitHub's rate-limit documentation](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
 
 Project cards show linked **issues** and **PRs** (or GitLab **MRs**) count badges,
-including zero after a successful check. Hover or focus a badge to see the last
-successful check time. Failed or rate-limited checks keep previous counts and
+including zero after a successful check. Hover or focus a badge to see a styled tooltip with the last
+successful check expressed as a relative time. Failed or rate-limited checks keep previous counts and
 report the failure. Repositories beyond the bounded scan limit (20 pages of 100
 items per collection) keep their previous results instead of showing partial
 counts. Packages sharing a repository are checked once in a workspace scan.

@@ -1,0 +1,23 @@
+.scan-badge-tooltip {
+  z-index: 100;
+  width: max-content;
+  max-width: min(290px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 5px 18px var(--shadow), 0 16px 40px var(--shadow);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  animation: scan-tooltip-in .12s ease-out;
+}
+.scan-badge-tooltip-heading { display: block; font-size: 13px; font-weight: 650; }
+.scan-badge-tooltip-details { margin-top: 4px; color: var(--muted-foreground); }
+.scan-badge-tooltip-date { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); color: var(--muted-foreground); }
+.scan-badge-tooltip-date > span { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; flex: 1; }
+.scan-badge-tooltip-date time { color: var(--foreground); font-weight: 500; }
+.scan-badge-tooltip-arrow { fill: var(--surface); }
+@keyframes scan-tooltip-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .scan-badge-tooltip { animation: none; } }

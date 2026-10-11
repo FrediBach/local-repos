@@ -1,3 +1,4 @@
+import { ScanBadgeTooltip } from './scan-badge-tooltip'
 import { ShieldAlert } from 'lucide-react'
 import type { AuditSeverity, RepoProject } from '@/types'
 import { useSettings } from '@/hooks/use-settings'
@@ -15,11 +16,10 @@ export function ProjectAuditBadge({ project, onClick }: { project: RepoProject; 
   const label = `${project.name}: ${total} ${total === 1 ? 'vulnerability' : 'vulnerabilities'}, highest severity ${severity}. View audit details`
   const breakdown = severities.filter(level => report.counts[level] > 0).map(level => `${report.counts[level]} ${level}`).join(' · ')
 
-  return <button
+  return <ScanBadgeTooltip heading="Vulnerabilities" details={<>{total} {total === 1 ? 'vulnerability' : 'vulnerabilities'} · highest severity {severity}<br />{breakdown}</>} scannedAt={report.scannedAt}><button
     type="button"
     className={`project-audit-badge audit-severity-${severity} audit-color-${settings.auditColors[severity]}`}
     aria-label={label}
-    title={`${label}\n${breakdown}\nLast scan: ${new Date(report.scannedAt).toLocaleString()}`}
     onClick={onClick}
-  ><ShieldAlert size={15} aria-hidden="true" /><span aria-hidden="true">{total}</span></button>
+  ><ShieldAlert size={15} aria-hidden="true" /><span aria-hidden="true">{total}</span></button></ScanBadgeTooltip>
 }

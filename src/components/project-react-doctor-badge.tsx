@@ -1,3 +1,4 @@
+import { ScanBadgeTooltip } from './scan-badge-tooltip'
 import { Stethoscope } from 'lucide-react'
 import { isReactProject, reactDoctorScoreLevel } from '@/lib/react-doctor'
 import type { RepoProject } from '@/types'
@@ -9,8 +10,8 @@ export function ProjectReactDoctorBadge({ project, onClick }: { project: RepoPro
   const score = report.score === null ? 'Score unavailable' : `score ${report.score} out of 100`
   const label = `${project.name}: React Doctor ${score}${report.warning ? ', scan notes available' : ''}. View React Doctor findings`
 
-  return <button type="button" className={`project-react-doctor-badge react-doctor-level-${reactDoctorScoreLevel(report.score)}`}
-    aria-label={label} title={`${label}\n${report.label}\nLast scan: ${new Date(report.scannedAt).toLocaleString()}`} onClick={onClick}>
+  return <ScanBadgeTooltip heading="React Doctor" details={<>{score} · {report.label}{report.warning && <><br />Scan notes available</>}</>} scannedAt={report.scannedAt}><button type="button" className={`project-react-doctor-badge react-doctor-level-${reactDoctorScoreLevel(report.score)}`}
+    aria-label={label} onClick={onClick}>
     <Stethoscope size={15} aria-hidden="true" /><span aria-hidden="true">{report.score ?? '—'}</span>
-  </button>
+  </button></ScanBadgeTooltip>
 }

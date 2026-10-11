@@ -22,15 +22,19 @@ describe('project vulnerability badge', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it.each<AuditSeverity>(['critical', 'high', 'moderate', 'low', 'info'])('uses %s styling when it is the highest severity', severity => {
+  it.each<AuditSeverity>(['critical', 'high', 'moderate', 'low', 'info'])('uses %s styling when it is the highest severity', async severity => {
+    const user = userEvent.setup()
     const counts = { ...cleanReport.counts, info: 2, [severity]: 3 }
     const total = severity === 'info' ? 3 : 5
     render(<ProjectAuditBadge project={{ ...project, audit: { ...cleanReport, counts } }} onClick={vi.fn()} />)
     const badge = screen.getByRole('button', { name: `Fixture: ${total} vulnerabilities, highest severity ${severity}. View audit details` })
     expect(badge.classList.contains(`audit-severity-${severity}`)).toBe(true)
     expect(badge.textContent).toBe(String(total))
-    expect(badge.title).toContain(`3 ${severity}`)
-    expect(badge.title).toContain(`Last scan: ${new Date(cleanReport.scannedAt).toLocaleString()}`)
+    await user.hover(badge)
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip.textContent).toContain(`3 ${severity}`)
+    expect(tooltip.textContent).toContain('Last scan')
+    expect(badge.hasAttribute('title')).toBe(false)
   })
 
   it('describes a single vulnerability and opens its details by keyboard', async () => {
