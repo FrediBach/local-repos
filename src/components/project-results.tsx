@@ -6,11 +6,13 @@ import { ProjectCard } from './project-card'
 import { ProjectEmptyState } from './project-empty-state'
 import { groupProjectResults, projectGridTitle, type ProjectResultGroup } from '@/lib/project-groups'
 import type { RepoProject } from '@/types'
+import type { PreviewCommitActivity } from '@/lib/commit-activity'
 
-interface Props extends Omit<ComponentProps<typeof ProjectCard>, 'project' | 'displayName' | 'index' | 'favorite' | 'capturing' | 'todoCount'> {
+interface Props extends Omit<ComponentProps<typeof ProjectCard>, 'project' | 'displayName' | 'activity' | 'index' | 'favorite' | 'capturing' | 'todoCount'> {
   ignoredProjects?: RepoProject[]
   projects: RepoProject[]
   allProjects?: RepoProject[]
+  projectActivity?: Record<string, PreviewCommitActivity>
   favoriteIds: Set<string>
   capturingId?: string
   todoCounts?: Record<string, number>
@@ -22,9 +24,10 @@ interface Props extends Omit<ComponentProps<typeof ProjectCard>, 'project' | 'di
   onConnect: () => void
 }
 
-export function ProjectResults({ ignoredProjects = [], onIgnore, projects, allProjects = projects, favoriteIds, capturingId, filter, hasRefinements, emptyWorkspace, isDemo, onReset, onConnect,
+export function ProjectResults({ ignoredProjects = [], onIgnore, projects, allProjects = projects, projectActivity, favoriteIds, capturingId, filter, hasRefinements, emptyWorkspace, isDemo, onReset, onConnect,
   view, query, activeTags, tagsReady, busy, onOpen, onEditTags, onToggleFavorite, onTagFilter, onTechnologyFilter, onAction, todoCounts, onTodos }: Props) {
   const renderProject = ({ project, index }: ProjectResultGroup['items'][number]) => <ProjectCard key={project.id} project={project} index={index} view={view} query={query}
+    activity={projectActivity?.[project.id]}
     displayName={view === 'grid' ? projectGridTitle(project, allProjects) : project.name}
     activeTags={activeTags} tagsReady={tagsReady} favorite={favoriteIds.has(project.id)} capturing={capturingId === project.id} busy={busy} todoCount={todoCounts?.[project.id]} onTodos={onTodos}
     onOpen={onOpen} onEditTags={onEditTags} onToggleFavorite={onToggleFavorite} onIgnore={onIgnore} onTagFilter={onTagFilter} onTechnologyFilter={onTechnologyFilter} onAction={onAction} />

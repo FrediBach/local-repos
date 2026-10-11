@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { ProjectResults } from './project-results'
 import type { RepoProject } from '@/types'
+import { previewCommitActivity } from '@/lib/commit-activity'
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
@@ -11,6 +12,15 @@ const root: RepoProject = { ...standalone, id: 'suite', name: 'Suite', dirName: 
 const web: RepoProject = { ...standalone, id: 'web', name: 'Frontend', dirName: 'frontend', relativePath: 'suite/frontend', monorepo: { id: root.id, name: root.name, relativePath: root.relativePath, packagePath: 'frontend' } }
 const api: RepoProject = { ...web, id: 'api', name: 'API', dirName: 'api', relativePath: 'suite/api', monorepo: { ...web.monorepo!, packagePath: 'api' } }
 const props = { projects: [web, standalone, root, api], favoriteIds: new Set(['web']), filter: 'all' as const, hasRefinements: false, emptyWorkspace: false, isDemo: false, query: '', tagsReady: true, busy: '', onReset: vi.fn(), onConnect: vi.fn(), onOpen: vi.fn(), onEditTags: vi.fn(), onToggleFavorite: vi.fn(), onTagFilter: vi.fn(), onTechnologyFilter: vi.fn(), onAction: vi.fn() }
+
+it.each(['grid', 'list'] as const)('keeps the %s preview clickable through its activity overlay', view => {
+  const activity = previewCommitActivity({ from: '2026-09-10', to: '2026-10-09', cachedAt: '2026-10-09T12:00:00Z', shallow: false, activity: [{ date: '2026-10-09', count: 5 }] }, '', '2026-10-09')
+  render(<ProjectResults {...props} view={view} projectActivity={{ solo: activity }} />)
+  const graph = screen.getByRole('img', { name: /Commit activity: 5 cached commits/ })
+  expect(screen.getAllByRole('img', { name: /Commit activity:/ })).toHaveLength(1)
+  fireEvent.click(graph)
+  expect(props.onOpen).toHaveBeenCalledWith(standalone)
+})
 
 describe('monorepo results in list view', () => {
   const view = 'list'

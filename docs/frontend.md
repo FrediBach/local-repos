@@ -173,7 +173,7 @@ manifest. Cleanup and package mutation suggestions open existing review controls
 and retain their confirmation behavior. No new API or durable search state is
 introduced. Project and tag dialogs restore focus to the search opener.
 
-## Cached header commit activity
+## Cached commit activity
 
 [`use-commit-activity.ts`](../src/hooks/use-commit-activity.ts) retains only successful,
 first-page, all-branch history activity supplied by `ProjectHistory` whose author
@@ -201,6 +201,21 @@ workspace. Missing coverage stays distinct from known zero-count days; partial
 repository or shallow coverage is labeled. Directory changes hide stale data
 immediately, late callbacks are rejected, and cache-load results cannot replace
 newer history. Forgetting the workspace clears this separate activity cache.
+
+The same hook exposes a workspace- and author-scoped `projectActivity` map for
+preview overlays. `previewCommitActivity` derives 90 UTC daily buckets, keeping
+uncovered dates distinct from known zero counts, and monorepo members reuse their
+repository's derived activity. `App` passes these snapshots through project results
+and the detail dialog to `ProjectPreview`; the small SVG in
+[`project-commit-activity.tsx`](../src/components/project-commit-activity.tsx) overlays
+screenshots, preview assets, and empty-preview placeholders with no background.
+Thin, square-topped bars use the card's `--surface` color at full opacity and sit
+flush with the preview's bottom edge, creating a skyline that merges into the
+card. Bars scale to the maximum count within that project's window. Tooltips and an
+accessible description identify dates, author selection, cache age, and shallow or
+missing coverage. Missing caches render no chart. Rendering does not request Git
+history or add persistence, and the existing refresh and stale-response guards
+apply to both the header and preview graphs.
 
 ## Project details and action menus
 

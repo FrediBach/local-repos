@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { projectHistory } from '@/lib/api'
 import { summaryRepositories } from '@/lib/daily-summary'
 import { loadCommitActivity, saveCommitActivity } from '@/lib/storage'
-import { aggregateCommitActivity, commitRepositoryId, validCommitActivity, type CommitActivityCache } from '@/lib/commit-activity'
+import { aggregateCommitActivity, commitRepositoryId, previewCommitActivity, validCommitActivity, type CommitActivityCache, type PreviewCommitActivity } from '@/lib/commit-activity'
 import type { GitHistory, Workspace } from '@/types'
 
 /** Cache history activity on successful helper syncs and from open history views. */
@@ -74,5 +74,19 @@ export function useCommitActivity(workspace?: Workspace, syncedWorkspace?: Works
     return () => { active = false }
   }, [syncedWorkspace, scope, remember, author])
 
-  return { activity: scope && cache.scope === scope ? aggregateCommitActivity(workspace?.projects ?? [], cache.repositories, undefined, author) : undefined, remember }
+  const today = new Date().toISOString().slice(0, 10)
+  const projectActivity = useMemo(() => {
+    const result: Record<string, PreviewCommitActivity> = {}
+    if (!scope || cache.scope !== scope) return result
+    const repositories = new Map(Object.entries(cache.repositories)
+      .filter(([, report]) => validCommitActivity(report))
+      .map(([id, report]) => [id, previewCommitActivity(report, author, today)]))
+    for (const project of projectsById.values()) {
+      const activity = repositories.get(commitRepositoryId(project, projectsById))
+      if (activity) result[project.id] = activity
+    }
+    return result
+  }, [scope, cache, projectsById, author, today])
+
+  return { activity: scope && cache.scope === scope ? aggregateCommitActivity(workspace?.projects ?? [], cache.repositories, today, author) : undefined, projectActivity, remember }
 }

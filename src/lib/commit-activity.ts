@@ -22,6 +22,20 @@ export function commitRepositoryId(project: RepoProject, projects: ReadonlyMap<s
   return project.id
 }
 
+export function previewCommitActivity(report: CachedCommitActivity, author = '', today = new Date().toISOString().slice(0, 10)) {
+  const counts = new Map(report.activity.map(day => [day.date, day.count]))
+  const end = new Date(`${today}T00:00:00Z`)
+  const start = new Date(end)
+  start.setUTCDate(start.getUTCDate() - 89)
+  const days = []
+  for (const day = new Date(start); day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
+    const date = day.toISOString().slice(0, 10)
+    days.push({ date, count: date >= report.from && date <= report.to ? counts.get(date) ?? 0 : undefined })
+  }
+  return { days, author, cachedAt: report.cachedAt, shallow: report.shallow }
+}
+export type PreviewCommitActivity = ReturnType<typeof previewCommitActivity>
+
 export function aggregateCommitActivity(projects: RepoProject[], cache: Record<string, CachedCommitActivity>, today = new Date().toISOString().slice(0, 10), author = '') {
   const gitProjects = new Set(projects.filter(project => project.git).map(project => project.id))
   const repositories = summaryRepositories(projects).filter(project => gitProjects.has(project.id) || validCommitActivity(cache[project.id]))

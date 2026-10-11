@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateCommitActivity, commitRepositoryId, validCommitActivity, type CachedCommitActivity } from './commit-activity'
+import { aggregateCommitActivity, commitRepositoryId, previewCommitActivity, validCommitActivity, type CachedCommitActivity } from './commit-activity'
 import type { RepoProject } from '@/types'
 const root: RepoProject = { id: 'root', name: 'Root', dirName: 'root', relativePath: 'root', description: '', stack: [], scripts: {}, packageManager: 'npm', scannedAt: '', git: { branch: 'main' } }
 const child = { ...root, id: 'child', monorepo: { id: 'root', name: 'Root', relativePath: 'root', packagePath: 'child' } }
@@ -32,5 +32,26 @@ describe('cached global activity', () => {
     expect(commitRepositoryId(grandchild, projects)).toBe(child.id)
     projects.set(child.id, { ...child, monorepo: { ...child.monorepo, id: grandchild.id } })
     expect(commitRepositoryId(grandchild, projects)).toBe(grandchild.id)
+  })
+})
+
+describe('preview activity', () => {
+  it('uses 90 UTC dates in order and distinguishes missing coverage from zero commits', () => {
+    const activity = previewCommitActivity({ ...report, from: '2026-10-01' }, 'ada@example.com', '2026-10-09')
+    expect(activity.days).toHaveLength(90)
+    expect(activity.days[0]).toEqual({ date: '2026-07-12', count: undefined })
+    expect(activity.days.find(day => day.date === '2026-10-01')).toEqual({ date: '2026-10-01', count: 0 })
+    expect(activity.days.at(-2)).toEqual({ date: '2026-10-08', count: 3 })
+    expect(activity.days.at(-1)).toEqual({ date: '2026-10-09', count: undefined })
+    expect(activity.author).toBe('ada@example.com')
+    expect(activity.cachedAt).toBe(report.cachedAt)
+  })
+
+  it('handles leap days, old caches, and shallow histories without inventing recent activity', () => {
+    const leap = previewCommitActivity({ ...report, from: '2024-01-01', to: '2024-03-01', shallow: true, activity: [{ date: '2024-02-29', count: 2 }] }, '', '2024-03-01')
+    expect(leap.days[0].date).toBe('2023-12-03')
+    expect(leap.days.at(-2)).toEqual({ date: '2024-02-29', count: 2 })
+    expect(leap.shallow).toBe(true)
+    expect(previewCommitActivity(report, '', '2027-02-01').days.every(day => day.count === undefined)).toBe(true)
   })
 })

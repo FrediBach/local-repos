@@ -1,17 +1,20 @@
 import { ArrowUpRight, AudioLines, Box, Circle, Command, FolderGit2, Plus, Search } from 'lucide-react'
 import type { RepoProject } from '@/types'
 import { useState } from 'react'
+import type { PreviewCommitActivity } from '@/lib/commit-activity'
+import { ProjectCommitActivity } from './project-commit-activity'
 
-export function ProjectPreview({ project, large = false }: { project: RepoProject; large?: boolean }) {
+export function ProjectPreview({ project, large = false, activity }: { project: RepoProject; large?: boolean; activity?: PreviewCommitActivity }) {
   const [failedImage, setFailedImage] = useState<string>()
   if (project.screenshot && failedImage !== project.screenshot) {
-    return <CapturedPreview project={project} large={large} onError={() => setFailedImage(project.screenshot)} />
+    return <CapturedPreview project={project} large={large} activity={activity} onError={() => setFailedImage(project.screenshot)} />
   }
   const type = project.id.replace('demo-', '')
   const demo = project.id.startsWith('demo-')
   return <div className={`project-preview preview-${demo ? type : 'empty'} ${large ? 'large' : ''}`}>
     <PreviewArtwork type={type} dirName={project.dirName} />
     {demo && <span className="demo-preview-label">EXAMPLE PREVIEW</span>}
+    {activity && <ProjectCommitActivity activity={activity} />}
     <span className="preview-open"><ArrowUpRight size={16} /></span>
   </div>
 }
@@ -28,9 +31,9 @@ function PreviewArtwork({ type, dirName }: { type: string; dirName: string }) {
   }
 }
 
-function CapturedPreview({ project, large, onError }: { project: RepoProject; large: boolean; onError: () => void }) {
+function CapturedPreview({ project, large, activity, onError }: { project: RepoProject; large: boolean; activity?: PreviewCommitActivity; onError: () => void }) {
   const kind = project.preview?.kind ?? 'screenshot'
   const label = kind === 'og-image' ? 'Open Graph image' : kind === 'logo' ? 'Logo' : 'Favicon'
   const assetClass = kind === 'screenshot' ? '' : `asset-preview asset-preview-${kind}`
-  return <div className={`project-preview screenshot-preview ${assetClass} ${large ? 'large' : ''}`}><img src={project.screenshot} alt={kind === 'screenshot' ? `Screenshot of ${project.name}` : `${label} for ${project.name}`} loading="lazy" onError={onError} /></div>
+  return <div className={`project-preview screenshot-preview ${assetClass} ${large ? 'large' : ''}`}><img src={project.screenshot} alt={kind === 'screenshot' ? `Screenshot of ${project.name}` : `${label} for ${project.name}`} loading="lazy" onError={onError} />{activity && <ProjectCommitActivity activity={activity} />}</div>
 }

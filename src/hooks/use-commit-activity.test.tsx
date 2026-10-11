@@ -27,6 +27,7 @@ it('hides old data immediately on directory changes and rejects stale callbacks'
   act(() => oldRemember('root', report))
   rerender({ value: { ...workspace, rootPath: '/different' } })
   expect(result.current.activity).toBeUndefined()
+  expect(result.current.projectActivity).toEqual({})
   act(() => oldRemember('root', report))
   expect(saveCommitActivity).toHaveBeenCalledOnce()
 })
@@ -69,6 +70,7 @@ it('retains cached counts after a failed sync history read and skips browser syn
   await act(async () => {})
   expect(saveCommitActivity).toHaveBeenCalledOnce()
   expect(result.current.activity?.cachedRepositories).toBe(1)
+  expect(result.current.projectActivity.root.cachedAt).toBeTruthy()
   const browserWorkspace = { ...workspace, mode: 'browser' as const }
   rerender({ value: browserWorkspace, snapshot: browserWorkspace })
   await act(async () => {})
@@ -115,6 +117,7 @@ it('refreshes on author changes, isolates caches, and rejects stale or mismatche
   act(() => rememberAll('root', report))
   rerender({ author: 'alice@example.com' })
   expect(result.current.activity).toBeUndefined()
+  expect(result.current.projectActivity).toEqual({})
   expect(projectHistory).toHaveBeenLastCalledWith('root', { author: 'alice@example.com' })
   act(() => result.current.remember('root', report))
   expect(saveCommitActivity).toHaveBeenCalledOnce()
@@ -124,6 +127,7 @@ it('refreshes on author changes, isolates caches, and rejects stale or mismatche
   await act(async () => finishOld(report))
   act(() => rememberAll('root', report))
   expect(result.current.activity?.author).toBe('bob@example.com')
+  expect(result.current.projectActivity.root.author).toBe('bob@example.com')
   expect(saveCommitActivity).toHaveBeenCalledTimes(2)
   expect(saveCommitActivity).toHaveBeenLastCalledWith(expect.objectContaining({ scope: JSON.stringify(['helper', '/projects', 'bob@example.com']), repositories: { root: expect.objectContaining({ activity: [] }) } }))
   rerender({ author: '' })
@@ -136,5 +140,20 @@ it('restores only a matching author cache without scanning on startup', async ()
   vi.mocked(loadCommitActivity).mockResolvedValue({ scope: JSON.stringify(['helper', '/projects', 'alice@example.com']), repositories: { root: { ...report, cachedAt: '2026-10-09T12:00:00Z' } } })
   const { result } = renderHook(() => useCommitActivity(workspace, undefined, 'alice@example.com'))
   await waitFor(() => expect(result.current.activity?.author).toBe('alice@example.com'))
+  expect(projectHistory).not.toHaveBeenCalled()
+})
+
+it('shares cached repository activity with nested packages without additional history reads', async () => {
+  const root = workspace.projects[0]
+  const child = { ...root, id: 'child', monorepo: { id: root.id, name: root.name, relativePath: '.', packagePath: 'child' } }
+  const grandchild = { ...child, id: 'grandchild', monorepo: { ...child.monorepo, id: child.id } }
+  const other = { ...root, id: 'uncached' }
+  vi.mocked(loadCommitActivity).mockResolvedValue({ scope: JSON.stringify(['helper', '/projects']), repositories: { root: { ...report, cachedAt: '2026-10-09T12:00:00Z' }, unrelated: { ...report, cachedAt: '2026-10-09T12:00:00Z' } } })
+  const { result } = renderHook(() => useCommitActivity({ ...workspace, projects: [root, child, grandchild, other] }))
+  await waitFor(() => expect(result.current.projectActivity.root).toBeDefined())
+  expect(result.current.projectActivity.child).toBe(result.current.projectActivity.root)
+  expect(result.current.projectActivity.grandchild).toBe(result.current.projectActivity.root)
+  expect(result.current.projectActivity.uncached).toBeUndefined()
+  expect(result.current.projectActivity.unrelated).toBeUndefined()
   expect(projectHistory).not.toHaveBeenCalled()
 })

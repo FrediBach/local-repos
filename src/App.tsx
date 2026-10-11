@@ -363,6 +363,7 @@ function WorkspaceApp() {
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} />
 
         <ProjectResults ignoredProjects={ignoredProjects} onIgnore={workspace ? toggleIgnored : undefined} projects={filtered} allProjects={projects} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
+          projectActivity={commitActivity.projectActivity}
           todoCounts={projectTodos.counts} onTodos={openTodos}
           filter={filter} hasRefinements={hasRefinements} emptyWorkspace={!rawProjects.length} isDemo={isDemo}
           onReset={() => { navigate('all'); if (!rawProjects.length) setConnectOpen(true) }} onConnect={() => setConnectOpen(true)}
@@ -376,6 +377,7 @@ function WorkspaceApp() {
       onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }} onPathChange={setPath} onConnect={connect} />
 
     <ProjectDetailDialog scanProgress={selectedScanProgress} onActivity={commitActivity.remember} selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
+      activity={selected ? commitActivity.projectActivity[selected.id] : undefined}
       packageBusy={packageBusy(selected)}
       detailTab={detailTab} onTabChange={setDetailTab} logs={logs} tagsReady={tagsReady} selectedTags={selectedTags} favorite={!!selected && favoriteIds.has(selected.id)}
       onClose={() => setSelectedId(undefined)} onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}
