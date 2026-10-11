@@ -106,6 +106,9 @@ that checks include projects hidden by filters and preserves eligibility, helper
 connection, and global busy guards. Selections use the same action callbacks and
 batch progress panels as before. Keyboard dismissal restores focus to the trigger,
 or to the labeled action group while a check has disabled the trigger.
+Check descriptors are built separately from menu rendering and use one active
+project list for React, Lighthouse, and public repository eligibility. Ignored
+projects cannot keep an otherwise unavailable check enabled.
 
 Project count, resync, and watcher status share a compact metadata row. Unknown
 report freshness appears as a **Cached reports** disclosure with guidance in an

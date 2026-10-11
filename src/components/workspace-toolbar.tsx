@@ -43,20 +43,7 @@ export function WorkspaceToolbar({ workspace, projectCount, busy, watcherStatus,
 function WorkspaceActions({ workspace, projectCount, busy, scanAllRemoteActivity, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews }: Omit<Props, 'onResync' | 'watcherStatus'>) {
   const actionsRef = useRef<HTMLDivElement>(null)
   const batchDisabled = !!busy || !workspace || !projectCount
-  const reactCount = workspace ? activeProjects(workspace).filter(isReactProject).length : 0
-  const frontendCount = workspace ? activeProjects(workspace).filter(isLighthouseProject).length : 0
-  const checks = [
-    { label: 'Check issues & PRs', description: 'Public GitHub & GitLab repositories', icon: GitPullRequest, action: scanAllRemoteActivity, key: 'batch-remote-activity', unavailable: !remoteActivityProjects(workspace?.projects ?? []).length,
-      title: 'Check public GitHub and GitLab issues and pull requests for all repositories. Requires the local helper.' },
-    { label: 'Scan outdated packages', description: 'Available dependency updates', icon: Package, action: scanAllOutdated, key: 'batch-outdated',
-      title: workspace?.mode === 'browser' ? 'Connect the local helper to scan outdated packages' : `Check outdated packages in all ${projectCount} projects, including those hidden by filters. Contacts their configured registries.` },
-    { label: 'Scan vulnerabilities', description: 'Dependency security advisories', icon: ShieldCheck, action: scanAllVulnerabilities, key: 'batch-audit',
-      title: workspace?.mode === 'browser' ? 'Connect the local helper to scan vulnerabilities' : `Audit all ${projectCount} projects, including those hidden by filters. Package names and versions are sent to their configured registries.` },
-    { label: 'Scan React projects', description: `${reactCount} React ${reactCount === 1 ? 'project' : 'projects'} · React Doctor`, icon: Stethoscope, action: scanAllReactDoctor, key: 'batch-react-doctor', unavailable: !reactCount,
-      title: !reactCount ? 'No React projects found in this workspace' : workspace?.mode === 'browser' ? 'Connect the local helper to run React Doctor' : `Run React Doctor on all ${reactCount} React ${reactCount === 1 ? 'project' : 'projects'}, including those hidden by filters. Diagnostic details are sent to React Doctor to calculate scores.` },
-    { label: 'Scan frontends with Lighthouse', description: `${frontendCount} frontend ${frontendCount === 1 ? 'project' : 'projects'} · Performance & accessibility`, icon: Gauge, action: scanAllLighthouse, key: 'batch-lighthouse', unavailable: !frontendCount,
-      title: !frontendCount ? 'No testable frontend projects found in this workspace' : workspace?.mode === 'browser' ? 'Connect the local helper to run Lighthouse' : `Run Lighthouse on all ${frontendCount} frontend ${frontendCount === 1 ? 'project' : 'projects'}, including those hidden by filters. Loads each frontend in Chromium and starts local apps when needed.` },
-  ]
+  const checks = workspaceChecks({ workspace, projectCount, scanAllRemoteActivity, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse })
   const checking = checks.some(check => check.key === busy)
   return <div className="workspace-actions" role="group" aria-label="Workspace actions" tabIndex={-1} ref={actionsRef}>
     <DropdownMenu>
@@ -77,4 +64,22 @@ function WorkspaceActions({ workspace, projectCount, busy, scanAllRemoteActivity
       {busy === 'batch-capture' ? <LoaderCircle size={16} className="spinning" aria-hidden="true" /> : <Monitor size={16} aria-hidden="true" />}Capture previews
     </Button>
   </div>
+}
+
+function workspaceChecks({ workspace, projectCount, scanAllRemoteActivity, scanAllOutdated, scanAllVulnerabilities, scanAllReactDoctor, scanAllLighthouse }: Omit<Props, 'onResync' | 'watcherStatus' | 'busy' | 'captureAllPreviews'>) {
+  const projects = workspace ? activeProjects(workspace) : []
+  const reactCount = projects.filter(isReactProject).length
+  const frontendCount = projects.filter(isLighthouseProject).length
+  return [
+    { label: 'Check issues & PRs', description: 'Public GitHub & GitLab repositories', icon: GitPullRequest, action: scanAllRemoteActivity, key: 'batch-remote-activity', unavailable: !remoteActivityProjects(projects).length,
+      title: 'Check public GitHub and GitLab issues and pull requests for all repositories. Requires the local helper.' },
+    { label: 'Scan outdated packages', description: 'Available dependency updates', icon: Package, action: scanAllOutdated, key: 'batch-outdated',
+      title: workspace?.mode === 'browser' ? 'Connect the local helper to scan outdated packages' : `Check outdated packages in all ${projectCount} projects, including those hidden by filters. Contacts their configured registries.` },
+    { label: 'Scan vulnerabilities', description: 'Dependency security advisories', icon: ShieldCheck, action: scanAllVulnerabilities, key: 'batch-audit',
+      title: workspace?.mode === 'browser' ? 'Connect the local helper to scan vulnerabilities' : `Audit all ${projectCount} projects, including those hidden by filters. Package names and versions are sent to their configured registries.` },
+    { label: 'Scan React projects', description: `${reactCount} React ${reactCount === 1 ? 'project' : 'projects'} · React Doctor`, icon: Stethoscope, action: scanAllReactDoctor, key: 'batch-react-doctor', unavailable: !reactCount,
+      title: !reactCount ? 'No React projects found in this workspace' : workspace?.mode === 'browser' ? 'Connect the local helper to run React Doctor' : `Run React Doctor on all ${reactCount} React ${reactCount === 1 ? 'project' : 'projects'}, including those hidden by filters. Diagnostic details are sent to React Doctor to calculate scores.` },
+    { label: 'Scan frontends with Lighthouse', description: `${frontendCount} frontend ${frontendCount === 1 ? 'project' : 'projects'} · Performance & accessibility`, icon: Gauge, action: scanAllLighthouse, key: 'batch-lighthouse', unavailable: !frontendCount,
+      title: !frontendCount ? 'No testable frontend projects found in this workspace' : workspace?.mode === 'browser' ? 'Connect the local helper to run Lighthouse' : `Run Lighthouse on all ${frontendCount} frontend ${frontendCount === 1 ? 'project' : 'projects'}, including those hidden by filters. Loads each frontend in Chromium and starts local apps when needed.` },
+  ]
 }

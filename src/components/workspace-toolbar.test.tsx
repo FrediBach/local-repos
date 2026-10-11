@@ -142,6 +142,27 @@ describe('workspace toolbar', () => {
     expect(screen.getByRole('menuitem', { name: 'Scan vulnerabilities' }).getAttribute('aria-busy')).toBe('true')
     for (const action of Object.values(actions)) expect(action).not.toHaveBeenCalled()
   })
+
+  it('excludes ignored projects from check availability and restores it when unignored', async () => {
+    const user = userEvent.setup(), actions = callbacks()
+    const backend = { ...project, id: 'backend', stack: [], scripts: { start: 'node server.js' }, git: undefined }
+    const value = { ...workspace, projects: [project, backend], ignoredProjectIds: [project.id] }
+    const { rerender } = render(<WorkspaceToolbar {...actions} workspace={value} projectCount={1} busy="" />)
+    await user.click(trigger())
+    for (const label of ['Check issues & PRs', 'Scan React projects', 'Scan frontends with Lighthouse']) {
+      const item = screen.getByRole('menuitem', { name: label })
+      expect(item.getAttribute('aria-disabled')).toBe('true')
+      await user.click(item)
+    }
+    for (const action of Object.values(actions)) expect(action).not.toHaveBeenCalled()
+
+    rerender(<WorkspaceToolbar {...actions} workspace={{ ...value, ignoredProjectIds: [] }} projectCount={2} busy="" />)
+    for (const label of ['Check issues & PRs', 'Scan React projects', 'Scan frontends with Lighthouse']) {
+      expect(screen.getByRole('menuitem', { name: label }).getAttribute('aria-disabled')).not.toBe('true')
+    }
+    await user.click(screen.getByRole('menuitem', { name: 'Check issues & PRs' }))
+    expect(actions.scanAllRemoteActivity).toHaveBeenCalledOnce()
+  })
 })
 
 describe('cached report disclosure', () => {

@@ -709,8 +709,10 @@ project**. The choice is saved in the browser workspace cache and survives
 rescans and reloads; reports, favorites, and tags are retained.
 
 Ignored projects are excluded from global checks and preview batches, automatic
-checks, package-change triggers, push reminders, and daily summaries. Directory
-discovery still refreshes metadata so projects remain available to unignore.
+checks, package-change triggers, push reminders, and daily summaries.
+The Run checks menu also excludes ignored projects when deciding whether public
+issues/PR, React Doctor, and Lighthouse checks are available.
+Directory discovery still refreshes metadata so projects remain available to unignore.
 Ignoring an individual package does not ignore its siblings or prevent a shared
 workspace check from inspecting shared dependencies. It does not stop running
 servers or change the independently configured MCP service.
