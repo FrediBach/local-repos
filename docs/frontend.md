@@ -297,7 +297,8 @@ and returns to the top when the phase changes, keeping surrounding content stabl
 
 [`use-scan-progress.ts`](../src/hooks/use-scan-progress.ts) supplies the same live
 display for individual scans, automatic checks, connection, and metadata sync.
-Active project and connection dialogs also show the relevant progress. Stage
+Active project and connection dialogs also show the relevant progress. The page-level
+panel keeps a 20px gap before the workspace controls or other content. Stage
 updates use the existing workspace generation and batch guards, and callbacks
 from finished projects cannot overwrite a later project's progress. Stages and
 their clocks are never saved in IndexedDB. Browser directory scans report their
@@ -348,6 +349,26 @@ and root changes invalidate the retry. Background `/status` polling deliberately
 does not trigger registration or scanning.
 
 ## Rendering and offline constraints
+
+[`use-workspace-favicon.ts`](../src/hooks/use-workspace-favicon.ts) observes the
+connected workspace's active projects before search/view filtering. Existing
+reports seed a session-local baseline on cache restoration or workspace changes.
+[`workspace-updates.ts`](../src/lib/workspace-updates.ts) compares fresh successful
+reports by finding identity: vulnerabilities and severity escalations, newly open
+remote items after their first baseline, high-priority dependency updates, and
+React Doctor errors. Shared package audits and repository activity are deduplicated
+using their respective maintenance and remote identities. Missing, invalidated,
+older, or unknown-freshness reports cannot establish resolution. Skipped dependency
+entries and incomplete React Doctor scans retain prior comparison findings.
+
+Updates accumulate while the document is hidden or unfocused. A visible, focused
+tab acknowledges them; this does not dismiss critical dialogs or todo findings.
+Workspace changes, disconnect, and unmount clear the indicator. There is no new
+persistence, timer, network request, or helper action.
+[`favicon.ts`](../src/lib/favicon.ts) overlays a static red exclamation, amber dot,
+or blue dot on the existing SVG brand source and adds an unread summary to the
+document title. It updates the tab icon links together and restores their original
+attributes and title on acknowledgement/cleanup. Touch and PWA icons are unaffected.
 
 The PWA caches application assets, with navigation fallback restricted to the
 single root route and explicitly excluding `/api`. Cached browsing and durable

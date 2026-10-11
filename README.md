@@ -196,6 +196,20 @@ A successful vulnerability scan that finds a **new critical issue** opens an ale
 
 Critical findings are compared with the last successful report, including the saved report after reloading the app. Unchanged findings do not alert again; new findings or escalations to critical do, even if the overall count stays the same. Summary-only increases also trigger an alert. Failed scans and loading cached projects never trigger one. A critical issue that disappears in a successful scan and later returns alerts again. Alerts use reported severity regardless of configured badge colors; if browser storage fails, repeat suppression lasts for the current session.
 
+The browser tab's favicon marks **unread updates** received while the tab is hidden
+or its window is unfocused. A red exclamation marks new high or critical
+vulnerabilities; an amber dot marks other new vulnerabilities. A blue dot marks
+newly open issues or pull/merge requests, new high-priority dependency updates,
+or new React Doctor errors. Vulnerabilities take precedence, and the tab title
+describes the unread updates. Returning to the visible, focused tab restores the
+original icon and title without dismissing critical alerts or todos.
+
+This uses results from existing checks, including synchronized helper reports;
+it does not schedule additional checks. Cached findings do not alert on startup,
+the first issue/PR report establishes a baseline, and ignored projects are
+excluded. Unread indicators last for the current tab session and reset when you
+change or disconnect the workspace. The installed app icon stays unchanged.
+
 Package-change detection reads file metadata for package.json, npm/pnpm/Yarn/Bun lockfiles, pnpm-workspace.yaml, .npmrc, and .yarnrc.yml. A shared workspace input change also affects its member packages. It does not traverse node_modules or follow symlink targets. New projects outside the known project directories need a manual or periodic rescan. Enabling change watching after a helper restart first refreshes the workspace and runs the selected checks to establish a baseline.
 
 The watcher runs while the app is open and online, waits for existing app actions, and avoids overlapping runs in the same tab. Browser background throttling or computer sleep can delay scans; this is not a system background service. Changing to manual mode stops queued checks after the current request finishes. Changing or forgetting the connected directory clears its schedule. The workspace watcher status beside the directory sync status shows activity and failures; hover it for the next scheduled scan or change check. Use a single tab for automatic scans.

@@ -23,6 +23,7 @@ import { configureOutdatedReport } from '@/lib/outdated'
 import { DailySummary } from '@/components/daily-summary'
 import { ProjectTodos } from '@/components/project-todos'
 import { useProjectTodos } from '@/hooks/use-project-todos'
+import { useWorkspaceFavicon } from '@/hooks/use-workspace-favicon'
 import { PushReminder } from '@/components/push-reminder'
 import { usePushReminder } from '@/hooks/use-push-reminder'
 import { ProjectFilters } from '@/components/project-filters'
@@ -106,6 +107,7 @@ function WorkspaceApp() {
   const ignoredProjects = rawProjects.filter(project => ignoredIds.has(project.id))
   const projects = useMemo(() => rawProjects.filter(project => !ignoredIds.has(project.id)).map(project => ({ ...project, tags: projectTags[project.id] ?? [], ...(project.outdated ? { outdated: configureOutdatedReport(project.outdated, settings) } : {}) })), [rawProjects, projectTags, settings, ignoredIds])
   const projectTodos = useProjectTodos(projects, workspace)
+  useWorkspaceFavicon(workspace, projects)
   const tagProject = projects.find(p => p.id === tagProjectId)
   const availableTags = useMemo(() => normalizeTags(projects.flatMap(project => project.tags)), [projects])
   const selected = projects.find(p => p.id === selectedId)

@@ -204,6 +204,7 @@ svg { flex-shrink: 0; }
 .asset-preview-favicon img { width: auto; height: auto; max-width: min(64px, 70%); max-height: min(64px, 70%); }
 @media (max-width: 480px) { .preview-source-controls > .button { margin-left: 0; } }
 .capture-progress-panel { container-type: inline-size; margin-top: 19px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 5px var(--shadow); }
+.page-content > .scan-progress-panel { margin-bottom: 20px; }
 .capture-progress-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .capture-progress-title { display: flex; align-items: flex-start; gap: 12px; color: var(--foreground); min-width: 0; }
 .scan-progress-icon { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
