@@ -211,7 +211,14 @@ and the detail dialog to `ProjectPreview`; the small SVG in
 screenshots, preview assets, and empty-preview placeholders with no background.
 Thin, square-topped bars use the card's `--surface` color at full opacity and sit
 flush with the preview's bottom edge, creating a skyline that merges into the
-card. Bars scale to the maximum count within that project's window. Tooltips and an
+card. Open SVG paths draw a contrasting `--foreground` border on the left, top,
+and right edges, with no bottom stroke or shadow. `non-scaling-stroke` keeps the
+border one CSS pixel wide in grid, list, and detail views. A half-pixel horizontal
+inset and visible SVG overflow keep the outer strokes intact within the preview.
+The graph is 27px high in grid and detail views, and 15px high in list view.
+Bars scale to the maximum count within that project's window. Zero-count days
+render no marks but retain their horizontal slots; missing coverage still uses
+hollow marks. Tooltips and an
 accessible description identify dates, author selection, cache age, and shallow or
 missing coverage. Missing caches render no chart. Rendering does not request Git
 history or add persistence, and the existing refresh and stale-response guards
