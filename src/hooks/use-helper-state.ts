@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { api, registerHelperWorkspace } from '@/lib/api'
 import { cachePreview, preservePreviews } from '@/lib/workspace'
 import type { HelperActivity, Workspace, WorkspaceState } from '@/types'
@@ -11,7 +11,7 @@ export function useHelperState(options: {
   persist: (workspace: Workspace) => Promise<boolean>
 }) {
   const latest = useRef(options)
-  latest.current = options
+  useLayoutEffect(() => { latest.current = options }, [options])
   const [activity, setActivity] = useState<{ path?: string; operations: HelperActivity[] }>({ operations: [] })
   const [error, setError] = useState<string>()
   const path = options.workspace?.mode === 'helper' ? options.workspace.rootPath : undefined

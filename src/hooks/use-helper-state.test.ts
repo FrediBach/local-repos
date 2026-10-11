@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from '@testing-library/react'
+import { startTransition } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workspaceHelpers from '@/lib/workspace'
 import { useHelperState } from './use-helper-state'
@@ -15,6 +16,25 @@ beforeEach(() => { vi.useFakeTimers(); mocks.api.mockReset().mockResolvedValue(s
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('helper workspace synchronization', () => {
+  it('keeps polling committed options while a replacement render is suspended', async () => {
+    const props = options()
+    const pending = new Promise<never>(() => {})
+    const { rerender } = renderHook((next: typeof props & { suspend: boolean }) => {
+      const state = useHelperState(next)
+      if (next.suspend) throw pending
+      return state
+    }, { initialProps: { ...props, suspend: false } })
+
+    act(() => startTransition(() => rerender({ ...props, localBusy: 'audit', suspend: true })))
+    await advance()
+    expect(mocks.api).toHaveBeenCalledOnce()
+    expect(props.persist).toHaveBeenCalledWith(expect.objectContaining({ revision: 2 }))
+
+    rerender({ ...props, localBusy: 'audit', suspend: false })
+    await advance()
+    expect(mocks.api).toHaveBeenCalledOnce()
+  })
+
   it('persists newer snapshots and exposes external activity without leaking request ownership', async () => {
     const props = options()
     mocks.api.mockResolvedValue({ ...snapshot, activeOperations: [{ operationId: 'op_a', kind: 'check', projectIds: ['project'], progress: { phase: 'Auditing' } }] })

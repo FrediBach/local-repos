@@ -424,6 +424,11 @@ cached reports are labeled as having unknown freshness. Changed preview images
 are downloaded into the durable cache. Cache failures retain the existing visible
 warning. No MCP access to browser preferences or durable storage is introduced.
 
+Polling options and the workspace snapshot used to protect report revisions are
+published to refs in layout effects, so unfinished renders cannot change the
+state seen by asynchronous work. Persistence also advances its workspace ref
+immediately to protect consecutive writes before React commits the next render.
+
 Process lifecycle changes (pending start, readiness, stop, failure, and unexpected
 exit) advance the helper revision too. The same reconciliation updates project
 server buttons and running filters for work started by MCP, including when the

@@ -86,8 +86,10 @@ function FilterMultiSelect({ group, selected, counts, onToggle, onClear }: {
   const searchable = group.options.length > 8
   const term = searchable ? query.trim().toLowerCase() : ''
   const matches = group.options.filter(option => option.label.toLowerCase().includes(term))
-  const options = group.options.filter(option => matches.includes(option) || selected.includes(option.value))
-  const summary = group.options.filter(option => selected.includes(option.value)).map(option => option.label).join(', ') || 'Any'
+  const matchingOptions = new Set(matches)
+  const selectedValues = new Set(selected)
+  const options = group.options.filter(option => matchingOptions.has(option) || selectedValues.has(option.value))
+  const summary = group.options.filter(option => selectedValues.has(option.value)).map(option => option.label).join(', ') || 'Any'
   const searchLabel = group.key === 'stack' ? 'Find a technology' : `Find ${group.label.toLowerCase()}`
 
   return <div className="filter-field">
@@ -118,7 +120,7 @@ function FilterMultiSelect({ group, selected, counts, onToggle, onClear }: {
           }
         }} />}
         <div className="filter-select-options">
-          {options.map(option => <DropdownMenuCheckboxItem key={option.value} checked={selected.includes(option.value)} onSelect={event => event.preventDefault()} onCheckedChange={() => onToggle(option.value)}>
+          {options.map(option => <DropdownMenuCheckboxItem key={option.value} checked={selectedValues.has(option.value)} onSelect={event => event.preventDefault()} onCheckedChange={() => onToggle(option.value)}>
             <span className="filter-option-name">{option.label}</span><span className="filter-count" aria-hidden="true">{counts[option.value]}</span>
           </DropdownMenuCheckboxItem>)}
           {!matches.length && <p className="filter-select-empty" role="status">{term ? 'No matches.' : 'No options.'}</p>}

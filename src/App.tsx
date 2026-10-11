@@ -94,7 +94,7 @@ function WorkspaceApp() {
   const projectOpener = useRef<HTMLElement | null>(null)
   const workspaceVersion = useRef(0)
   const workspaceRef = useRef(workspace)
-  workspaceRef.current = workspace
+  useLayoutEffect(() => { workspaceRef.current = workspace }, [workspace])
   const helperState = useHelperState({ workspace, localBusy, workspaceVersion, persist })
   const busy = localBusy || (helperState.operations.length ? 'external' : '')
   const favoritesVersion = useRef(0)
