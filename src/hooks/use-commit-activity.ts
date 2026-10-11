@@ -1,5 +1,5 @@
 import { activeProjects } from '@/lib/workspace'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { projectHistory } from '@/lib/api'
 import { summaryRepositories } from '@/lib/daily-summary'
 import { loadCommitActivity, saveCommitActivity } from '@/lib/storage'
@@ -9,8 +9,10 @@ import type { GitHistory, Workspace } from '@/types'
 /** Cache history activity on successful helper syncs and from open history views. */
 export function useCommitActivity(workspace?: Workspace, syncedWorkspace?: Workspace, author = '') {
   const scope = workspace ? JSON.stringify([workspace.mode, workspace.rootPath ?? workspace.rootName, ...(author ? [author] : [])]) : ''
-  const current = useRef({ scope, workspace, projects: workspace?.projects ?? [] })
-  useLayoutEffect(() => { current.current = { scope, workspace, projects: workspace?.projects ?? [] } }, [scope, workspace])
+  const projectsById = useMemo(() => new Map(workspace?.projects.map(project => [project.id, project])), [workspace?.projects])
+  const ignoredIds = useMemo(() => new Set(workspace?.ignoredProjectIds), [workspace?.ignoredProjectIds])
+  const current = useRef({ scope, workspace, projectsById, ignoredIds })
+  useLayoutEffect(() => { current.current = { scope, workspace, projectsById, ignoredIds } }, [scope, workspace, projectsById, ignoredIds])
   const latest = useRef<CommitActivityCache>({ scope: '', repositories: {} })
   const [cache, setCache] = useState<CommitActivityCache>(latest.current)
   useEffect(() => {
@@ -33,13 +35,13 @@ export function useCommitActivity(workspace?: Workspace, syncedWorkspace?: Works
 
   const remember = useCallback((id: string, data: GitHistory, queryAuthor = '') => {
     if (!scope || current.current.scope !== scope || queryAuthor !== author || !data.available) return
-    const project = current.current.projects.find(item => item.id === id)
+    const projects = current.current.projectsById
+    const project = projects.get(id)
     if (!project) return
     const report = { activity: data.activity, from: data.from, to: data.to, shallow: data.shallow, cachedAt: new Date().toISOString() }
     if (!validCommitActivity(report)) return
-    const allowed = new Set(current.current.projects.map(item => item.id))
-    const repositories = Object.fromEntries(Object.entries(latest.current.scope === scope ? latest.current.repositories : {}).filter(([key]) => allowed.has(key)))
-    repositories[commitRepositoryId(project, current.current.projects)] = report
+    const repositories = Object.fromEntries(Object.entries(latest.current.scope === scope ? latest.current.repositories : {}).filter(([key]) => projects.has(key)))
+    repositories[commitRepositoryId(project, projects)] = report
     latest.current = { scope, repositories }
     setCache(latest.current)
     void saveCommitActivity(latest.current).catch(() => { /* Keep the session cache on storage failure. */ })
@@ -53,15 +55,16 @@ export function useCommitActivity(workspace?: Workspace, syncedWorkspace?: Works
     const syncedScope = JSON.stringify([source.mode, source.rootPath ?? source.rootName, ...(author ? [author] : [])])
     if (syncedScope !== scope) return
     let active = true
+    const gitProjects = new Set(source.projects.filter(project => project.git).map(project => project.id))
     const repositories = summaryRepositories(activeProjects(source))
-      .filter(repository => source.projects.some(project => project.id === repository.id && project.git))
+      .filter(repository => gitProjects.has(repository.id))
     let index = 0
     // Like daily summaries, read only local history with at most three requests
     // in flight. Cache each success; a failed repository retains its old report.
     void Promise.all(Array.from({ length: Math.min(3, repositories.length) }, async () => {
       while (active && index < repositories.length) {
         const repository = repositories[index++]
-        if (current.current.workspace?.ignoredProjectIds?.includes(repository.id)) continue
+        if (current.current.ignoredIds.has(repository.id)) continue
         try {
           const data = await (author ? projectHistory(repository.id, { author }) : projectHistory(repository.id))
           if (active) remember(repository.id, data, author)

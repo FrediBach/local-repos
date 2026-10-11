@@ -148,6 +148,9 @@ filter matches the optional `commitActivityAuthor` setting. Successful
 helper connection, manual sync, and watcher sync also supply an explicit refresh
 snapshot through `persist`. The hook reads history for deduplicated Git repositories
 with at most three requests in flight, preserving prior reports on failure. It
+reuses an ID index for project and monorepo-parent lookups and a set of ignored
+IDs, updated after committed workspace changes. Queued reads consult that latest
+set so ignoring a project takes effect without restarting an active refresh. It
 also refreshes when the configured author changes, using an exact Git author-email
 filter. It does not refresh on cache restoration, unrelated settings changes, or
 report writes. New refresh snapshots and workspace changes cancel queued reads

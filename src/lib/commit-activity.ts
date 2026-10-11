@@ -11,11 +11,11 @@ export function validCommitActivity(value: unknown): value is CachedCommitActivi
     && Array.isArray(item.activity) && item.activity.length <= 366 && item.activity.every(day => dateKey(day.date) && Number.isSafeInteger(day.count) && day.count >= 0)
 }
 
-export function commitRepositoryId(project: RepoProject, projects: RepoProject[]): string {
+export function commitRepositoryId(project: RepoProject, projects: ReadonlyMap<string, RepoProject>): string {
   const seen = new Set<string>()
   while (project.monorepo && !seen.has(project.id)) {
     seen.add(project.id)
-    const parent = projects.find(item => item.id === project.monorepo!.id)
+    const parent = projects.get(project.monorepo.id)
     if (!parent) break
     project = parent
   }
@@ -23,7 +23,8 @@ export function commitRepositoryId(project: RepoProject, projects: RepoProject[]
 }
 
 export function aggregateCommitActivity(projects: RepoProject[], cache: Record<string, CachedCommitActivity>, today = new Date().toISOString().slice(0, 10), author = '') {
-  const repositories = summaryRepositories(projects).filter(project => projects.find(item => item.id === project.id)?.git || validCommitActivity(cache[project.id]))
+  const gitProjects = new Set(projects.filter(project => project.git).map(project => project.id))
+  const repositories = summaryRepositories(projects).filter(project => gitProjects.has(project.id) || validCommitActivity(cache[project.id]))
   const reports = repositories.flatMap(project => validCommitActivity(cache[project.id]) ? [cache[project.id]] : [])
   if (!reports.length) return
   const end = new Date(`${today}T00:00:00Z`)

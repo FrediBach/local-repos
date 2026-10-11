@@ -75,6 +75,24 @@ it('retains cached counts after a failed sync history read and skips browser syn
   expect(projectHistory).toHaveBeenCalledOnce()
 })
 
+it('applies ignore changes to queued history without restarting the active refresh', async () => {
+  const projects = Array.from({ length: 5 }, (_, index) => ({ ...workspace.projects[0], id: `repo-${index}` }))
+  const synced = { ...workspace, projects }
+  const pending: ((data: GitHistory) => void)[] = []
+  vi.mocked(projectHistory).mockImplementation(() => new Promise(resolve => pending.push(resolve)))
+  const { rerender } = renderHook(({ value }) => useCommitActivity(value, synced), { initialProps: { value: synced } })
+  expect(projectHistory).toHaveBeenCalledTimes(3)
+
+  rerender({ value: { ...synced, ignoredProjectIds: ['repo-3'] } })
+  expect(projectHistory).toHaveBeenCalledTimes(3)
+  await act(async () => pending[0](report))
+  expect(projectHistory).toHaveBeenCalledTimes(4)
+  expect(projectHistory).toHaveBeenLastCalledWith('repo-4')
+  expect(projectHistory).not.toHaveBeenCalledWith('repo-3')
+  await act(async () => { pending[1](report); pending[2](report); pending[3](report) })
+  expect(Object.keys(vi.mocked(saveCommitActivity).mock.calls.at(-1)![0].repositories)).toHaveLength(4)
+})
+
 it('ignores late results from an earlier sync in the same workspace', async () => {
   let finishOld!: (data: GitHistory) => void
   vi.mocked(projectHistory).mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))

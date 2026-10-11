@@ -11,7 +11,7 @@ describe('cached global activity', () => {
   })
   it('counts monorepo history once, aggregates repositories, and ignores other workspaces', () => {
     const other = { ...root, id: 'other' }
-    expect(commitRepositoryId(child, [root, child])).toBe('root')
+    expect(commitRepositoryId(child, new Map([root, child].map(project => [project.id, project])))).toBe('root')
     const result = aggregateCommitActivity([root, child, other], { root: report, child: report, other: report, unrelated: report }, '2026-10-09')!
     expect(result.repositories).toBe(2)
     expect(result.days.find(day => day.date === '2026-10-08')).toMatchObject({ count: 6, covered: 2, partial: false })
@@ -23,5 +23,14 @@ describe('cached global activity', () => {
     expect(result.days.find(day => day.date === '2026-10-07')).toMatchObject({ count: 0, covered: 1, partial: true })
     expect(aggregateCommitActivity([root], { root: { ...report, shallow: true } }, '2026-10-08')!.days.at(-1)?.partial).toBe(true)
     expect(aggregateCommitActivity([root], { root: { ...report, activity: [] } }, '2026-10-08')).toBeDefined()
+  })
+  it('resolves nested parents and stops at missing parents or cycles', () => {
+    const grandchild = { ...child, id: 'grandchild', monorepo: { ...child.monorepo, id: child.id } }
+    const projects = new Map([root, child, grandchild].map(project => [project.id, project]))
+    expect(commitRepositoryId(grandchild, projects)).toBe(root.id)
+    projects.delete(root.id)
+    expect(commitRepositoryId(grandchild, projects)).toBe(child.id)
+    projects.set(child.id, { ...child, monorepo: { ...child.monorepo, id: grandchild.id } })
+    expect(commitRepositoryId(grandchild, projects)).toBe(grandchild.id)
   })
 })
