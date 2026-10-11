@@ -17,7 +17,7 @@ export interface Operation {
 interface RecordEntry { principal: string; operation: Operation; result?: unknown[]; bytes: number }
 export class Operations {
   private readonly records = new Map<string, RecordEntry>()
-  private readonly admissions = new Map<string, { args: string; id: string }>()
+  private readonly admissions = new Map<string, { principal: string; args: string; id: string }>()
   private readonly running = new Set<Promise<void>>()
   private closed = false
   private queuedItems = 0
@@ -47,7 +47,7 @@ export class Operations {
     if (!options.allowConcurrent && [...this.records.values()].some(entry => entry.principal === principal && !entry.operation.finishedAt)) throw new McpFailure('PROJECT_BUSY', 'Wait for your current operation to finish.', true)
     const operation: Operation = { operationId: `op_${randomUUID()}`, helperInstanceId: this.helperInstanceId, requestId, kind, projectIds, state: 'queued', createdAt: new Date(this.now()).toISOString(), cancellation: 'stop-after-current', cancelRequested: false, resultAvailable: false }
     const entry: RecordEntry = { principal, operation, bytes: 0 }
-    this.admissions.set(key, { args: normalized, id: operation.operationId })
+    this.admissions.set(key, { principal, args: normalized, id: operation.operationId })
     this.records.set(operation.operationId, entry)
     this.queuedItems += Math.max(1, projectIds.length)
     let invalidationCount = 0
@@ -92,7 +92,7 @@ export class Operations {
   private entry(principal: string, id: string) {
     this.prune()
     const entry = this.records.get(id)
-    if (!entry && [...this.admissions].some(([key, value]) => value.id === id && JSON.parse(key)[0] === principal)) throw new McpFailure('REQUEST_EXPIRED', 'The operation result expired; the request will not be replayed.')
+    if (!entry && [...this.admissions.values()].some(value => value.id === id && value.principal === principal)) throw new McpFailure('REQUEST_EXPIRED', 'The operation result expired; the request will not be replayed.')
     if (!entry || entry.principal !== principal) throw new McpFailure('OPERATION_NOT_FOUND', 'Operation not found or expired.')
     return entry
   }

@@ -405,8 +405,10 @@ the normalized request. There is one active operation per principal, except that
 exact-generation stops may interrupt pending work. At most 100 work items may
 be admitted across the helper. Terminal records retain results for
 30 minutes, up to 200 records/32 MiB, with an 8 MiB per-result cap. Compact retry
-keys persist for the helper lifetime, capped at 10,000; expired admissions cannot
-be replayed. Cancellation stops queued work or stops after the current repository;
+keys and explicit principal ownership persist for the helper lifetime, capped at
+10,000; expired admissions cannot be replayed. Only the owning principal can
+distinguish an expired operation from an unknown one. Cancellation stops queued
+work or stops after the current repository;
 completed work is still recorded as successful. Disconnecting never cancels an
 admitted job. Terminal diagnostics log only operation ID, kind, project IDs,
 duration, outcome, and invalidation count.

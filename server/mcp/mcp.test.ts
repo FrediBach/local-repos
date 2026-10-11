@@ -78,6 +78,20 @@ async function scan(client: Client, requestId = 'scan') {
 }
 
 describe('authenticated MCP read release', () => {
+  it.each([
+    { capabilities: ['read'], checks: [] },
+    { capabilities: ['read', 'analysis'], checks: ['storage'] },
+    { capabilities: ['read', 'analysis', 'project-execution'], checks: ['storage'] },
+    { capabilities: ['read', 'analysis', 'network'], checks: ['audit', 'outdated', 'storage'] },
+    { capabilities: ['read', 'analysis', 'network', 'project-execution'], checks: ['audit', 'lighthouse', 'outdated', 'reactDoctor', 'storage', 'unused'] },
+  ] as const)('reports supported checks for $capabilities', async ({ capabilities, checks }) => {
+    policy.clients[0].principal.capabilities = [...capabilities]
+    const client = await connect()
+    const info = await call(client, 'get_server_info')
+    expect(info.data.supportedChecks.sort()).toEqual([...checks])
+    expect(info.data.capabilities).toEqual([...capabilities])
+  })
+
   it('preserves omitted, empty, and combined project and finding filters', async () => {
     await project('alpha'); await project('beta')
     const client = await connect()
@@ -549,6 +563,16 @@ describe('authenticated MCP read release', () => {
 })
 
 describe('configuration and operation retention', () => {
+  it('deduplicates canonical root grants and rejects an unconfigured root', async () => {
+    const writeConfig = (grants: string[]) => writeFile(configPath, JSON.stringify({ enabled: true, roots: [root], clients: [{ id: 'reader', token, roots: grants }] }), { mode: 0o600 })
+    const alias = path.join(temp, 'root-alias')
+    await symlink(root, alias)
+    await writeConfig([root, alias])
+    expect((await loadPolicy(configPath))?.clients[0].principal.roots.map(value => value.directory)).toEqual([root])
+    await writeConfig([root, privateRoot])
+    await expect(loadPolicy(configPath)).rejects.toThrow('Client roots must name configured roots')
+  })
+
   it('rejects unsafe config permissions and configuration within a scan root', async () => {
     await chmod(configPath, 0o644)
     await expect(loadPolicy(configPath)).rejects.toThrow('owner-only')
@@ -570,6 +594,10 @@ describe('configuration and operation retention', () => {
     expect(run).not.toHaveBeenCalled()
     expect(operations.get('a', first.operationId).state).toBe('cancelled')
     now += 31 * 60_000
+    expect(() => operations.get('a', first.operationId)).toThrow('operation result expired')
+    expect(() => operations.get('b', first.operationId)).toThrow('Operation not found')
+    expect(() => operations.result('b', first.operationId)).toThrow('Operation not found')
+    expect(() => operations.cancel('b', first.operationId)).toThrow('Operation not found')
     expect(() => operations.admit('a', 'one', 'scan', { root: 1 }, [], run)).toThrow('expired')
   })
   it('caps queued items and retains successful current work after an active cancellation', async () => {

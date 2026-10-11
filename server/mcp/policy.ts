@@ -65,9 +65,9 @@ export async function loadPolicy(filename: string | undefined): Promise<McpPolic
   if (roots.some(root => isWithin(root.directory, configPath))) throw new Error('Keep MCP credentials outside all scanned roots.')
   const clients: McpPolicy['clients'] = []
   for (const client of parsed.data.clients) {
-    const granted = await Promise.all(client.roots.map(directory => realpath(directory)))
-    const selected = roots.filter(root => granted.includes(root.directory))
-    if (new Set(granted).size !== selected.length) throw new Error('Client roots must name configured roots.')
+    const granted = new Set(await Promise.all(client.roots.map(directory => realpath(directory))))
+    const selected = roots.filter(root => granted.has(root.directory))
+    if (granted.size !== selected.length) throw new Error('Client roots must name configured roots.')
     const digest = createHash('sha256').update(client.token).digest()
     if (clients.some(other => other.principal.id === client.id || timingSafeEqual(other.digest, digest))) throw new Error('MCP clients need distinct IDs and credentials.')
     clients.push({ digest, principal: { id: client.id, roots: selected, capabilities: client.capabilities, maintenanceAutomation: client.maintenanceAutomation, disclosePaths: client.disclosePaths, discloseContent: client.discloseContent } })
