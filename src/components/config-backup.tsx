@@ -22,11 +22,16 @@ export function ConfigBackupPanel({ ready, busy, connected, onExport, onImport, 
     setError(''); setMessage('')
     try {
       const backup = onExport()
-      const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2) + '\n'], { type: 'application/json' }))
       const link = document.createElement('a')
-      link.href = url; link.download = `local-repos-config-${backup.exportedAt.slice(0, 10)}.json`
-      document.body.append(link)
-      try { link.click() } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2) + '\n'], { type: 'application/json' }))
+      try {
+        link.href = url; link.download = `local-repos-config-${backup.exportedAt.slice(0, 10)}.json`
+        document.body.append(link)
+        link.click()
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        link.remove()
+      }
       setMessage('Configuration exported.')
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not export the configuration.') }
   }

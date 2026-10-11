@@ -97,6 +97,8 @@ The topbar composes separate breadcrumb and connection-status displays alongside
 its actions. The connection dialog owns hosted/browser mode selection and
 composes a helper form only in local mode; all connection callbacks and state
 remain owned by `App`.
+Sidebar navigation shares a button component for active-page semantics and
+styling while keeping navigation callbacks and count badges in the parent.
 
 [`workspace-toolbar.tsx`](../src/components/workspace-toolbar.tsx) keeps directory
 identity and workspace actions together. **Run checks** opens the existing Radix
@@ -271,6 +273,8 @@ reported rather than guessed. Existing favorites and tags are merged. Storage
 coordinates the IndexedDB preference write with settings/theme writes and rolls
 back localStorage when the transaction fails. A preferences-changed event updates
 same-tab settings/theme consumers; storage events handle cross-tab changes.
+Configuration downloads release their temporary object URL after a short delay,
+including when link setup or download initiation fails.
 
 Editor, Git-client, and script-terminal preferences (`editor`, `gitClient`, and
 `terminal`) are validated against the shared allowlist in [`desktop-apps.ts`](../src/lib/desktop-apps.ts). Missing or

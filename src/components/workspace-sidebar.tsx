@@ -1,4 +1,5 @@
 import { ArrowUpRight, CalendarDays, ChevronDown, CircleHelp, Download, FolderOpen, LayoutGrid, ListTodo, Play, Star } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Logo } from './brand-logo'
 import type { ProjectFilters } from '@/lib/project-filters'
 import type { RepoProject, Workspace } from '@/types'
@@ -52,10 +53,20 @@ function WorkspaceNavigation({ page, filter, filters, hasFilters, projectCount, 
   const runningActive = page === 'projects' && filters.server?.includes('running')
   const summaryActive = page === 'summary'
   return <nav className="main-nav" aria-label="Workspace">
-        <button aria-current={allActive ? 'page' : undefined} className={allActive ? 'active' : ''} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projectCount}</span></button>
-        <button aria-current={favoritesActive ? 'page' : undefined} className={favoritesActive ? 'active' : ''} onClick={() => navigate('favorites')}><Star size={17} /><span>Favorites</span><span className="nav-count">{favoriteCount.toString().padStart(2, '0')}</span></button>
-        <button aria-current={runningActive ? 'page' : undefined} className={runningActive ? 'active' : ''} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</button>
-        <button aria-current={summaryActive ? 'page' : undefined} className={summaryActive ? 'active' : ''} onClick={onSummary}><CalendarDays size={17} /><span>Daily summary</span></button>
-        <button aria-label="Todos" title={todoCount ? `${todoCount} important ${todoCount === 1 ? 'todo' : 'todos'}` : 'Todos'} aria-current={page === 'todos' ? 'page' : undefined} className={page === 'todos' ? 'active' : ''} onClick={onTodos}><ListTodo size={17} /><span>Todos</span>{todoCount > 0 && <span className="todo-nav-count" aria-hidden="true">{todoCount}</span>}</button>
+        <NavigationButton active={allActive} onClick={() => navigate('all')}><LayoutGrid size={17} /><span>All projects</span><span className="nav-count">{projectCount}</span></NavigationButton>
+        <NavigationButton active={favoritesActive} onClick={() => navigate('favorites')}><Star size={17} /><span>Favorites</span><span className="nav-count">{favoriteCount.toString().padStart(2, '0')}</span></NavigationButton>
+        <NavigationButton active={runningActive} onClick={() => navigate('running')}><span className="running-icon"><Play size={14} /></span><span>Running</span>{running > 0 && <span className="nav-count">{running}</span>}</NavigationButton>
+        <NavigationButton active={summaryActive} onClick={onSummary}><CalendarDays size={17} /><span>Daily summary</span></NavigationButton>
+        <NavigationButton label="Todos" title={todoCount ? `${todoCount} important ${todoCount === 1 ? 'todo' : 'todos'}` : 'Todos'} active={page === 'todos'} onClick={onTodos}><ListTodo size={17} /><span>Todos</span>{todoCount > 0 && <span className="todo-nav-count" aria-hidden="true">{todoCount}</span>}</NavigationButton>
       </nav>
+}
+
+function NavigationButton({ active, onClick, label, title, children }: {
+  active?: boolean
+  onClick: () => void
+  label?: string
+  title?: string
+  children: ReactNode
+}) {
+  return <button type="button" aria-label={label} title={title} aria-current={active ? 'page' : undefined} className={active ? 'active' : ''} onClick={onClick}>{children}</button>
 }

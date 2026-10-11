@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import type { RepoProject } from './types'
@@ -80,6 +80,21 @@ describe('configuration backup controls', () => {
     expect(await screen.findByRole('button', { name: 'Unfavorite alpha' })).toBeTruthy()
     expect(await screen.findByRole('button', { name: 'Filter by tag: work' })).toBeTruthy()
     expect((screen.getByRole('combobox', { name: 'Color theme' }) as HTMLSelectElement).value).toBe('dark')
+  })
+
+  it('releases the download URL when attaching the export link fails', async () => {
+    await setup()
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(document.body, 'append').mockImplementationOnce(() => { throw new Error('Download unavailable') })
+      fireEvent.click(screen.getByRole('button', { name: 'Export JSON' }))
+      expect(screen.getByRole('alert').textContent).toContain('Download unavailable')
+      expect(download).not.toHaveBeenCalled()
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1000)
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:config')
+      expect(document.querySelector('a[download]')).toBeNull()
+    } finally { vi.useRealTimers() }
   })
 
   it('rejects malformed files without saving, and allows retrying the same file after a storage failure', async () => {
