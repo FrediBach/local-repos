@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectTodos } from './project-todos'
+import { projectTodoOverview, projectTodos } from './project-todos'
 import type { AuditFinding, PackageAudit, ReactDoctorFinding, RepoProject } from '@/types'
 
 const project: RepoProject = { id: 'app', name: 'App', dirName: 'app', relativePath: 'app', description: '', stack: [], scripts: {}, packageManager: 'npm', scannedAt: '' }
@@ -8,6 +8,24 @@ const audit = (findings: AuditFinding[]): PackageAudit => ({ manager: 'npm', sca
 const error: ReactDoctorFinding = { filePath: 'src/App.tsx', line: 12, column: 3, plugin: 'react', rule: 'hooks', severity: 'error', message: 'Conditional hook', help: 'Move hook', category: 'React' }
 
 describe('important project todos', () => {
+  it('scopes overview coverage and valid scan dates without reordering input tasks', () => {
+    const older = { ...project, id: 'older', audit: { ...audit([high]), scannedAt: '2026-10-08' } }
+    const newer = { ...project, id: 'newer', audit: { ...audit([high]), scannedAt: '2026-10-09' } }
+    const invalid = { ...project, id: 'invalid', audit: { ...audit([high]), scannedAt: 'invalid-date' } }
+    const projects = [older, newer, invalid]
+    const todos = projectTodos(projects).reverse()
+    const original = [...todos]
+    const all = projectTodoOverview(projects, todos)
+    expect(all.latestScan?.toISOString()).toBe('2026-10-09T00:00:00.000Z')
+    expect(all.scannedProjects).toHaveLength(3)
+    const scoped = projectTodoOverview(projects, todos, older.id)
+    expect(scoped.visibleTodos.map(todo => todo.projectId)).toEqual([older.id])
+    expect(scoped.latestScan?.toISOString()).toBe('2026-10-08T00:00:00.000Z')
+    expect(projectTodoOverview(projects, todos, invalid.id).latestScan).toBeUndefined()
+    expect(projectTodoOverview(projects, todos, 'missing').groups).toEqual([])
+    expect(todos).toEqual(original)
+  })
+
   it('groups all important scans into three tasks and prioritizes critical vulnerabilities', () => {
     const todos = projectTodos([{ ...project, audit: audit([high, { ...high, name: 'critical-package', severity: 'critical' }]),
       outdated: { manager: 'npm', scannedAt: 'outdated scan', level: 'high', score: 100, findings: [{ name: 'old', current: '1.0.0', latest: '11.0.0', change: 'major', majorGap: 10, score: 100 }] },

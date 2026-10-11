@@ -2,7 +2,7 @@ import { useId, useLayoutEffect, useRef } from 'react'
 import { ArrowLeft, ArrowUpRight, CheckCheck, CircleAlert, ClipboardList, Clock3, FolderGit2, Package, ScanLine, ShieldAlert, Stethoscope, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ProjectTab } from '@/components/project-tabs'
-import type { ProjectTodo } from '@/lib/project-todos'
+import { projectTodoOverview, type ProjectTodo } from '@/lib/project-todos'
 import type { RepoProject } from '@/types'
 import './project-todos.css'
 
@@ -18,13 +18,9 @@ interface Props {
 }
 
 const kindDetails = {
-  security: { label: 'Security', icon: ShieldAlert, order: 0 },
-  outdated: { label: 'Package updates', icon: Package, order: 1 },
-  'react-doctor': { label: 'React Doctor', icon: Stethoscope, order: 2 },
-}
-
-function compareTodos(a: ProjectTodo, b: ProjectTodo) {
-  return Number(b.priority === 'critical') - Number(a.priority === 'critical') || kindDetails[a.kind].order - kindDetails[b.kind].order
+  security: { label: 'Security', icon: ShieldAlert },
+  outdated: { label: 'Package updates', icon: Package },
+  'react-doctor': { label: 'React Doctor', icon: Stethoscope },
 }
 
 function scanTime(value: string) {
@@ -36,15 +32,7 @@ export function ProjectTodos({ projects, todos, projectId, onClearProject, onOpe
   const id = useId()
   const section = useRef<HTMLElement>(null)
   const dismissFocus = useRef<{ button: HTMLButtonElement; candidates: HTMLButtonElement[] } | null>(null)
-  const selectedProject = projects.find(project => project.id === projectId)
-  const visibleProjects = projectId ? projects.filter(project => project.id === projectId) : projects
-  const groups = visibleProjects.map(project => ({ project, todos: todos.filter(todo => todo.projectId === project.id).sort(compareTodos) }))
-    .filter(group => group.todos.length > 0)
-    .sort((a, b) => compareTodos(a.todos[0], b.todos[0]) || a.project.name.localeCompare(b.project.name))
-  const visibleTodos = groups.flatMap(group => group.todos)
-  const scannedProjects = visibleProjects.filter(project => project.audit || project.outdated || project.reactDoctor)
-  const latestScan = scannedProjects.flatMap(project => [project.audit?.scannedAt, project.outdated?.scannedAt, project.reactDoctor?.scannedAt])
-    .flatMap(value => value && scanTime(value) ? [scanTime(value)!] : []).sort((a, b) => b.getTime() - a.getTime())[0]
+  const { selectedProject, visibleProjects, groups, visibleTodos, scannedProjects, latestScan } = projectTodoOverview(projects, todos, projectId)
 
   useLayoutEffect(() => {
     const pending = dismissFocus.current
@@ -81,22 +69,39 @@ export function ProjectTodos({ projects, todos, projectId, onClearProject, onOpe
     <div className="todos-section-heading"><h3>{projectId ? 'Project priorities' : 'By project'}</h3><span>Critical first · refreshed with each scan</span></div>
     {groups.length ? <div className="todos-projects">{groups.map(({ project, todos: projectTodos }) => <article className="todos-project" aria-label={`${project.name} todos`} key={project.id}>
       <div className="todos-project-heading"><div><h3>{project.name}</h3><p>{project.relativePath}</p></div><span>{projectTodos.length} {projectTodos.length === 1 ? 'todo' : 'todos'}</span></div>
-      <ul>{projectTodos.map(todo => {
-        const { label, icon: Icon } = kindDetails[todo.kind]
-        const scannedAt = scanTime(todo.scannedAt)
-        return <li key={todo.id} aria-label={todo.title} className="todos-task">
-          <div className={`todos-task-icon todos-priority-${todo.priority}`}><Icon size={19} aria-hidden="true" /></div>
-          <div className="todos-task-content"><div className="todos-task-meta"><span className={`todos-priority todos-priority-${todo.priority}`}>{todo.priority === 'critical' ? 'Critical' : 'High priority'}</span><span>{label}</span></div><h4>{todo.title}</h4><p>{todo.description}</p><span className="todos-task-date">{scannedAt ? <>Scanned <time dateTime={scannedAt.toISOString()}>{scannedAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></> : 'Scan date unavailable'}</span></div>
-          <div className="todos-task-actions"><Button variant="outline" size="sm" aria-label={`Review ${todo.title} in ${project.name}`} onClick={() => onOpen(project, todo.tab)}>Review scan<ArrowUpRight size={14} aria-hidden="true" /></Button><Button variant="ghost" size="sm" data-todo-dismiss aria-label={`Dismiss ${todo.title} in ${project.name}`} aria-describedby={`${id}-dismiss-note`} onClick={event => dismiss(todo, event.currentTarget)}><X size={14} aria-hidden="true" />Dismiss</Button></div>
-        </li>
-      })}</ul>
-    </article>)}</div> : <div className="todos-empty" role="status">
-      {scannedProjects.length ? <CheckCheck size={30} aria-hidden="true" /> : <ScanLine size={30} aria-hidden="true" />}
-      <h3 tabIndex={-1}>{projectId && !selectedProject ? 'This project is no longer available.' : !visibleProjects.length ? 'Connect projects to get started.' : scannedProjects.length ? 'No important active todos.' : 'Run a scan to find important tasks.'}</h3>
-      <p>{projectId && !selectedProject ? 'Return to all todos to see the projects in this directory.' : !visibleProjects.length ? 'Your project scans will bring their most important findings here.' : scannedProjects.length ? 'There are no active tasks from the available scans. Dismissed findings stay hidden; new findings will appear after a scan.' : 'Run a security audit, outdated package scan, or React Doctor from your projects. Important findings will appear here automatically.'}</p>
-      {selectedProject && !scannedProjects.length && <Button variant="outline" size="sm" onClick={() => onOpen(selectedProject, 'vulnerabilities')}>Open project scans<ArrowUpRight size={14} aria-hidden="true" /></Button>}
-    </div>}
+      <ul>{projectTodos.map(todo => <TodoTask key={todo.id} todo={todo} project={project} dismissNoteId={`${id}-dismiss-note`} onOpen={onOpen} onDismiss={dismiss} />)}</ul>
+    </article>)}</div> : <TodoEmptyState projectId={projectId} selectedProject={selectedProject} visibleProjects={visibleProjects} scannedProjects={scannedProjects} onOpen={onOpen} />}
     {scannedProjects.length > 0 && scannedProjects.length < visibleProjects.length && <p className="todos-coverage"><ScanLine size={15} aria-hidden="true" />{visibleProjects.length - scannedProjects.length} {visibleProjects.length - scannedProjects.length === 1 ? 'project has' : 'projects have'} no scans yet. Their findings are not included.</p>}
     <div className="todos-notes"><p>Only high or critical security issues, high package lag, and React Doctor errors make this list. Related findings share a task to keep it short.</p><p id={`${id}-dismiss-note`}>Dismissed findings stay hidden while unchanged. New findings can bring a task back. Rescans remove tasks when their findings are resolved.</p></div>
   </section>
+}
+
+function TodoTask({ todo, project, dismissNoteId, onOpen, onDismiss }: {
+  todo: ProjectTodo; project: RepoProject; dismissNoteId: string; onOpen: Props['onOpen']; onDismiss: (todo: ProjectTodo, button: HTMLButtonElement) => void
+}) {
+  const { label, icon: Icon } = kindDetails[todo.kind]
+  const scannedAt = scanTime(todo.scannedAt)
+  return <li aria-label={todo.title} className="todos-task">
+    <div className={`todos-task-icon todos-priority-${todo.priority}`}><Icon size={19} aria-hidden="true" /></div>
+    <div className="todos-task-content"><div className="todos-task-meta"><span className={`todos-priority todos-priority-${todo.priority}`}>{todo.priority === 'critical' ? 'Critical' : 'High priority'}</span><span>{label}</span></div><h4>{todo.title}</h4><p>{todo.description}</p><span className="todos-task-date">{scannedAt ? <>Scanned <time dateTime={scannedAt.toISOString()}>{scannedAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></> : 'Scan date unavailable'}</span></div>
+    <div className="todos-task-actions"><Button variant="outline" size="sm" aria-label={`Review ${todo.title} in ${project.name}`} onClick={() => onOpen(project, todo.tab)}>Review scan<ArrowUpRight size={14} aria-hidden="true" /></Button><Button variant="ghost" size="sm" data-todo-dismiss aria-label={`Dismiss ${todo.title} in ${project.name}`} aria-describedby={dismissNoteId} onClick={event => onDismiss(todo, event.currentTarget)}><X size={14} aria-hidden="true" />Dismiss</Button></div>
+  </li>
+}
+
+function TodoEmptyState({ projectId, selectedProject, visibleProjects, scannedProjects, onOpen }: {
+  projectId?: string; selectedProject?: RepoProject; visibleProjects: RepoProject[]; scannedProjects: RepoProject[]; onOpen: Props['onOpen']
+}) {
+  const state = projectId && !selectedProject ? 'missing' : !visibleProjects.length ? 'empty' : scannedProjects.length ? 'scanned' : 'unscanned'
+  const messages = {
+    missing: { title: 'This project is no longer available.', detail: 'Return to all todos to see the projects in this directory.' },
+    empty: { title: 'Connect projects to get started.', detail: 'Your project scans will bring their most important findings here.' },
+    scanned: { title: 'No important active todos.', detail: 'There are no active tasks from the available scans. Dismissed findings stay hidden; new findings will appear after a scan.' },
+    unscanned: { title: 'Run a scan to find important tasks.', detail: 'Run a security audit, outdated package scan, or React Doctor from your projects. Important findings will appear here automatically.' },
+  }
+  return <div className="todos-empty" role="status">
+    {scannedProjects.length ? <CheckCheck size={30} aria-hidden="true" /> : <ScanLine size={30} aria-hidden="true" />}
+    <h3 tabIndex={-1}>{messages[state].title}</h3>
+    <p>{messages[state].detail}</p>
+    {selectedProject && !scannedProjects.length && <Button variant="outline" size="sm" onClick={() => onOpen(selectedProject, 'vulnerabilities')}>Open project scans<ArrowUpRight size={14} aria-hidden="true" /></Button>}
+  </div>
 }

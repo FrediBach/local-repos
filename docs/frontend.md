@@ -87,6 +87,12 @@ browser's local day and configured reminder time.
 
 ## Workspace controls and project browsing
 
+The todo view delegates project grouping, priority ordering, scan coverage, and
+latest valid scan time to `projectTodoOverview` in `src/lib/project-todos.ts`.
+Tasks are indexed by project for grouping. Separate task-row and empty-state
+components render the results; the parent retains dismissal focus restoration
+and routes actions through the existing callbacks.
+
 The topbar composes separate breadcrumb and connection-status displays alongside
 its actions. The connection dialog owns hosted/browser mode selection and
 composes a helper form only in local mode; all connection callbacks and state
