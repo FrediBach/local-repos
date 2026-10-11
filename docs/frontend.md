@@ -19,6 +19,7 @@ and maintenance-report contracts used by both the frontend and helper.
 | Project browsing | [`use-project-filtering.ts`](../src/hooks/use-project-filtering.ts) owns filters, search, sorting, and the current page. [`project-results.tsx`](../src/components/project-results.tsx) renders flat grid results or monorepo groups in list view, and [`project-card.tsx`](../src/components/project-card.tsx) renders each project. Grid subpackages use directory-path titles and dashed card borders. |
 | Project details | [`project-detail-dialog.tsx`](../src/components/project-detail-dialog.tsx) composes focused project tabs; controls delegate actions back to `App`. |
 | Workspace operations | [`use-workspace-actions.ts`](../src/hooks/use-workspace-actions.ts) handles helper actions, maintenance batches, automatic scans, result merging, and notices. |
+| Directory connection | [`use-workspace-connection.ts`](../src/hooks/use-workspace-connection.ts) coordinates connection, manual resync, disconnect, and metadata progress with workspace generations and batch guards. |
 | Automatic work | [`use-workspace-watcher.ts`](../src/hooks/use-workspace-watcher.ts) schedules scans; [`use-push-reminder.ts`](../src/hooks/use-push-reminder.ts) schedules Git push-status checks. |
 | Summary and todos | [`use-daily-summary.ts`](../src/hooks/use-daily-summary.ts) loads Git activity; [`use-project-todos.ts`](../src/hooks/use-project-todos.ts) derives actionable findings and reconciles dismissals. |
 | Data access | [`api.ts`](../src/lib/api.ts) calls the helper; [`filesystem.ts`](../src/lib/filesystem.ts) scans browser directory handles; [`storage.ts`](../src/lib/storage.ts) owns IndexedDB access. |
@@ -69,6 +70,12 @@ callbacks and workspace ownership remain in `App`.
 `WorkspaceStatus` groups helper activity, synchronization errors, cached-report
 guidance, and active scan progress above the selected page. It only renders the
 state supplied by the existing hooks; it does not own polling or scan lifecycles.
+
+`useWorkspaceConnection` owns the directory-operation workflow and temporary scan
+progress. It checks both global busy state and live batch activity before starting,
+preserves cached reports on resync, and stops owned workspace servers before
+switching directories or disconnecting. `App` retains workspace persistence,
+navigation, dialog state, and critical-alert state through callbacks.
 
 The rendering pipeline is:
 
