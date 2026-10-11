@@ -1,3 +1,5 @@
+import { WorkspacePage } from '@/components/workspace-page'
+import { useWorkspaceProjects } from '@/hooks/use-workspace-projects'
 import { WorkspaceBatchProgress } from '@/components/workspace-batch-progress'
 import { projectScanProgress } from '@/lib/scan-progress'
 import { useHelperState } from '@/hooks/use-helper-state'
@@ -14,15 +16,12 @@ import { ProjectDetailDialog } from '@/components/project-detail-dialog'
 import type { ProjectTab } from '@/components/project-tabs'
 import { ConnectWorkspaceDialog } from '@/components/connect-workspace-dialog'
 import { WorkspaceHelpDialog } from '@/components/workspace-help-dialog'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Folder, ShieldCheck } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { SettingsProvider, useSettings } from '@/hooks/use-settings'
 import { readThemePreference } from '@/hooks/use-theme'
 import { PREFERENCES_CHANGED_EVENT } from '@/lib/settings'
 import { createConfigBackup, mergeConfigProjects, type ConfigBackup } from '@/lib/config-backup'
-import { configureOutdatedReport } from '@/lib/outdated'
-import { DailySummary } from '@/components/daily-summary'
-import { ProjectTodos } from '@/components/project-todos'
 import { useProjectTodos } from '@/hooks/use-project-todos'
 import { useWorkspaceFavicon } from '@/hooks/use-workspace-favicon'
 import { PushReminder } from '@/components/push-reminder'
@@ -30,7 +29,6 @@ import { usePushReminder } from '@/hooks/use-push-reminder'
 import { ProjectFilters } from '@/components/project-filters'
 import { ProjectTagDialog } from '@/components/project-tags'
 import { normalizeTags, type ProjectTags } from '@/lib/project-tags'
-import { isRunning } from '@/lib/project-filters'
 import { projectCommands, type ProjectCommand } from '@/lib/project-commands'
 import type { WorkspaceCommandId } from '@/lib/project-search'
 import { useProjectFiltering } from '@/hooks/use-project-filtering'
@@ -41,14 +39,11 @@ import { useWorkspaceWatcher } from '@/hooks/use-workspace-watcher'
 import { CriticalVulnerabilityDialog } from '@/components/critical-vulnerability-dialog'
 import { mergeCriticalAlerts, newCriticalVulnerabilities, type CriticalVulnerabilityAlert } from '@/lib/critical-vulnerabilities'
 import { api, projectAction, scanWithHelper, setHelperWorkspacePath } from '@/lib/api'
-import { demoProjects } from '@/lib/demo'
 import { canReadDirectory, chooseDirectory, scanDirectory } from '@/lib/filesystem'
 import { clearWorkspace, loadFavorites, loadProjectTags, loadWorkspace, saveConfigPreferences, saveFavorites, saveProjectTags, saveWorkspace } from '@/lib/storage'
-import { activeProjects, preservePreviews, protectReportRevisions } from '@/lib/workspace'
+import { preservePreviews, protectReportRevisions } from '@/lib/workspace'
 import { isVercelHosted } from '@/lib/deployment'
 import type { PackageAudit, RepoProject, Workspace } from '@/types'
-
-const emptyProjects: RepoProject[] = []
 
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
 
@@ -98,14 +93,10 @@ function WorkspaceApp() {
   const { remoteActivityBatch, scanAllRemoteActivity, action, packageBusy, runAutomaticScan, scanProgress, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews } = useWorkspaceActions({
     workspace, busy, workspaceVersion, setBusy, setLogs, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
   })
-  const rawProjects = workspace?.projects ?? (workspaceStatus === 'ready' ? demoProjects : emptyProjects)
-  const ignoredIds = useMemo(() => new Set(workspace?.ignoredProjectIds ?? []), [workspace?.ignoredProjectIds])
-  const ignoredProjects = rawProjects.filter(project => ignoredIds.has(project.id))
-  const projects = useMemo(() => rawProjects.filter(project => !ignoredIds.has(project.id)).map(project => ({ ...project, tags: projectTags[project.id] ?? [], ...(project.outdated ? { outdated: configureOutdatedReport(project.outdated, settings) } : {}) })), [rawProjects, projectTags, settings, ignoredIds])
+  const { rawProjects, ignoredIds, ignoredProjects, projects, isDemo, running, favoriteIds, favoriteCount, stacks, availableTags } = useWorkspaceProjects(workspace, workspaceStatus, projectTags, favorites, settings)
   const projectTodos = useProjectTodos(projects, workspace)
   useWorkspaceFavicon(workspace, projects)
   const tagProject = projects.find(p => p.id === tagProjectId)
-  const availableTags = useMemo(() => normalizeTags(projects.flatMap(project => project.tags)), [projects])
   const selected = projects.find(p => p.id === selectedId)
   const activeScanProgress = metadataProgress.progress ?? scanProgress
   const selectedScanProgress = projectScanProgress(selectedId, selected?.name, scanProgress, [
@@ -116,11 +107,6 @@ function WorkspaceApp() {
     { title: 'Running Lighthouse', progress: lighthouseBatch.progress },
     { title: 'Capturing preview', progress: previewBatch.progress },
   ])
-  const isDemo = !workspace && workspaceStatus === 'ready'
-  const running = rawProjects.filter(isRunning).length
-  const favoriteIds = useMemo(() => new Set(favorites), [favorites])
-  const favoriteCount = projects.filter(p => favoriteIds.has(p.id)).length
-  const stacks = useMemo(() => [...new Set(projects.flatMap(p => p.stack))].sort((a, b) => projects.filter(p => p.stack.includes(b)).length - projects.filter(p => p.stack.includes(a)).length).slice(0, settings.sidebarTechnologyLimit), [projects, settings.sidebarTechnologyLimit])
   const { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchReset, searchScope, setSearchScope, sort, setSort, page, setPage,
     filterContext, filterGroups, searched, filtered, hasFilters, hasRefinements, clearFilters, toggleTechnology, toggleTag, navigate } = useProjectFiltering(projects, favorites)
   const watcher = useWorkspaceWatcher({ workspace, settings, busy: !!busy, online, run: runAutomaticScan })
@@ -363,14 +349,8 @@ function WorkspaceApp() {
         {activeScanProgress && <ScanProgressPanel progress={activeScanProgress} />}
         <PushReminder results={pushReminder.results} checking={pushReminder.checking} busy={!!busy} onRefresh={pushReminder.refresh} onDismiss={pushReminder.dismiss}
           onOpen={id => { const project = projects.find(project => project.id === id); if (project) openProject(project) }} />
-        {!workspace && workspaceStatus !== 'ready' ? <div className="empty-state" role="status">
-          <Folder size={24} aria-hidden="true" />
-          <h2>{workspaceStatus === 'loading' ? 'Loading saved workspace…' : 'Saved workspace could not be loaded.'}</h2>
-          {workspaceStatus === 'error' && <p>Reload to try again, or connect a directory to browse this session.</p>}
-        </div> : page === 'todos' ? <>
-          {projectTodos.storageError && <p role="alert">Todo dismissals could not be saved in this browser. They will stay dismissed for this session.</p>}
-          <ProjectTodos projects={projects} todos={projectTodos.todos} projectId={todoProjectId} onClearProject={() => setTodoProjectId(undefined)} onOpen={openProject} onDismiss={projectTodos.dismiss} isDemo={isDemo} onConnect={() => setConnectOpen(true)} />
-        </> : page === 'summary' ? <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={workspace ? activeProjects(workspace) : projects} helper={workspace?.mode === 'helper'} onConnect={() => setConnectOpen(true)} /> : <>
+        <WorkspacePage workspace={workspace} workspaceStatus={workspaceStatus} page={page} projects={projects} projectTodos={projectTodos}
+          todoProjectId={todoProjectId} onClearProject={() => setTodoProjectId(undefined)} onOpen={openProject} isDemo={isDemo} onConnect={() => setConnectOpen(true)}>
         <WorkspaceToolbar workspace={workspace} projectCount={projects.length} busy={busy} onResync={resync}
           watcherStatus={workspace && <WorkspaceWatcherStatus watcher={watcher} mode={settings.watcherMode} scanning={busy === 'watcher'} />}
           scanAllRemoteActivity={scanAllRemoteActivity} scanAllOutdated={scanAllOutdated}
@@ -391,7 +371,7 @@ function WorkspaceApp() {
           onReset={() => { navigate('all'); if (!rawProjects.length) setConnectOpen(true) }} onConnect={() => setConnectOpen(true)}
           view={view} query={query} activeTags={filters.tags} tagsReady={tagsReady} busy={busy} onOpen={openProject} onEditTags={editTags}
           onToggleFavorite={toggleFavorite} onTagFilter={toggleTag} onTechnologyFilter={toggleTechnology} onAction={action} />
-        </>}
+        </WorkspacePage>
       </div>
     </main>
 

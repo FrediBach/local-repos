@@ -62,6 +62,11 @@ restarted or older cache data lacks root identity. Version refs prevent an older
 replacing a newer connection or favorite edit. Readiness flags keep configuration
 imports and tag editing from racing initial preference restoration.
 
+`useWorkspaceProjects` prepares display projects, tag suggestions, favorites and
+technology counts from the cached workspace and preferences. `WorkspacePage`
+selects the loading/error state, todos, daily summary, or project browser; action
+callbacks and workspace ownership remain in `App`.
+
 The rendering pipeline is:
 
 1. Take scanned projects from the workspace, or use demo projects only after
