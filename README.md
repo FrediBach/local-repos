@@ -283,7 +283,7 @@ The heatmap, commit log, and grouped outdated-package cards are local adaptation
 
 ## Packages, disk usage, and maintenance
 
-Project details are split into focused tabs: **Overview** shows the preview, metadata, and latest commit, with disk usage and dependency cleanup at the end; **History** contains the commit log; and **Development** holds the server, scripts, preview capture, and logs. **Packages** lists declared dependencies, while **Vulnerabilities**, **Updates**, and **Unused** show their respective reports and actions. **React Doctor** and **Lighthouse** appear for eligible projects, and **README** shows the project documentation.
+Project details are split into focused tabs: **Overview** shows the preview, metadata, and latest commit, with disk usage and dependency cleanup at the end; **History** contains the commit log; and **Development** holds the server, scripts, preview capture, and logs. **Packages** lists declared dependencies, while **Vulnerabilities** and **Updates** show their respective reports and actions. **Metrics** shows lines of code by type and unused-package results. **React Doctor** and **Lighthouse** appear for eligible projects, and **README** shows the project documentation.
 
 Open a project’s **Packages** tab to inspect its runtime, development, peer, and optional dependencies. Package search works with either connection method and matches names case-insensitively, including scoped names. Versions are the ranges or other specifications declared in the selected project’s `package.json`, not resolved or installed versions. Resync existing workspaces to load the new dependency metadata. Monorepo subprojects appear as separate searchable projects. List view groups them under their repository; grid view shows individual cards with dashed borders and directory-path titles such as `needlescript/dist-lib`. Transitive dependencies are not included in package search.
 
@@ -371,9 +371,32 @@ The card badge shows the **performance** score, not an average. Click it for sep
 
 Successful dated reports survive rescans and reloads. Failed scans retain the previous report; package update attempts invalidate reports for all affected workspace packages. Install target-project dependencies before starting local scans. Lighthouse runs with a two-minute analysis limit, in addition to bounded startup and page checks, and the helper releases browser resources on completion, failure, or shutdown. The bundled Lighthouse version is pinned for compatibility with this app's Node.js minimum.
 
+### Code metrics
+
+Open **Metrics** in a project overview to see the total nonblank source lines,
+source-file count, and a chart of lines by code type. Both browser and helper
+connections collect these metrics during directory scans; use **Synced …** to
+resync after changing files or upgrading. Results are cached for offline use.
+
+Types are identified by extension or known filenames. Counts include comments,
+markup, styles, and configuration (such as JSON and YAML); blank lines and
+unrecognized types, including prose documents, are excluded. Root and nested
+`.gitignore` rules apply, including negation. Workspace members inherit ancestor
+rules within the selected directory; global Git excludes and `.git/info/exclude`
+are not read. Rules apply to tracked and untracked files alike.
+Dependency/build folders, lockfiles, binaries, and helper symlinks are skipped.
+A parent project includes child packages, so totals across overlapping projects
+should not be added together. Nested Git checkouts are counted separately.
+
+Each project is limited to 20,000 directory entries, 2,000 folders, 20 levels,
+1 MiB per source file, 64 KiB per ignore file, 32 MiB total reads, and a ten-second
+scan budget. Incomplete or unreadable scans are labeled **partial** with notes;
+unreadable ignore files cause their folders to be skipped. Older cached projects
+show a resync prompt rather than a zero count.
+
 ### Unused packages with Knip
 
-Open **Unused → Scan for unused packages** on a helper-connected project. Local Repos includes a pinned version of [Knip](https://knip.dev/), so the target project does not need its own Knip installation. Rebuild with `npm run build` and rebuild with `npm run build` and restart `npm run app` after updating Local Repos to load the new endpoint.
+Open **Metrics → Scan for unused packages** on a helper-connected project. Local Repos includes a pinned version of [Knip](https://knip.dev/), so the target project does not need its own Knip installation. Rebuild with `npm run build` and rebuild with `npm run build` and restart `npm run app` after updating Local Repos to load the new endpoint.
 
 The scan analyzes source files and tooling using the project's existing Knip configuration and reports potentially unused `dependencies` and `devDependencies`. Findings include the declared version, dependency type, and package.json line when available. Peer and optional dependencies are outside this report; Knip's referenced optional-peer findings are not unused packages.
 

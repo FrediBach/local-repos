@@ -249,6 +249,15 @@ export interface ProjectDocumentation {
   warnings: string[]
 }
 
+export interface CodeMetrics {
+  scannedAt: string
+  totalLines: number
+  totalFiles: number
+  languages: { name: string; lines: number; files: number }[]
+  partial: boolean
+  warnings: string[]
+}
+
 export interface RepoProject {
   reportState?: Partial<Record<HelperReportKind, HelperReportState>>
   id: string
@@ -264,6 +273,7 @@ export interface RepoProject {
   description: string
   readme?: string
   documentation?: ProjectDocumentation
+  codeMetrics?: CodeMetrics
   version?: string
   author?: string
   license?: string

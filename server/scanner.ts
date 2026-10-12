@@ -10,6 +10,7 @@ import type { RepoProject, ScanProgress, ScanProgressReporter, ScanResult } from
 import { packageFingerprint, repositoryFingerprint } from './package-fingerprint'
 import { documentationFolders } from '../src/lib/documentation'
 import { readProjectDocumentation } from './documentation'
+import { readCodeMetrics } from './code-metrics'
 
 const execFileAsync = promisify(execFile)
 const MAX_METADATA_BYTES = 256 * 1024
@@ -111,6 +112,8 @@ async function inspectProject(directory: string, root: string, names: string[], 
   if (docRoots.length) onProgress?.({ phase: 'Reading project documentation', detail })
   const documentation = await readProjectDocumentation(directory, docRoots)
   warnings.push(...documentation.warnings.map(warning => `${detail}: ${warning}`))
+  onProgress?.({ phase: 'Counting source lines', detail })
+  const codeMetrics = await readCodeMetrics(directory, root)
   if (filenames.has('.git')) onProgress?.({ phase: 'Reading Git branch, commit, and working-tree status', detail })
   const gitInfo = filenames.has('.git') ? await readGit(directory) : undefined
   onProgress?.({ phase: 'Checking project instruction files', detail })
@@ -131,6 +134,7 @@ async function inspectProject(directory: string, root: string, names: string[], 
     description: (readme && extractReadmeIntro(readme)) || metadata?.description || 'No project description yet.',
     readme,
     documentation,
+    codeMetrics,
     version: metadata?.version,
     author: metadata?.author,
     license: metadata?.license,

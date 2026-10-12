@@ -157,7 +157,7 @@ describe('Lighthouse badge and tab', () => {
     const { rerender } = render(<ProjectTabs value="unused" onChange={onChange}><p>Details</p></ProjectTabs>)
     expect(screen.queryByRole('tab', { name: 'Lighthouse' })).toBeNull()
     rerender(<ProjectTabs value="unused" onChange={onChange} frontend><p>Details</p></ProjectTabs>)
-    screen.getByRole('tab', { name: 'Unused' }).focus()
+    screen.getByRole('tab', { name: 'Metrics' }).focus()
     await user.keyboard('{ArrowRight}')
     expect(onChange).toHaveBeenLastCalledWith('lighthouse')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Lighthouse' }))

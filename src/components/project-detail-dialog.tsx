@@ -9,6 +9,7 @@ import { ProjectPackages } from './project-packages'
 import { ProjectAudit } from './project-audit'
 import { ProjectOutdated } from './project-outdated'
 import { ProjectUnused } from './project-unused'
+import { ProjectCodeMetrics } from './project-code-metrics'
 import { ProjectReactDoctor } from './project-react-doctor'
 import { ProjectLighthouse } from './project-lighthouse'
 import { ProjectDocumentation } from './project-documentation'
@@ -63,7 +64,7 @@ function DetailContent({ tab, project, activity, helper, demo, busy, packageBusy
     case 'packages': return <ProjectPackages project={project} />
     case 'vulnerabilities': return <ProjectAudit {...maintenance} />
     case 'updates': return <ProjectOutdated {...maintenance} />
-    case 'unused': return <ProjectUnused {...maintenance} />
+    case 'unused': return <><ProjectCodeMetrics report={project.codeMetrics} demo={demo} /><ProjectUnused {...maintenance} /></>
     case 'react-doctor': return <ProjectReactDoctor {...maintenance} />
     case 'lighthouse': return <ProjectLighthouse {...maintenance} />
     case 'overview': return <><DetailOverview project={project} activity={activity} /><ProjectDocumentation project={project} /><ProjectStoragePanel project={project} helper={helper} demo={demo} busy={busy} onAction={action} /></>

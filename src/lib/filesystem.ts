@@ -1,5 +1,6 @@
 import { matchesWorkspace, workspacePatterns } from './monorepo'
 import { documentationFolders, scanDocumentation } from './documentation'
+import { scanCodeMetrics, type CodeSource } from './code-metrics'
 import type { RepoProject, ScanProgressReporter, ScanResult } from '../types'
 import { aiInstructionFileNames, extractReadmeIntro, parseGitConfig, parseGitHead, parseGitLog, parsePackageJson } from './metadata'
 
@@ -103,6 +104,29 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle, onProgres
   let limitWarning = false
   const warn = (message: string) => { if (warnings.length < 20 && !warnings.includes(message)) warnings.push(message) }
 
+  const codeDirectory = async (path: string) => {
+    let parent = handle
+    for (const segment of path.split('/').filter(Boolean)) parent = await parent.getDirectoryHandle(segment)
+    return parent
+  }
+  const codeSource: CodeSource = {
+    async *entries(path) {
+      for await (const entry of (await codeDirectory(path)).values()) yield entry
+    },
+    async read(path, maxBytes) {
+      try {
+        const segments = path.split('/')
+        const name = segments.pop()!
+        const parent = await codeDirectory(segments.join('/'))
+        const file = await (await parent.getFileHandle(name)).getFile()
+        return file.size > maxBytes ? undefined : file.slice(0, maxBytes).text()
+      } catch (error) {
+        if (error instanceof Error && error.name === 'NotFoundError') return null
+        return undefined
+      }
+    },
+  }
+
   type WorkspaceContext = { project: RepoProject; patterns: string[]; depth: number; automatic: boolean }
   async function visit(directory: FileSystemDirectoryHandle, relativePath: string, depth: number, workspace?: WorkspaceContext): Promise<void> {
     if (inspected >= 500 || projects.length >= 250) {
@@ -165,6 +189,8 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle, onProgres
         },
       })
       documentation.warnings.forEach(warning => warn(`${relativePath}: ${warning}`))
+      onProgress?.({ phase: 'Counting source lines', detail: folderName })
+      const codeMetrics = await scanCodeMetrics(codeSource, relativePath === '.' ? '' : relativePath)
       const stack = [...new Set([...(pkg?.stack ?? []), ...Object.entries(markerStack).filter(([name]) => entries.has(name)).map(([, name]) => name)])]
       if (entries.has('components.json') && !stack.includes('shadcn/ui')) stack.push('shadcn/ui')
       if (entries.has('tsconfig.json') && !stack.includes('TypeScript')) stack.push('TypeScript')
@@ -181,6 +207,7 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle, onProgres
         description: extractReadmeIntro(readme ?? '') || pkg?.description || '',
         readme,
         documentation,
+        codeMetrics,
         version: pkg?.version,
         author: pkg?.author,
         license: pkg?.license,

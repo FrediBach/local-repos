@@ -82,7 +82,7 @@ describe('workspace package search', () => {
     let failure = false
     fetchMock.mockImplementation((url: string) => url.endsWith('/unused') ? failure ? response({ error: 'Knip configuration failed' }, false) : response({ unused }) : original(url))
     const details = await openProject(user)
-    await user.click(within(details).getByRole('tab', { name: 'Unused' }))
+    await user.click(within(details).getByRole('tab', { name: 'Metrics' }))
     expect(actionRequests('unused')).toHaveLength(0)
     await user.click(within(details).getByRole('button', { name: 'Scan for unused packages' }))
     await within(details).findByText('unused-package')
@@ -96,7 +96,7 @@ describe('workspace package search', () => {
     await user.click(screen.getByRole('button', { name: /Synced/ }))
     await waitFor(() => expect(actionRequests('scan')).toHaveLength(1))
     const reopened = await openProject(user)
-    await user.click(within(reopened).getByRole('tab', { name: 'Unused' }))
+    await user.click(within(reopened).getByRole('tab', { name: 'Metrics' }))
     expect(within(reopened).getByText('unused-package')).toBeTruthy()
   })
 

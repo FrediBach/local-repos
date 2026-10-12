@@ -27,6 +27,25 @@ async function fixture(name: string, metadata: unknown = { name }): Promise<stri
 }
 
 describe('local directory scanning', () => {
+  it('counts source with inherited ignore rules, rejects symlinks and refreshes metrics', async () => {
+    const directory = await fixture('metrics', { name: 'metrics', workspaces: ['app'] })
+    await fixture('metrics/app', { name: 'app' })
+    await writeFile(path.join(directory, '.gitignore'), '*.generated.ts\n')
+    await writeFile(path.join(directory, 'app/main.ts'), 'one\n\ntwo\n')
+    await writeFile(path.join(directory, 'app/out.generated.ts'), 'excluded')
+    await writeFile(path.join(temporary, 'outside.ts'), 'outside')
+    await symlink(path.join(temporary, 'outside.ts'), path.join(directory, 'linked.ts'))
+    await symlink(path.join(directory, 'app'), path.join(directory, 'linked-folder'))
+    const first = await scanDirectory(root)
+    const app = first.result.projects.find(project => project.name === 'app')!
+    expect(app.codeMetrics).toMatchObject({ totalLines: 3, totalFiles: 2, partial: false })
+    expect(first.result.projects.find(project => project.name === 'metrics')!.codeMetrics?.totalLines).toBe(4)
+    await writeFile(path.join(directory, 'app/main.ts'), 'one\n')
+    expect((await scanDirectory(root)).result.projects.find(project => project.name === 'app')!.codeMetrics?.totalLines).toBe(2)
+    await symlink(path.join(temporary, 'missing'), path.join(directory, 'app/.gitignore'))
+    expect((await scanDirectory(root)).result.projects.find(project => project.name === 'app')!.codeMetrics).toMatchObject({ totalLines: 0, partial: true })
+  })
+
   it('caches nested Markdown in documentation folders, skips symlinks, and refreshes removed docs', async () => {
     const directory = await fixture('documented')
     for (const folder of ['doc', 'docs/setup', 'documentation', 'docs/node_modules', 'docs/.hidden']) await mkdir(path.join(directory, folder), { recursive: true })

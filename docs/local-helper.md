@@ -565,3 +565,13 @@ activity. MCP analysis/report schemas are unchanged and do not expose this new
 check. The public API contracts are documented by
 [GitHub](https://docs.github.com/en/rest/issues/issues) and
 [GitLab](https://docs.gitlab.com/api/issues/).
+
+## Source line metrics
+
+[`code-metrics.ts`](../server/code-metrics.ts) supplies the shared source counter
+with canonical, no-follow file reads during metadata scans. It rejects symlinks
+and non-regular files and bounds every read. Source content is discarded after
+counting; only totals, type rows, timestamps, and partial-scan warnings enter
+`RepoProject.codeMetrics`. The existing scan reservations, registration, and
+workspace snapshots carry these metrics; no endpoint or subprocess is added.
+See [the user-facing counting rules and limits](../README.md#code-metrics).

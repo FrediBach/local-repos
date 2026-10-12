@@ -59,7 +59,7 @@ describe('project detail sections', () => {
     for (const [tab, button, action] of [
       ['Vulnerabilities', 'Scan for vulnerabilities', 'audit'],
       ['Updates', 'Scan for outdated packages', 'outdated'],
-      ['Unused', 'Scan for unused packages', 'unused'],
+      ['Metrics', 'Scan for unused packages', 'unused'],
     ]) {
       await user.click(screen.getByRole('tab', { name: tab }))
       await user.click(screen.getByRole('button', { name: button }))

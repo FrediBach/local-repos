@@ -266,8 +266,11 @@ The project dialog keeps the preview, metadata, and latest commit in **Overview*
 followed by documentation, disk usage, and dependency cleanup. **History** contains the commit
 log, and **Development** holds the server, scripts, preview capture, and logs.
 **Packages** lists declared dependencies; **Vulnerabilities**, **Updates**, and
-**Unused** contain the audit, outdated-package and minor/patch update controls,
-and Knip reports.
+**Metrics** contain the audit, outdated-package and minor/patch update controls,
+and Knip reports. Metrics also renders the optional `codeMetrics` snapshot with
+a total and accessible, labeled CSS bar charts in `project-code-metrics.tsx`.
+Missing snapshots prompt resync; partial counts retain their warnings. The tab
+keeps its internal `unused` key so existing action navigation remains valid.
 Eligible projects also show **React Doctor** and **Lighthouse**. `ProjectHistory` mounts only when **History** is
 selected, so opening the overview does not load its commit log.
 

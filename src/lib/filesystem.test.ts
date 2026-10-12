@@ -28,6 +28,17 @@ function directory(name: string, tree: Tree): FileSystemDirectoryHandle {
 }
 
 describe('read-only folder scan', () => {
+  it('counts code and inherits parent ignore rules for browser workspace members', async () => {
+    const result = await scanDirectory(directory('metrics', {
+      'package.json': '{"name":"metrics","workspaces":["app"]}',
+      '.gitignore': '*.generated.ts\n',
+      app: { 'package.json': '{"name":"app"}', 'main.ts': 'one\n\ntwo\n', 'out.generated.ts': 'excluded', '.gitignore': '/local.ts', 'local.ts': 'excluded' },
+      node_modules: { 'dependency.js': 'excluded' },
+    }))
+    expect(result.projects.find(project => project.name === 'app')?.codeMetrics).toMatchObject({ totalLines: 3, totalFiles: 2, partial: false })
+    expect(result.projects.find(project => project.name === 'metrics')?.codeMetrics?.totalLines).toBe(4)
+  })
+
   it('caches Markdown from all documentation roots, preserving nested paths and excluding generated folders', async () => {
     const result = await scanDirectory(directory('project', {
       'package.json': '{}', 'README.md': '# Home',

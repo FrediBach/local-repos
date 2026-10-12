@@ -158,7 +158,7 @@ describe('React Doctor project tab', () => {
     const { rerender } = render(<ProjectTabs value="unused" onChange={onChange}><p>Details</p></ProjectTabs>)
     expect(screen.queryByRole('tab', { name: 'React Doctor' })).toBeNull()
     rerender(<ProjectTabs value="unused" onChange={onChange} react><p>Details</p></ProjectTabs>)
-    screen.getByRole('tab', { name: 'Unused' }).focus()
+    screen.getByRole('tab', { name: 'Metrics' }).focus()
     await user.keyboard('{ArrowRight}')
     expect(onChange).toHaveBeenLastCalledWith('react-doctor')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'React Doctor' }))
