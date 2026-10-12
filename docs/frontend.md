@@ -274,7 +274,9 @@ also shows file counts and average, minimum, maximum, and median lines per file.
 A local file-type selector scopes those statistics to all types or one type;
 it also scopes the file-size histogram in `code-distribution-chart.tsx`. The SVG
 uses line ranges on the x axis and file counts on the y axis, with visible counts,
-an accessible description, and an expandable data table. Its scroll region is
+an accessible description, and an expandable data table. Distributions contain
+up to 100 bars; dense charts use sparse boundary labels and one-pixel bar gaps,
+with exact counts in hover titles and the table instead of overlapping bar labels. Its scroll region is
 keyboard accessible on narrow screens. Missing distributions prompt resync;
 empty and partial distributions are labeled explicitly. Both axes adapt to the
 selected type. The existing project total and composition chart keep their overall

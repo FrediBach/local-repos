@@ -387,9 +387,11 @@ successfully read. Older cached results need a resync to collect these statistic
 
 The **File size distribution** bar graph follows the same file-type selector.
 Its x axis shows inclusive ranges of nonblank lines per file and its y axis shows
-the number of files in each range. Up to ten equal-width ranges are chosen
+the number of files in each range. Up to 100 equal-width ranges are chosen
 automatically for the selected files, starting at zero; empty ranges remain
-visible. **View file counts by range** reveals the exact counts in a table.
+visible. Dense charts show fewer axis labels to keep them readable; hover a bar
+for its exact range and count. **View file counts by range** also reveals all
+counts in a table. Resync existing scans to use the finer ranges.
 The chart scrolls horizontally on narrow screens. Resync older cached scans to
 collect distribution data; partial distributions only include successfully read files.
 

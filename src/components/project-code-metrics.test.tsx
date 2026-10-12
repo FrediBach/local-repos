@@ -3,10 +3,26 @@ import { afterEach, expect, it } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProjectCodeMetrics } from './project-code-metrics'
+import { CodeDistributionChart } from './code-distribution-chart'
 import type { CodeMetrics } from '@/types'
 
 afterEach(cleanup)
 const report: CodeMetrics = { scannedAt: '2026-10-12T10:00:00Z', totalLines: 100, totalFiles: 3, languages: [{ name: 'TypeScript', lines: 75, files: 2 }, { name: 'CSS', lines: 25, files: 1 }], partial: false, warnings: [] }
+
+it('renders 100 visible-width bars with sparse labels and exact counts available in the table', async () => {
+  const user = userEvent.setup()
+  const buckets = Array.from({ length: 100 }, (_, index) => ({ minLines: index * 10, maxLines: index * 10 + 9, files: index + 1 }))
+  render(<CodeDistributionChart buckets={buckets} type="all file types" partial={false} />)
+  const chart = screen.getByRole('img')
+  const bars = [...chart.querySelectorAll('rect')]
+  expect(bars).toHaveLength(100)
+  expect(bars.every(bar => Number(bar.getAttribute('width')) >= 5)).toBe(true)
+  expect(chart.querySelectorAll('text').length).toBeLessThanOrEqual(20)
+  await user.click(screen.getByText('View file counts by range'))
+  const table = within(screen.getByRole('table'))
+  expect(table.getAllByRole('row')).toHaveLength(101)
+  expect(table.getByRole('row', { name: '990–999 100' })).toBeTruthy()
+})
 
 it('shows totals and readable values alongside the visual bars', () => {
   render(<ProjectCodeMetrics report={report} demo={false} />)

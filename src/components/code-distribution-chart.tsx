@@ -17,6 +17,10 @@ export function CodeDistributionChart({ buckets, type, partial }: { buckets?: Co
   const width = 646
   const height = 160
   const barWidth = width / buckets.length
+  const dense = buckets.length > 10
+  const gap = dense ? 1 : 6
+  const labelStep = Math.ceil(buckets.length / 10)
+  const boundaries = [...buckets.map((_, index) => index).filter(index => index % labelStep === 0 && index < buckets.length - labelStep * 0.75), buckets.length]
   const description = buckets.map(bucket => `${range(bucket)} lines: ${format(bucket.files)} ${bucket.files === 1 ? 'file' : 'files'}`).join('; ')
 
   return <figure className="code-distribution">
@@ -36,11 +40,15 @@ export function CodeDistributionChart({ buckets, type, partial }: { buckets?: Co
           const barHeight = bucket.files / ceiling * height
           return <g key={bucket.minLines}>
             <title>{range(bucket)} lines: {format(bucket.files)} {bucket.files === 1 ? 'file' : 'files'}</title>
-            <rect x={x + 3} y={top + height - barHeight} width={barWidth - 6} height={barHeight} rx={2} className="code-distribution-bar" />
-            {bucket.files > 0 && <text x={x + barWidth / 2} y={top + height - barHeight - 7} textAnchor="middle" className="code-distribution-count">{format(bucket.files)}</text>}
-            <text x={x + barWidth / 2} y={208} textAnchor="middle">{format(bucket.minLines)}{bucket.minLines !== bucket.maxLines && <><tspan>–</tspan><tspan x={x + barWidth / 2} dy={14}>{format(bucket.maxLines)}</tspan></>}</text>
+            <rect x={x + gap / 2} y={top + height - barHeight} width={barWidth - gap} height={barHeight} rx={dense ? 0 : 2} className="code-distribution-bar" />
+            {!dense && bucket.files > 0 && <text x={x + barWidth / 2} y={top + height - barHeight - 7} textAnchor="middle" className="code-distribution-count">{format(bucket.files)}</text>}
+            {!dense && <text x={x + barWidth / 2} y={208} textAnchor="middle">{format(bucket.minLines)}{bucket.minLines !== bucket.maxLines && <><tspan>–</tspan><tspan x={x + barWidth / 2} dy={14}>{format(bucket.maxLines)}</tspan></>}</text>}
           </g>
         })}
+        {dense && boundaries.map(index => <g key={index}>
+          <line x1={left + index * barWidth} x2={left + index * barWidth} y1={top + height} y2={top + height + 5} className="code-distribution-gridline" />
+          <text x={left + index * barWidth} y={212} textAnchor={index === 0 ? 'start' : index === buckets.length ? 'end' : 'middle'}>{format(index === buckets.length ? buckets[index - 1].maxLines + 1 : buckets[index].minLines)}</text>
+        </g>)}
         <line x1={left} x2={left} y1={top} y2={top + height} className="code-distribution-gridline" />
         <text x={left + width / 2} y={248} textAnchor="middle" className="code-distribution-axis-title">Lines of code per file</text>
       </svg>

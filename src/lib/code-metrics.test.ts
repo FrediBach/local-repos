@@ -44,7 +44,7 @@ it('calculates overall statistics from individual files, with even and odd media
   expect(report.languages.find(row => row.name === 'TypeScript')?.fileStatistics).toEqual({ average: 4, min: 0, max: 10, median: 2 })
   expect(report.languages.find(row => row.name === 'CSS')?.fileStatistics).toEqual({ average: 2.5, min: 1, max: 4, median: 2.5 })
   expect(JSON.stringify(report)).not.toContain('lineCounts')
-  expect(report.distribution?.map(bucket => bucket.files)).toEqual([3, 1, 1, 0, 0, 1])
+  expect(report.distribution?.map(bucket => bucket.files)).toEqual([2, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1])
   expect(report.languages.find(row => row.name === 'CSS')?.distribution?.map(bucket => bucket.files)).toEqual([0, 1, 0, 0, 1])
 })
 

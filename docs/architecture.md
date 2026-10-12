@@ -93,7 +93,7 @@ Only aggregate `fileStatistics` values are cached; older snapshots can omit them
 and scans with no counted files store null statistics.
 The same bounded counts produce optional overall and per-type `distribution`
 arrays via [`code-distribution.ts`](../src/lib/code-distribution.ts). These store
-at most ten equal-width inclusive line ranges and file counts, including empty
+at most 100 equal-width inclusive line ranges and file counts, including empty
 ranges, without persisting individual filenames or line-count arrays. Empty
 scans store an empty distribution; older caches may omit it.
 
