@@ -87,6 +87,10 @@ It applies scoped `.gitignore` rules within the granted root, excludes generated
 and dependency folders and nested Git checkouts, and reports partial scans.
 Metrics refresh with metadata, use the existing workspace cache and generation
 guards, and require no process execution, separate action, or report lifecycle.
+Scans retain bounded per-file line counts in memory to calculate exact overall
+and per-type averages, minima, maxima, and medians, including zero-line files.
+Only aggregate `fileStatistics` values are cached; older snapshots can omit them,
+and scans with no counted files store null statistics.
 
 The browser owns one displayed workspace and its durable cache. The helper keeps
 an in-memory registry of scanned projects and runtime resources. A helper action

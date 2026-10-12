@@ -28,8 +28,28 @@ it('counts nonblank lines including comments across newline styles, with source 
     constructor: 'unknown', 'file.__proto__': 'unknown', ts: 'not an extension',
   }))
   expect(report).toMatchObject({ totalLines: 10, totalFiles: 7, partial: false, warnings: [] })
-  expect(report.languages[0]).toEqual({ name: 'TypeScript', lines: 5, files: 2 })
-  expect(report.languages.find(row => row.name === 'Python')).toEqual({ name: 'Python', lines: 0, files: 1 })
+  expect(report.languages[0]).toMatchObject({ name: 'TypeScript', lines: 5, files: 2 })
+  expect(report.languages.find(row => row.name === 'Python')).toMatchObject({ name: 'Python', lines: 0, files: 1, fileStatistics: { average: 0, min: 0, max: 0, median: 0 } })
+})
+
+it('calculates overall statistics from individual files, with even and odd medians per type', async () => {
+  const text = (lines: number) => 'code\n'.repeat(lines)
+  const report = await scanCodeMetrics(source({
+    '.gitignore': 'ignored.ts', 'ignored.ts': text(999), 'binary.ts': '\0',
+    'a.ts': text(10), 'b.ts': text(2), 'c.ts': ' \n\t\n',
+    'a.css': text(4), 'b.css': text(1), 'empty.py': '',
+  }))
+  // [0, 0, 1, 2, 4, 10]; overall median must not average the per-type medians.
+  expect(report).toMatchObject({ totalFiles: 6, totalLines: 17, fileStatistics: { average: 17 / 6, min: 0, max: 10, median: 1.5 } })
+  expect(report.languages.find(row => row.name === 'TypeScript')?.fileStatistics).toEqual({ average: 4, min: 0, max: 10, median: 2 })
+  expect(report.languages.find(row => row.name === 'CSS')?.fileStatistics).toEqual({ average: 2.5, min: 1, max: 4, median: 2.5 })
+  expect(JSON.stringify(report)).not.toContain('lineCounts')
+})
+
+it('distinguishes zero-file statistics from single-file statistics and limits partial stats to readable files', async () => {
+  expect((await scanCodeMetrics(source({ 'README.md': 'prose' }))).fileStatistics).toEqual({ average: null, min: null, max: null, median: null })
+  const partial = await scanCodeMetrics(source({ 'main.ts': 'one\ntwo\n', 'unreadable.ts': undefined }))
+  expect(partial).toMatchObject({ totalFiles: 1, partial: true, fileStatistics: { average: 2, min: 2, max: 2, median: 2 } })
 })
 
 it('respects nested, anchored, directory, glob, escaped and negated ignore rules', async () => {

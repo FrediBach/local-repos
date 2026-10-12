@@ -1,5 +1,5 @@
 import ignore, { type Ignore } from 'ignore'
-import type { CodeMetrics } from '../types'
+import type { CodeFileStatistics, CodeMetrics } from '../types'
 
 const languages: Record<string, string> = {
   ts: 'TypeScript', tsx: 'TSX', mts: 'TypeScript', cts: 'TypeScript',
@@ -34,9 +34,21 @@ export interface CodeSource {
 type Rules = { directory: string; matcher: Ignore }[]
 const join = (directory: string, name: string) => directory ? `${directory}/${name}` : name
 
+function fileStatistics(lineCounts: number[]): CodeFileStatistics {
+  if (!lineCounts.length) return { average: null, min: null, max: null, median: null }
+  const sorted = [...lineCounts].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return {
+    average: sorted.reduce((sum, count) => sum + count, 0) / sorted.length,
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+    median: sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2,
+  }
+}
+
 /** Read-only counts, shared by both connection modes. Paths are relative to the granted root. */
 export async function scanCodeMetrics(source: CodeSource, projectPath = ''): Promise<CodeMetrics> {
-  const counts = new Map<string, { name: string; lines: number; files: number }>()
+  const counts = new Map<string, { name: string; lines: number; files: number; lineCounts: number[] }>()
   const warnings = new Set<string>()
   let entries = 0
   let folders = 0
@@ -100,9 +112,10 @@ export async function scanCodeMetrics(source: CodeSource, projectPath = ''): Pro
         bytes += new TextEncoder().encode(text).byteLength
         if (text.includes('\0')) continue
         const lines = text.split(/\r\n|\n|\r/).filter(line => line.trim().length > 0).length
-        const row = counts.get(language) ?? { name: language, lines: 0, files: 0 }
+        const row = counts.get(language) ?? { name: language, lines: 0, files: 0, lineCounts: [] }
         row.lines += lines
         row.files += 1
+        row.lineCounts.push(lines)
         counts.set(language, row)
       }
     } catch {
@@ -130,6 +143,6 @@ export async function scanCodeMetrics(source: CodeSource, projectPath = ''): Pro
   } catch {
     warnings.add('Parent .gitignore rules could not be read safely. Counts are unavailable.')
   }
-  const rows = [...counts.values()].sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name))
-  return { scannedAt: new Date().toISOString(), totalLines: rows.reduce((sum, row) => sum + row.lines, 0), totalFiles: rows.reduce((sum, row) => sum + row.files, 0), languages: rows, partial: warnings.size > 0, warnings: [...warnings] }
+  const rows = [...counts.values()].map(({ lineCounts, ...row }) => ({ ...row, fileStatistics: fileStatistics(lineCounts) })).sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name))
+  return { scannedAt: new Date().toISOString(), totalLines: rows.reduce((sum, row) => sum + row.lines, 0), totalFiles: rows.reduce((sum, row) => sum + row.files, 0), fileStatistics: fileStatistics([...counts.values()].flatMap(row => row.lineCounts)), languages: rows, partial: warnings.size > 0, warnings: [...warnings] }
 }

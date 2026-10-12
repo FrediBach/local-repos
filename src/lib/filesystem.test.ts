@@ -35,7 +35,7 @@ describe('read-only folder scan', () => {
       app: { 'package.json': '{"name":"app"}', 'main.ts': 'one\n\ntwo\n', 'out.generated.ts': 'excluded', '.gitignore': '/local.ts', 'local.ts': 'excluded' },
       node_modules: { 'dependency.js': 'excluded' },
     }))
-    expect(result.projects.find(project => project.name === 'app')?.codeMetrics).toMatchObject({ totalLines: 3, totalFiles: 2, partial: false })
+    expect(result.projects.find(project => project.name === 'app')?.codeMetrics).toMatchObject({ totalLines: 3, totalFiles: 2, partial: false, fileStatistics: { average: 1.5, min: 1, max: 2, median: 1.5 } })
     expect(result.projects.find(project => project.name === 'metrics')?.codeMetrics?.totalLines).toBe(4)
   })
 

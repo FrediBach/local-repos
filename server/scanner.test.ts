@@ -38,7 +38,7 @@ describe('local directory scanning', () => {
     await symlink(path.join(directory, 'app'), path.join(directory, 'linked-folder'))
     const first = await scanDirectory(root)
     const app = first.result.projects.find(project => project.name === 'app')!
-    expect(app.codeMetrics).toMatchObject({ totalLines: 3, totalFiles: 2, partial: false })
+    expect(app.codeMetrics).toMatchObject({ totalLines: 3, totalFiles: 2, partial: false, fileStatistics: { average: 1.5, min: 1, max: 2, median: 1.5 } })
     expect(first.result.projects.find(project => project.name === 'metrics')!.codeMetrics?.totalLines).toBe(4)
     await writeFile(path.join(directory, 'app/main.ts'), 'one\n')
     expect((await scanDirectory(root)).result.projects.find(project => project.name === 'app')!.codeMetrics?.totalLines).toBe(2)

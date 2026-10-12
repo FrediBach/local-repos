@@ -14,4 +14,14 @@
 .code-metrics-track { height: 5px; background: var(--surface-muted); border-radius: 2px; overflow: hidden; }
 .code-metrics-track span { display: block; height: 100%; border-radius: inherit; }
 .code-metrics-warning { border-left: 3px solid var(--warning); padding: 1px 12px; background: var(--warning-soft); font-size: .875rem; }
+.code-file-statistics { margin-bottom: 24px; }
+.code-file-statistics-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.code-file-statistics-heading h4 { margin: 0; font-size: .875rem; font-weight: 600; }
+.code-file-statistics-heading label { display: flex; align-items: center; gap: 8px; font-size: .8125rem; color: var(--muted-foreground); }
+.code-file-statistics-heading select { max-width: 100%; min-width: 0; padding: 7px 10px; border: 1px solid var(--control-border); border-radius: 4px; background: var(--surface); color: var(--foreground); }
+.code-file-statistics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: var(--border); }
+.code-file-statistics-grid > div { padding: 12px 16px; background: var(--surface-muted); }
+.code-file-statistics-grid dt { font-size: .8125rem; color: var(--muted-foreground); }
+.code-file-statistics-grid dd { margin: 4px 0 0; font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 @media (max-width: 520px) { .code-metrics-chart ul { grid-template-columns: 1fr; } }
+@media (max-width: 380px) { .code-file-statistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

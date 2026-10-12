@@ -378,6 +378,13 @@ source-file count, and a chart of lines by code type. Both browser and helper
 connections collect these metrics during directory scans; use **Synced …** to
 resync after changing files or upgrading. Results are cached for offline use.
 
+The **Lines per file** section shows file and line counts plus the average,
+minimum, maximum, and median lines per file. Choose **All file types** or a
+specific **File type** to change the statistics. Average and median display up to
+one decimal place. Empty and blank-only source files count as zero lines; a scan
+with no counted files shows dashes for statistics. Partial scans use only files
+successfully read. Older cached results need a resync to collect these statistics.
+
 Types are identified by extension or known filenames. Counts include comments,
 markup, styles, and configuration (such as JSON and YAML); blank lines and
 unrecognized types, including prose documents, are excluded. Root and nested

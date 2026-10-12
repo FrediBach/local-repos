@@ -249,11 +249,20 @@ export interface ProjectDocumentation {
   warnings: string[]
 }
 
+export interface CodeFileStatistics {
+  average: number | null
+  min: number | null
+  max: number | null
+  median: number | null
+}
+
 export interface CodeMetrics {
   scannedAt: string
   totalLines: number
   totalFiles: number
-  languages: { name: string; lines: number; files: number }[]
+  /** Older cached scans omit per-file statistics. Empty scans use null values. */
+  fileStatistics?: CodeFileStatistics
+  languages: { name: string; lines: number; files: number; fileStatistics?: CodeFileStatistics }[]
   partial: boolean
   warnings: string[]
 }
