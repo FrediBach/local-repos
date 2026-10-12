@@ -75,3 +75,32 @@ it('distinguishes missing data, partial results, and a completed empty scan', ()
   rerender(<ProjectCodeMetrics report={{ ...report, totalLines: 0, totalFiles: 0, languages: [] }} demo={false} />)
   expect(screen.getByText('No nonblank lines found in recognized source files.')).toBeTruthy()
 })
+
+it('plots the selected file type and exposes exact range counts in an accessible table', async () => {
+  const user = userEvent.setup()
+  render(<ProjectCodeMetrics report={{ ...report,
+    distribution: [{ minLines: 0, maxLines: 49, files: 2 }, { minLines: 50, maxLines: 99, files: 1 }],
+    languages: report.languages.map(row => ({ ...row, distribution: [{ minLines: 0, maxLines: 49, files: 1 }, { minLines: 50, maxLines: 99, files: row.name === 'CSS' ? 0 : 1 }] })),
+  }} demo={false} />)
+  expect(screen.getByRole('img', { name: /File size distribution for all file types/ })).toBeTruthy()
+  await user.click(screen.getByText('View file counts by range'))
+  const table = within(screen.getByRole('table', { name: 'File size distribution for all file types' }))
+  expect(table.getByRole('row', { name: '0–49 2' })).toBeTruthy()
+  expect(table.getByRole('row', { name: '50–99 1' })).toBeTruthy()
+  await user.selectOptions(screen.getByRole('combobox', { name: 'File type' }), 'CSS')
+  expect(screen.getByRole('img', { name: /File size distribution for CSS/ })).toBeTruthy()
+  expect(within(screen.getByRole('table', { name: 'File size distribution for CSS' })).getByRole('row', { name: '50–99 0' })).toBeTruthy()
+  await user.selectOptions(screen.getByRole('combobox', { name: 'File type' }), '')
+  expect(screen.getByRole('img', { name: /File size distribution for all file types/ })).toBeTruthy()
+})
+
+it('distinguishes missing distributions, empty scans and zero-line files, and labels partial graphs', () => {
+  const { rerender } = render(<ProjectCodeMetrics report={report} demo={false} />)
+  expect(screen.getByText('Resync your directory to collect the file-size distribution.')).toBeTruthy()
+  expect(screen.queryByRole('img')).toBeNull()
+  rerender(<ProjectCodeMetrics report={{ ...report, distribution: [], totalFiles: 0, totalLines: 0, languages: [] }} demo={false} />)
+  expect(screen.getByText('No counted files to plot.')).toBeTruthy()
+  rerender(<ProjectCodeMetrics report={{ ...report, distribution: [{ minLines: 0, maxLines: 0, files: 1 }], totalFiles: 1, totalLines: 0, languages: [], partial: true }} demo={false} />)
+  expect(screen.getByRole('img', { name: /0 lines: 1 file/ })).toBeTruthy()
+  expect(screen.getByText('· partial scan')).toBeTruthy()
+})

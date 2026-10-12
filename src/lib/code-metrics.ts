@@ -1,4 +1,5 @@
 import ignore, { type Ignore } from 'ignore'
+import { codeDistribution } from './code-distribution'
 import type { CodeFileStatistics, CodeMetrics } from '../types'
 
 const languages: Record<string, string> = {
@@ -143,6 +144,7 @@ export async function scanCodeMetrics(source: CodeSource, projectPath = ''): Pro
   } catch {
     warnings.add('Parent .gitignore rules could not be read safely. Counts are unavailable.')
   }
-  const rows = [...counts.values()].map(({ lineCounts, ...row }) => ({ ...row, fileStatistics: fileStatistics(lineCounts) })).sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name))
-  return { scannedAt: new Date().toISOString(), totalLines: rows.reduce((sum, row) => sum + row.lines, 0), totalFiles: rows.reduce((sum, row) => sum + row.files, 0), fileStatistics: fileStatistics([...counts.values()].flatMap(row => row.lineCounts)), languages: rows, partial: warnings.size > 0, warnings: [...warnings] }
+  const rows = [...counts.values()].map(({ lineCounts, ...row }) => ({ ...row, fileStatistics: fileStatistics(lineCounts), distribution: codeDistribution(lineCounts) })).sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name))
+  const allLineCounts = [...counts.values()].flatMap(row => row.lineCounts)
+  return { scannedAt: new Date().toISOString(), totalLines: rows.reduce((sum, row) => sum + row.lines, 0), totalFiles: rows.reduce((sum, row) => sum + row.files, 0), fileStatistics: fileStatistics(allLineCounts), distribution: codeDistribution(allLineCounts), languages: rows, partial: warnings.size > 0, warnings: [...warnings] }
 }

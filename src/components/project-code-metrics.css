@@ -23,5 +23,18 @@
 .code-file-statistics-grid > div { padding: 12px 16px; background: var(--surface-muted); }
 .code-file-statistics-grid dt { font-size: .8125rem; color: var(--muted-foreground); }
 .code-file-statistics-grid dd { margin: 4px 0 0; font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.code-distribution { margin: 22px 0 0; }
+.code-distribution figcaption { font-size: .875rem; font-weight: 600; margin-bottom: 12px; }
+.code-distribution figcaption span { font-weight: 400; color: var(--muted-foreground); }
+.code-distribution-scroll { max-width: 100%; overflow-x: auto; }
+.code-distribution svg { display: block; width: 100%; min-width: 540px; font-size: 12px; fill: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.code-distribution-axis-title, .code-distribution-count { fill: var(--foreground); font-weight: 600; }
+.code-distribution-gridline { stroke: var(--border); stroke-width: 1; }
+.code-distribution-bar { fill: var(--accent); }
+.code-distribution-data { margin-top: 8px; font-size: .8125rem; color: var(--muted-foreground); }
+.code-distribution-data summary { cursor: pointer; width: fit-content; }
+.code-distribution-data table { width: 100%; margin-top: 12px; border-collapse: collapse; color: var(--foreground); }
+.code-distribution-data th, .code-distribution-data td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+.code-distribution-data td { font-variant-numeric: tabular-nums; }
 @media (max-width: 520px) { .code-metrics-chart ul { grid-template-columns: 1fr; } }
 @media (max-width: 380px) { .code-file-statistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

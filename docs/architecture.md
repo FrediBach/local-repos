@@ -91,6 +91,11 @@ Scans retain bounded per-file line counts in memory to calculate exact overall
 and per-type averages, minima, maxima, and medians, including zero-line files.
 Only aggregate `fileStatistics` values are cached; older snapshots can omit them,
 and scans with no counted files store null statistics.
+The same bounded counts produce optional overall and per-type `distribution`
+arrays via [`code-distribution.ts`](../src/lib/code-distribution.ts). These store
+at most ten equal-width inclusive line ranges and file counts, including empty
+ranges, without persisting individual filenames or line-count arrays. Empty
+scans store an empty distribution; older caches may omit it.
 
 The browser owns one displayed workspace and its durable cache. The helper keeps
 an in-memory registry of scanned projects and runtime resources. A helper action

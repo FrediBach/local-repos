@@ -272,8 +272,13 @@ a total and accessible, labeled CSS bar charts in `project-code-metrics.tsx`.
 Missing snapshots prompt resync; partial counts retain their warnings. The tab
 also shows file counts and average, minimum, maximum, and median lines per file.
 A local file-type selector scopes those statistics to all types or one type;
-the project total and composition chart keep their overall scope. Missing cached
-statistics prompt resync, while empty scans display dashes. The selector falls
+it also scopes the file-size histogram in `code-distribution-chart.tsx`. The SVG
+uses line ranges on the x axis and file counts on the y axis, with visible counts,
+an accessible description, and an expandable data table. Its scroll region is
+keyboard accessible on narrow screens. Missing distributions prompt resync;
+empty and partial distributions are labeled explicitly. Both axes adapt to the
+selected type. The existing project total and composition chart keep their overall
+scope. Missing cached statistics prompt resync, while empty scans display dashes. The selector falls
 back to all types if its chosen type disappears during a rescan. The tab
 keeps its internal `unused` key so existing action navigation remains valid.
 Eligible projects also show **React Doctor** and **Lighthouse**. `ProjectHistory` mounts only when **History** is

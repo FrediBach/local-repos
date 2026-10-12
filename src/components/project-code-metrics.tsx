@@ -1,6 +1,7 @@
 import { ChartNoAxesCombined } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { CodeMetrics } from '@/types'
+import { CodeDistributionChart } from './code-distribution-chart'
 import './project-code-metrics.css'
 
 const colors = ['var(--accent)', 'var(--info)', 'var(--warm)', 'var(--muted-foreground)', 'var(--primary)']
@@ -54,5 +55,6 @@ function FileStatistics({ report }: { report: CodeMetrics }) {
       <dt>{label}</dt><dd>{value == null ? '—' : value.toLocaleString(undefined, { maximumFractionDigits: 1 })}</dd>
     </div>)}</dl>
     <p className="maintenance-hint">{!statistics ? 'Resync your directory to collect per-file statistics.' : !files ? 'No source files were counted in this selection.' : `Based on ${selected?.name ?? 'all'} source files${report.partial ? ' successfully read in this partial scan' : ''}. Empty and blank-only files count as zero lines.`}</p>
+    <CodeDistributionChart buckets={selected ? selected.distribution : report.distribution} type={selected?.name ?? 'all file types'} partial={report.partial} />
   </section>
 }

@@ -385,6 +385,14 @@ one decimal place. Empty and blank-only source files count as zero lines; a scan
 with no counted files shows dashes for statistics. Partial scans use only files
 successfully read. Older cached results need a resync to collect these statistics.
 
+The **File size distribution** bar graph follows the same file-type selector.
+Its x axis shows inclusive ranges of nonblank lines per file and its y axis shows
+the number of files in each range. Up to ten equal-width ranges are chosen
+automatically for the selected files, starting at zero; empty ranges remain
+visible. **View file counts by range** reveals the exact counts in a table.
+The chart scrolls horizontally on narrow screens. Resync older cached scans to
+collect distribution data; partial distributions only include successfully read files.
+
 Types are identified by extension or known filenames. Counts include comments,
 markup, styles, and configuration (such as JSON and YAML); blank lines and
 unrecognized types, including prose documents, are excluded. Root and nested

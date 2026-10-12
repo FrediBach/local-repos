@@ -44,12 +44,15 @@ it('calculates overall statistics from individual files, with even and odd media
   expect(report.languages.find(row => row.name === 'TypeScript')?.fileStatistics).toEqual({ average: 4, min: 0, max: 10, median: 2 })
   expect(report.languages.find(row => row.name === 'CSS')?.fileStatistics).toEqual({ average: 2.5, min: 1, max: 4, median: 2.5 })
   expect(JSON.stringify(report)).not.toContain('lineCounts')
+  expect(report.distribution?.map(bucket => bucket.files)).toEqual([3, 1, 1, 0, 0, 1])
+  expect(report.languages.find(row => row.name === 'CSS')?.distribution?.map(bucket => bucket.files)).toEqual([0, 1, 0, 0, 1])
 })
 
 it('distinguishes zero-file statistics from single-file statistics and limits partial stats to readable files', async () => {
   expect((await scanCodeMetrics(source({ 'README.md': 'prose' }))).fileStatistics).toEqual({ average: null, min: null, max: null, median: null })
   const partial = await scanCodeMetrics(source({ 'main.ts': 'one\ntwo\n', 'unreadable.ts': undefined }))
   expect(partial).toMatchObject({ totalFiles: 1, partial: true, fileStatistics: { average: 2, min: 2, max: 2, median: 2 } })
+  expect(partial.distribution?.reduce((sum, bucket) => sum + bucket.files, 0)).toBe(1)
 })
 
 it('respects nested, anchored, directory, glob, escaped and negated ignore rules', async () => {

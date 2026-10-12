@@ -256,13 +256,20 @@ export interface CodeFileStatistics {
   median: number | null
 }
 
+export interface CodeLineBucket {
+  minLines: number
+  maxLines: number
+  files: number
+}
+
 export interface CodeMetrics {
   scannedAt: string
   totalLines: number
   totalFiles: number
   /** Older cached scans omit per-file statistics. Empty scans use null values. */
   fileStatistics?: CodeFileStatistics
-  languages: { name: string; lines: number; files: number; fileStatistics?: CodeFileStatistics }[]
+  distribution?: CodeLineBucket[]
+  languages: { name: string; lines: number; files: number; fileStatistics?: CodeFileStatistics; distribution?: CodeLineBucket[] }[]
   partial: boolean
   warnings: string[]
 }
