@@ -152,6 +152,19 @@ Monorepo packages are grouped under their outermost workspace root and their rep
 
 Choose **Todos**, directly below **Daily summary**, for important tasks from your latest successful scans. Each project contributes at most three grouped tasks: high or critical vulnerabilities, high package lag under your configured outdated-package thresholds, and React Doctor errors. Lower-priority findings, React Doctor warnings, and unused packages do not create todos. Number badges show active task counts in the sidebar and on project cards in both views; a project badge opens that project's tasks, and **All todos** returns to the full list.
 
+Search task text, types, priorities, project names, paths, technologies, or tags.
+Filter by **Projects**, **Task type**, and **Priority**; multiple selections in one
+menu match any selected value, while separate menus combine. Counts show matching
+tasks with the other filters applied. Remove individual filter chips or use
+**Clear filters** to reset search and filters within the current project scope.
+Sort by priority (critical first), project name in either direction, or newest /
+oldest scan date. Tasks stay grouped by project; date sorting orders both tasks
+and groups by their first matching scan, with unavailable dates last. Overview
+totals and scan coverage describe the full scope, and a separate result count
+shows how many tasks match. Todo controls are independent of the main project
+list, stay active during scans and dismissals, and reset when leaving Todos or
+changing directories.
+
 Use **Review scan** to open the relevant project report, or **Dismiss** to hide a task. Dismissals are saved locally for the directory and survive reloads and unchanged rescans. New important findings bring the task back; successful scans remove resolved tasks automatically, and an issue that returns after a clean scan appears again. Failed scans retain the last successful findings. A directory metadata refresh preserves existing reports; run the relevant maintenance scan to check whether an issue is resolved. Automatic maintenance scans also update the list.
 
 ## End-of-day push reminder

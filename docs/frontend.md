@@ -108,6 +108,21 @@ Tasks are indexed by project for grouping. Separate task-row and empty-state
 components render the results; the parent retains dismissal focus restoration
 and routes actions through the existing callbacks.
 
+[`use-todo-filtering.ts`](../src/hooks/use-todo-filtering.ts) owns independent,
+temporary search, multi-select filters, and sort state for this view. Pure
+[`project-todo-filtering.ts`](../src/lib/project-todo-filtering.ts) matches search
+words across task text and project metadata, combines project/type/priority
+facets, and counts alternatives while ignoring each facet's own selection.
+Sorting preserves project groups; date sorts use matching task scan times,
+placing invalid dates last. The unfiltered, project-scoped overview remains the
+source for totals and scan coverage; filtered results have a separate count and
+no-match recovery. Controls survive report changes and dismissals, reset when
+the page unmounts, and remount with workspace mode/root changes.
+[`todo-filters.tsx`](../src/components/todo-filters.tsx) and the main list reuse
+the checkbox menus and removable chips in
+[`list-filters.tsx`](../src/components/list-filters.tsx), the existing search and
+filter styles, and [`sort-control.tsx`](../src/components/sort-control.tsx).
+
 The topbar composes separate breadcrumb and connection-status displays alongside
 its actions. The connection dialog owns hosted/browser mode selection and
 composes a helper form only in local mode; all connection callbacks and state

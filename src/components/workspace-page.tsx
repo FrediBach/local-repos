@@ -29,7 +29,7 @@ export function WorkspacePage({ workspace, workspaceStatus, page, projects, proj
   </div>
   if (page === 'todos') return <>
     {projectTodos.storageError && <p role="alert">Todo dismissals could not be saved in this browser. They will stay dismissed for this session.</p>}
-    <ProjectTodos projects={projects} todos={projectTodos.todos} projectId={todoProjectId} onClearProject={onClearProject} onOpen={onOpen} onDismiss={projectTodos.dismiss} isDemo={isDemo} onConnect={onConnect} />
+    <ProjectTodos key={workspace ? `${workspace.mode}:${workspace.rootPath ?? workspace.rootName}` : 'demo'} projects={projects} todos={projectTodos.todos} projectId={todoProjectId} onClearProject={onClearProject} onOpen={onOpen} onDismiss={projectTodos.dismiss} isDemo={isDemo} onConnect={onConnect} />
   </>
   if (page === 'summary') return <DailySummary key={workspace?.rootPath ?? workspace?.rootName ?? 'demo'} projects={workspace ? activeProjects(workspace) : projects} helper={workspace?.mode === 'helper'} onConnect={onConnect} />
   return children

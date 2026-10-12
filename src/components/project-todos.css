@@ -18,6 +18,14 @@
 .todos-stats dd { margin: 12px 0 0; font-size: 1.875rem; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
 .todos-stats dd > span { color: var(--muted-foreground); font-size: 1rem; font-weight: 400; }
 .todos-stats .todos-critical-count { color: var(--danger); }
+.todos-controls { margin-bottom: 26px; }
+.toolbar.todos-toolbar { padding: 0 0 14px; gap: 12px 20px; }
+.todos-toolbar .search-box { flex: 1 1 24rem; width: auto; min-width: 0; }
+.todos-toolbar .search-box input { min-width: 0; }
+.todos-toolbar .search-box > svg { flex-shrink: 0; }
+.todos-toolbar .sort-control { flex-shrink: 0; }
+.todos-filter-fields { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: 12px; }
+.todos-filter-fields .filter-field { margin: 0; }
 .todos-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
 .todos-section-heading h3 { margin: 0; font-size: 1rem; font-weight: 500; }
 .todos-section-heading > span { color: var(--muted-foreground); font-size: .8125rem; }
@@ -51,6 +59,8 @@
 .todos-notes p { margin: 0 0 5px; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.7; }
 @media (max-width: 1100px) { .todos-stats > div { padding: 17px 14px; } }
 @media (max-width: 650px) {
+  .todos-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .todos-filter-fields .filter-field:first-child { grid-column: 1 / -1; }
   .todos-heading { flex-direction: column; gap: 16px; }
   .todos-heading h2 { font-size: 1.625rem; }
   .todos-demo { align-items: flex-start; flex-direction: column; }

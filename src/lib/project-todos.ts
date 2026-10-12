@@ -16,10 +16,13 @@ export interface ProjectTodo {
 const counted = (count: number, singular: string, plural = `${singular}s`) => `${count} ${count === 1 ? singular : plural}`
 export const projectTodoId = (projectId: string, kind: ProjectTodo['kind']) => JSON.stringify([projectId, kind])
 
+export interface ProjectTodoGroup { project: RepoProject; todos: ProjectTodo[] }
+
+const kindOrder = { security: 0, outdated: 1, 'react-doctor': 2 }
+export const compareProjectTodos = (a: ProjectTodo, b: ProjectTodo) => Number(b.priority === 'critical') - Number(a.priority === 'critical') || kindOrder[a.kind] - kindOrder[b.kind]
+
 /** Scope and summarize the displayed tasks without changing their stored order. */
 export function projectTodoOverview(projects: RepoProject[], todos: ProjectTodo[], projectId?: string) {
-  const kindOrder = { security: 0, outdated: 1, 'react-doctor': 2 }
-  const compare = (a: ProjectTodo, b: ProjectTodo) => Number(b.priority === 'critical') - Number(a.priority === 'critical') || kindOrder[a.kind] - kindOrder[b.kind]
   const selectedProject = projects.find(project => project.id === projectId)
   const visibleProjects = projectId ? projects.filter(project => project.id === projectId) : projects
   const byProject = new Map<string, ProjectTodo[]>()
@@ -28,9 +31,9 @@ export function projectTodoOverview(projects: RepoProject[], todos: ProjectTodo[
     if (group) group.push(todo)
     else byProject.set(todo.projectId, [todo])
   }
-  const groups = visibleProjects.map(project => ({ project, todos: (byProject.get(project.id) ?? []).sort(compare) }))
+  const groups = visibleProjects.map(project => ({ project, todos: (byProject.get(project.id) ?? []).sort(compareProjectTodos) }))
     .filter(group => group.todos.length > 0)
-    .sort((a, b) => compare(a.todos[0], b.todos[0]) || a.project.name.localeCompare(b.project.name))
+    .sort((a, b) => compareProjectTodos(a.todos[0], b.todos[0]) || a.project.name.localeCompare(b.project.name))
   const visibleTodos = groups.flatMap(group => group.todos)
   const scannedProjects = visibleProjects.filter(project => project.audit || project.outdated || project.reactDoctor)
   const latestScan = scannedProjects.flatMap(project => [project.audit?.scannedAt, project.outdated?.scannedAt, project.reactDoctor?.scannedAt])

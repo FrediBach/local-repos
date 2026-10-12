@@ -140,6 +140,13 @@ describe('automatic workspace todos', () => {
     expect(within(screen.getByRole('article', { name: 'Alpha todos' })).getAllByRole('listitem')).toHaveLength(3)
     expect(screen.getByRole('article', { name: 'Bravo todos' })).toBeTruthy()
     expect(screen.queryByRole('article', { name: 'Charlie todos' })).toBeNull()
+    await user.type(screen.getByRole('searchbox', { name: 'Search todos' }), 'Alpha outdated')
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(review(outdatedTitle)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Daily summary' }))
+    await user.click(todosNav())
+    expect((screen.getByRole('searchbox', { name: 'Search todos' }) as HTMLInputElement).value).toBe('')
+    expect(screen.getAllByRole('listitem')).toHaveLength(4)
   })
 
   it('opens a project badge as a filtered list and reviews the relevant project reports', async () => {
