@@ -12,7 +12,8 @@ the architecture overview, then read the guide for the area you are changing.
 - [Development](development.md): setup, commands, testing, and build workflow.
 
 [Implementation plans](plan/README.md) describe proposed work separately from the
-current implementation, starting with the [MCP server plan](plan/mcp-server.md).
+current implementation, including the [MCP server plan](plan/mcp-server.md) and
+[Git worktree support](plan/git-worktrees.md).
 
 The root [README](../README.md) is the user guide. [AGENTS.md](../AGENTS.md)
 contains instructions for agents working on the repository. Keep these documents

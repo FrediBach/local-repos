@@ -6,3 +6,5 @@ These documents describe proposed work, not currently available behavior. The
 
 - [MCP server](mcp-server.md): scope, transport, data ownership, tool and resource
   contracts, operation lifecycle, permissions, and phased delivery.
+- [Git worktrees](git-worktrees.md): discovery and identity, library and detail UI,
+  checkout navigation, operation scopes, persistence, and phased management support.
