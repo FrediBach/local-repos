@@ -727,6 +727,11 @@ workflow. Agents working on this repository should read [AGENTS.md](AGENTS.md).
 
 The helper binds only to loopback, checks the request host and origin, rejects cross-site requests, and requires `X-Local-Repos: 1` on mutating API requests. Project actions accept registered project IDs rather than arbitrary commands. It is intended to run locally alongside the app, not as a public network service.
 
+Local Repos recognizes its own repository by its Git origin
+(`github.com/FrediBach/local-repos`) and shows a “Thanks for contributing!” speech
+bubble floating above its project name in grid and list views, even if the checkout
+is renamed. The bubble does not add a row or push card details down.
+
 Hover or keyboard-focus a project card’s branch name to see up to five recent
 commits from the checked-out branch (or detached HEAD), with short hashes and
 relative dates. The local helper refreshes this snapshot during directory sync;

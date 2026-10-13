@@ -1,0 +1,38 @@
+.project-name:has(.project-contributor-note) { position: relative; }
+.projects-list .project-card:has(.project-contributor-note) { overflow: visible; margin-top: 32px; }
+.projects-list .project-card:has(.project-contributor-note) > .preview-button { border-radius: 6px 0 0 6px; }
+.project-contributor-note {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 64px));
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 3px 10px var(--shadow);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.project-contributor-note::before {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 17px;
+  width: 8px;
+  height: 8px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--accent-soft);
+  transform: rotate(45deg);
+}
+.project-contributor-note svg { flex-shrink: 0; fill: currentColor; }

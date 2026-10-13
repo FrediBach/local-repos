@@ -1,4 +1,5 @@
 import { ProjectRemoteActivity } from './project-remote-activity'
+import { ProjectContributorNote } from './project-contributor-note'
 import { ProjectBranch } from './project-branch'
 import { LoaderCircle, Star } from 'lucide-react'
 import { ProjectActionMenu } from './project-action-menu'
@@ -33,7 +34,7 @@ interface Props {
 export function ProjectCard({ project, displayName = project.name, activity, index, view, query, activeTags, tagsReady, favorite, capturing: batchCapturing, busy, onOpen, onEditTags, onToggleFavorite, onIgnore, onTagFilter, onTechnologyFilter, onAction, todoCount = 0, onTodos }: Props) {
   const capturing = batchCapturing || busy === `${project.id}:screenshot`
   const tags = <CardTags project={project} activeTags={activeTags} tagsReady={tagsReady} onTagFilter={onTagFilter} onEditTags={onEditTags} onTechnologyFilter={onTechnologyFilter} />
-  const title = <><button id={`project-open-${project.id}`} className="project-title" title={displayName} onClick={() => onOpen(project)}>{displayName}</button><ProjectAiBadge project={project} /></>
+  const title = <><button id={`project-open-${project.id}`} className="project-title" title={displayName} onClick={() => onOpen(project)}>{displayName}</button><ProjectAiBadge project={project} /><ProjectContributorNote project={project} /></>
   const favoriteButton = <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} onClick={() => onToggleFavorite(project.id)} aria-label={`${favorite ? 'Unfavorite' : 'Favorite'} ${displayName}`} aria-pressed={favorite}><Star size={16} /></button>
   const preview = <button className="preview-button" onClick={() => onOpen(project)} aria-label={`View ${displayName}`}><ProjectPreview project={project} activity={activity} />{capturing && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
   return <article className={`project-card ${view === 'grid' && project.monorepo ? 'is-subpackage' : ''} ${capturing ? 'is-capturing' : ''}`} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
