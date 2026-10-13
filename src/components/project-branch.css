@@ -1,0 +1,6 @@
+.branch[tabindex] { cursor: help; border-radius: 3px; }
+.branch-commits { list-style: none; margin: 8px 0 0; padding: 0; }
+.branch-commits li + li { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.branch-commits strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--foreground); font-weight: 500; }
+.branch-commits li > span { display: block; margin-top: 2px; font-size: 11px; }
+.branch-history-note { margin: 8px 0 0; }

@@ -1,5 +1,6 @@
 import { ProjectRemoteActivity } from './project-remote-activity'
-import { GitBranch, LoaderCircle, Star } from 'lucide-react'
+import { ProjectBranch } from './project-branch'
+import { LoaderCircle, Star } from 'lucide-react'
 import { ProjectActionMenu } from './project-action-menu'
 import { ProjectTagChips } from './project-tags'
 import { ProjectAiBadge } from './project-ai-badge'
@@ -48,7 +49,7 @@ function CardTags({ project, activeTags, tagsReady, onTagFilter, onEditTags, onT
 }
 
 function CardFooter({ project, tagsReady, favorite, busy, onOpen, onEditTags, onToggleFavorite, onIgnore, onAction, todoCount = 0, onTodos }: Pick<Props, 'project' | 'tagsReady' | 'favorite' | 'busy' | 'onOpen' | 'onEditTags' | 'onToggleFavorite' | 'onIgnore' | 'onAction' | 'todoCount' | 'onTodos'>) {
-  return <div className="project-footer">{onTodos && <ProjectTodoBadge project={project} count={todoCount} onClick={() => onTodos(project)} />}<span className="branch"><GitBranch size={13} /><span>{project.git?.branch ?? 'No Git branch'}</span>{project.git?.dirty && <i title="Uncommitted changes" />}</span><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><ProjectActionMenu project={project} tagsReady={tagsReady} favorite={favorite} busy={busy} onOpen={onOpen} onEditTags={onEditTags} onToggleFavorite={onToggleFavorite} onIgnore={onIgnore} onAction={onAction} /></div>
+  return <div className="project-footer">{onTodos && <ProjectTodoBadge project={project} count={todoCount} onClick={() => onTodos(project)} />}<ProjectBranch project={project} /><span className="project-date">{relativeTime(project.git?.committedAt ?? project.updatedAt)}</span><ProjectActionMenu project={project} tagsReady={tagsReady} favorite={favorite} busy={busy} onOpen={onOpen} onEditTags={onEditTags} onToggleFavorite={onToggleFavorite} onIgnore={onIgnore} onAction={onAction} /></div>
 }
 
 function CardStorage({ storage }: { storage: RepoProject['storage'] }) {

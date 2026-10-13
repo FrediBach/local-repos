@@ -727,6 +727,12 @@ workflow. Agents working on this repository should read [AGENTS.md](AGENTS.md).
 
 The helper binds only to loopback, checks the request host and origin, rejects cross-site requests, and requires `X-Local-Repos: 1` on mutating API requests. Project actions accept registered project IDs rather than arbitrary commands. It is intended to run locally alongside the app, not as a public network service.
 
+Hover or keyboard-focus a project card’s branch name to see up to five recent
+commits from the checked-out branch (or detached HEAD), with short hashes and
+relative dates. The local helper refreshes this snapshot during directory sync;
+no fetch is performed. Browser-only and older cached projects show the available
+latest commit and indicate when recent history is unavailable.
+
 ## POC limits
 
 - Both scanners look for repositories in the selected folder and up to two directory levels beneath it. Inside each detected repository, automatic discovery checks only its immediate subfolders for `package.json`, including repositories without a root package manifest. Declared workspaces continue to be searched up to eight levels beneath their root. Scans skip hidden folders, dependencies, and common build output. Browser scanning is limited to 500 folders and 250 projects; helper scanning is limited to 500 folders and 300 projects.

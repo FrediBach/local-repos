@@ -38,6 +38,13 @@ Project IDs are the first 20 hexadecimal characters of the SHA-256 hash of the
 canonical project directory. They remain stable across scans at the same path;
 moving a repository changes its ID.
 
+Metadata scans capture up to five local commits reachable from HEAD in optional
+`RepoProject.git.recentCommits`, using the existing bounded Git subprocess and
+a NUL-delimited log. The first record also supplies the existing latest-commit
+fields. This snapshot follows the ordinary scan/cache flow and is inherited by
+packages sharing Git metadata. Failed or unavailable logs leave history absent;
+no remote fetch or additional history request is triggered by card tooltips.
+
 ## API groups
 
 Routes and response envelopes are defined in [`server/app.ts`](../server/app.ts).

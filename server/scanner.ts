@@ -81,14 +81,22 @@ async function git(directory: string, args: string[]): Promise<string | undefine
 }
 
 async function readGit(directory: string): Promise<RepoProject['git']> {
-  const [branch, lastCommit, origin, status] = await Promise.all([
+  const [branch, commitLog, origin, status] = await Promise.all([
     git(directory, ['symbolic-ref', '--short', 'HEAD']),
-    git(directory, ['log', '-1', '--format=%H%x00%s%x00%cI']),
+    git(directory, ['-c', 'log.showSignature=false', 'log', '-5', '--no-color', '--no-decorate', '--encoding=UTF-8', '--format=%H%x00%s%x00%cI%x00', 'HEAD', '--']),
     git(directory, ['config', '--get', 'remote.origin.url']),
     git(directory, ['status', '--porcelain', '--untracked-files=normal']),
   ])
-  const [commit, message, committedAt] = lastCommit?.split('\0') ?? []
-  return { branch: branch || (commit ? 'Detached HEAD' : undefined), commit, message, committedAt, origin: origin ? normalizeGitOrigin(origin) : undefined, dirty: status === undefined ? undefined : status.length > 0 }
+  const fields = commitLog?.split('\0')
+  const recentCommits: NonNullable<RepoProject['git']>['recentCommits'] = fields ? [] : undefined
+  if (fields && recentCommits) {
+    for (let index = 0; index + 2 < fields.length; index += 3) {
+      const [hash, message, committedAt] = fields.slice(index, index + 3)
+      recentCommits.push({ hash: hash.trim(), message, committedAt })
+    }
+  }
+  const { hash: commit, message, committedAt } = recentCommits?.[0] ?? {}
+  return { branch: branch || (commit ? 'Detached HEAD' : undefined), commit, message, committedAt, recentCommits, origin: origin ? normalizeGitOrigin(origin) : undefined, dirty: status === undefined ? undefined : status.length > 0 }
 }
 
 async function inspectProject(directory: string, root: string, names: string[], warnings: string[], onProgress?: ScanProgressReporter): Promise<RegisteredProject> {

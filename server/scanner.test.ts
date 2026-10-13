@@ -246,6 +246,26 @@ describe('local directory scanning', () => {
     expect(registered.find(entry => entry.project.name === 'web')).toMatchObject({ workspaceDirectory: await realpath(monorepo), project: { packageManager: 'pnpm', monorepo: { id: parent.project.id, packagePath: 'apps/web', declaredWorkspace: true } } })
   })
 
+  it('snapshots only the latest five commits reachable from the checked-out branch', async () => {
+    const directory = await fixture('history')
+    const git = (args: string[]) => execFileAsync('git', args, { cwd: directory })
+    await git(['init', '-b', 'main'])
+    for (let index = 1; index <= 6; index++) {
+      await git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '--no-gpg-sign', '-m', `Main commit ${index}`])
+    }
+    await git(['checkout', '-b', 'other'])
+    await git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '--no-gpg-sign', '-m', 'Other branch only'])
+    await git(['checkout', 'main'])
+    const { result } = await scanDirectory(root)
+    const metadata = result.projects[0].git!
+    expect(metadata.recentCommits?.map(commit => commit.message)).toEqual([6, 5, 4, 3, 2].map(index => `Main commit ${index}`))
+    expect(metadata.recentCommits?.[0]).toEqual({ hash: metadata.commit, message: metadata.message, committedAt: metadata.committedAt })
+    await git(['checkout', '--detach', 'HEAD~1'])
+    const detached = (await scanDirectory(root)).result.projects[0].git!
+    expect(detached.branch).toBe('Detached HEAD')
+    expect(detached.recentCommits?.[0].message).toBe('Main commit 5')
+  })
+
   it('reads metadata and real git history without executing project scripts', async () => {
     const directory = await fixture('hello', {
       name: '@studio/hello', version: '1.2.3', author: { name: 'Ada' },

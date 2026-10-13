@@ -322,6 +322,8 @@ export interface RepoProject {
   packageUpdate?: PackageUpdate
   git?: {
     branch?: string
+    /** Up to five commits reachable from HEAD, captured by helper metadata scans. */
+    recentCommits?: Pick<GitCommit, 'hash' | 'message' | 'committedAt'>[]
     commit?: string
     message?: string
     committedAt?: string

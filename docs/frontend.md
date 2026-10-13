@@ -46,6 +46,12 @@ resync may request renewed permission; background scans only check permission.
 Metadata parsing and declared-workspace matching are shared through
 [`metadata.ts`](../src/lib/metadata.ts) and [`monorepo.ts`](../src/lib/monorepo.ts).
 
+Project card branch tooltips use `ProjectBranch` and the shared `ScanBadgeTooltip`
+for hover/focus access, Escape dismissal, theme styling, and scan age. They read
+optional `git.recentCommits` from the workspace snapshot, falling back to the
+existing latest commit with an unavailable-history note for older/browser data.
+Opening a tooltip issues no request.
+
 ## State and data flow
 
 `WorkspaceApp` owns the current `Workspace`, favorites, tags, connection state,
