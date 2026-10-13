@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { gitOptions, readCommits } from './git-history'
+import { gitOptions, gitReadEnvironment, readCommits, type GitReadScope } from './git-history'
 import { HelperError, isWithin, type RegisteredProject } from './scanner'
 import type { GitDay, GitDayCommit, GitDayQuery, GitHistory } from '../src/types'
 
@@ -16,13 +16,13 @@ function dayQuery(input: Record<string, unknown>): GitDayQuery {
   return { from, to }
 }
 
-export async function readGitDay(entry: RegisteredProject, input: Record<string, unknown>): Promise<GitDay> {
+export async function readGitDay(entry: RegisteredProject, input: Record<string, unknown>, scope?: GitReadScope): Promise<GitDay> {
   const { from, to } = dayQuery(input)
   const directory = entry.gitDirectory ?? entry.workspaceDirectory ?? entry.directory
   const signal = AbortSignal.timeout(50_000)
   const git = async (args: string[]) => (await exec('git', [...gitOptions, ...args], {
     cwd: directory, timeout: 10_000, signal, maxBuffer: 4 * 1024 * 1024,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' },
+    env: gitReadEnvironment(),
   })).stdout.trim()
   const result: GitDay = { available: false, shallow: false, commits: [] }
   let topLevel: string
@@ -49,7 +49,7 @@ export async function readGitDay(entry: RegisteredProject, input: Record<string,
     branches.push({ ref, name: ref.replace(/^refs\/(heads|remotes)\//, ''), remote: ref.startsWith('refs/remotes/') })
     tips.set(hash, branches)
   }
-  if (head && !tips.has(head)) tips.set(head, [])
+  for (const tip of scope?.heads ?? (head ? [head] : [])) if (!tips.has(tip)) tips.set(tip, [])
   const commits = new Map<string, GitDayCommit>()
   const pending = [...tips.entries()]
   let index = 0

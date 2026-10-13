@@ -24,7 +24,12 @@ export function PushReminder({ results, checking, busy, onRefresh, onDismiss, on
         status?.dirty ? 'Uncommitted changes — commit before pushing' : '',
         status && !status.originRefsKnown ? 'Origin status unknown — fetch origin, then recheck' : '',
         status?.shallow ? 'Shallow clone; history is limited' : '',
+        status?.coverage === 'partial' ? 'Some worktrees could not be checked' : '',
       ].filter(Boolean).join(' · ')}</span>
+      {status?.checkouts?.filter(checkout => checkout.dirty || checkout.error).map(checkout => <span key={checkout.worktreeId}>
+        <button className="push-reminder-project" onClick={() => onOpen(checkout.projectId)}>{checkout.path}</button>
+        {checkout.error ? `Check unavailable: ${checkout.error}` : 'Uncommitted changes'}
+      </span>)}
     </li>)}</ul>
     <div className="push-reminder-footer"><p>Based on locally known origin branches. Recheck after pushing; fetch origin first if its status may be out of date.</p><Button variant="outline" size="sm" disabled={checking || busy} onClick={onRefresh}><RefreshCw size={14} className={checking ? 'spinning' : ''} />{checking ? 'Checking…' : 'Recheck'}</Button></div>
   </section>

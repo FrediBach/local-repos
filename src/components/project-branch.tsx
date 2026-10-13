@@ -1,12 +1,13 @@
 import { GitBranch } from 'lucide-react'
 import { ScanBadgeTooltip } from './scan-badge-tooltip'
+import { projectBranchLabel } from '@/lib/project-worktrees'
 import { relativeTime } from '@/lib/relative-time'
 import type { RepoProject } from '@/types'
 import './project-branch.css'
 
 export function ProjectBranch({ project }: { project: RepoProject }) {
   const git = project.git
-  const label = git?.branch ?? 'No Git branch'
+  const label = projectBranchLabel(project)
   const commits = git?.recentCommits ?? (git?.commit ? [{ hash: git.commit, message: git.message ?? '', committedAt: git.committedAt ?? '' }] : [])
   const trigger = <span className="branch" tabIndex={git ? 0 : undefined}><GitBranch size={13} aria-hidden="true" /><span>{label}</span>{git?.dirty && <i title="Uncommitted changes" />}</span>
   if (!git) return trigger

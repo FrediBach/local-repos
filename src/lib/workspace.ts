@@ -19,6 +19,15 @@ export function packageWorkspaceId(project: RepoProject): string {
 /** Keep durable previews and dated maintenance results across helper restarts. */
 export function preservePreviews(next: Workspace, previous?: Workspace): Workspace {
   if (!previous) return next
+  if (next.mode === previous.mode && next.rootPath === previous.rootPath && next.rootName === previous.rootName && next.repositories) {
+    const inventories = new Map(previous.repositories?.map(repository => [repository.id, repository]))
+    next = { ...next, repositories: next.repositories.map(repository => {
+      const cached = inventories.get(repository.id)
+      return repository.status === 'unavailable' && cached
+        ? { ...cached, status: 'unavailable', error: repository.error ?? 'Could not refresh worktrees.' }
+        : repository
+    }) }
+  }
   const saved = new Map(previous.projects.map(project => [project.id, project]))
   return { ...next, ...(previous.mode === next.mode && previous.rootPath === next.rootPath && previous.rootName === next.rootName ? { ignoredProjectIds: previous.ignoredProjectIds } : {}), projects: next.projects.map(project => {
     const cached = saved.get(project.id)
@@ -52,6 +61,22 @@ export function preservePreviews(next: Workspace, previous?: Workspace): Workspa
 /** Protect local writes built from an older render without reviving explicitly cleared data. */
 export function protectReportRevisions(next: Workspace, previous?: Workspace): Workspace {
   if (previous?.rootPath !== next.rootPath || previous?.mode !== 'helper' || next.mode !== 'helper') return next
+  if (previous.helperInstanceId === next.helperInstanceId && previous.revision !== undefined && previous.revision > (next.revision ?? 0)) {
+    const proposed = new Map(next.projects.map(project => [project.id, project]))
+    // An action may finish using a workspace captured before a metadata scan.
+    // Keep the newer membership and metadata; only report results can merge in.
+    next = { ...next, rootId: previous.rootId, rootName: previous.rootName, syncedAt: previous.syncedAt, repositories: previous.repositories, warnings: previous.warnings, projects: previous.projects.map(saved => {
+      const incoming = proposed.get(saved.id)
+      if (!incoming) return saved
+      const merged: RepoProject = { ...saved, reportState: incoming.reportState }
+      for (const kind of reportKinds) Object.assign(merged, { [kind]: incoming[kind] })
+      if (incoming.preview && (!saved.preview || Date.parse(incoming.preview.capturedAt) >= Date.parse(saved.preview.capturedAt))) {
+        merged.preview = incoming.preview
+        merged.screenshot = incoming.screenshot
+      }
+      return merged
+    }) }
+  }
   const cached = new Map(previous.projects.map(project => [project.id, project]))
   return { ...next, ...(previous.helperInstanceId === next.helperInstanceId && previous.revision !== undefined ? { revision: Math.max(previous.revision, next.revision ?? 0) } : {}), projects: next.projects.map(project => {
     const saved = cached.get(project.id)

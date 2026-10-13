@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { projectDay } from '@/lib/api'
-import { dayRange, summaryRepositories, type SummaryRepository, type SummaryResult } from '@/lib/daily-summary'
+import { projectDay, repositoryDay } from '@/lib/api'
+import { dayRange, repositoryScope, summaryRepositories, type SummaryRepository, type SummaryResult } from '@/lib/daily-summary'
 import type { RepoProject } from '@/types'
 
 /** Load at most three repositories at a time and discard results from stale requests. */
-export function useDailySummary(projects: RepoProject[], helper: boolean, day: string, revision: number) {
+export function useDailySummary(projects: RepoProject[], helper: boolean, day: string, revision: number, rootId?: string) {
   const [state, setState] = useState<{ key: string; results: SummaryResult[] }>({ key: '', results: [] })
   const repositories = summaryRepositories(projects)
   const repositoryKey = JSON.stringify(repositories)
-  const key = JSON.stringify([day, revision, repositoryKey, helper])
+  const key = JSON.stringify([day, revision, repositoryKey, helper, rootId])
   const range = dayRange(day)
 
   useEffect(() => {
@@ -25,13 +25,14 @@ export function useDailySummary(projects: RepoProject[], helper: boolean, day: s
       while (active && index < sources.length) {
         const project = sources[index++]
         let result: SummaryResult
-        try { result = { project, data: await projectDay(project.id, query) } }
+        const scope = repositoryScope(project, rootId)
+        try { result = { project, data: await (scope ? repositoryDay(project.id, scope, query) : projectDay(project.id, query)) } }
         catch (error) { result = { project, error: error instanceof Error ? error.message : 'Could not load commits.' } }
         if (active) setState(previous => ({ key, results: [...previous.results, result] }))
       }
     }))
     return () => { active = false }
-  }, [day, helper, repositoryKey, revision, key])
+  }, [day, helper, repositoryKey, revision, key, rootId])
 
   const results = useMemo(() => state.key === key ? state.results : [], [state, key])
   const loading = helper && !!range && (state.key !== key || results.length < repositories.length)

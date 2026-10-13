@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import path from 'node:path'
 import type { HelperReportKind, RepoProject } from '../src/types'
 import { packageMatches } from '../src/lib/packages'
 import { discoverProjectScripts } from '../src/lib/project-scripts'
@@ -117,7 +118,7 @@ export class ProjectIndex {
   }
   summary(principal: Principal, entry: RegisteredProject, rootId?: string) {
     const p = entry.project
-    const snapshot = digest([p.dev, p.dependencies, p.scripts, p.git])
+    const snapshot = digest([p.dev, p.dependencies, p.scripts, p.git, p.gitContext])
     const prior = this.snapshots.get(p.id)
     if (prior && prior !== snapshot) this.application.revision++
     this.snapshots.set(p.id, snapshot)
@@ -136,7 +137,24 @@ export class ProjectIndex {
     const description = bounded('description', p.description, 2048)
     const stack = p.stack.slice(0, 64).map(value => bounded('stack', value, 128))
     if (p.stack.length > stack.length) truncatedFields.push('stack')
-    return { id: p.id, name, description, stack, truncatedFields: [...new Set(truncatedFields)], packageManager: p.packageManager, hasPackageJson: !!p.hasPackageJson, rootMemberships: memberships, selectedMembership: rootId ? memberships.find(value => value.rootId === rootId) : undefined, visualGroupId: p.monorepo && visible.has(p.monorepo.id) ? p.monorepo.id : undefined, packageWorkspaceId: workspace?.project.id, git: p.git && (!entry.gitDirectory || principal.roots.some(root => isWithin(root.directory, entry.gitDirectory!))) ? { branch: p.git.branch, dirty: p.git.dirty } : undefined, devStatus: p.dev?.status ?? 'stopped', reports: s.reportKind.options.map(kind => this.reportSummary(p, kind)), scannedAt: p.scannedAt }
+    const context = p.gitContext
+    const gitContext = context?.state === 'verified' && entry.gitIdentity && principal.roots.some(root => isWithin(root.directory, entry.gitIdentity!.checkoutDirectory)) ? { state: context.state, repositoryId: context.repositoryId, worktreeId: context.worktreeId, role: context.role } : undefined
+    return { id: p.id, name, description, stack, truncatedFields: [...new Set(truncatedFields)], packageManager: p.packageManager, hasPackageJson: !!p.hasPackageJson, rootMemberships: memberships, selectedMembership: rootId ? memberships.find(value => value.rootId === rootId) : undefined, visualGroupId: p.monorepo && visible.has(p.monorepo.id) ? p.monorepo.id : undefined, packageWorkspaceId: workspace?.project.id, git: p.git && (!entry.gitDirectory || principal.roots.some(root => isWithin(root.directory, entry.gitDirectory!))) ? { branch: p.git.branch, dirty: p.git.dirty } : undefined, gitContext, devStatus: p.dev?.status ?? 'stopped', reports: s.reportKind.options.map(kind => this.reportSummary(p, kind)), scannedAt: p.scannedAt }
+  }
+  repository(principal: Principal, entry: RegisteredProject) {
+    const context = entry.project.gitContext
+    if (context?.state !== 'verified') return undefined
+    const rows = new Map<string, { id: string; projectId: string; role: 'main' | 'linked'; path?: string; branch?: string; head?: string; dirty?: boolean }>()
+    for (const member of this.entries(principal)) {
+      const memberContext = member.project.gitContext
+      if (memberContext?.state !== 'verified' || memberContext.repositoryId !== context.repositoryId || !member.gitIdentity) continue
+      const grant = principal.roots.find(root => isWithin(root.directory, member.gitIdentity!.checkoutDirectory))
+      if (!grant || rows.has(memberContext.worktreeId)) continue
+      // Build from authorized memberships, never redact an unrestricted worktree list.
+      rows.set(memberContext.worktreeId, { id: memberContext.worktreeId, projectId: member.project.id, role: memberContext.role, ...(principal.disclosePaths ? { path: path.relative(grant.directory, member.gitIdentity.checkoutDirectory) || '.' } : {}), branch: member.project.git?.branch, head: member.project.git?.commit, dirty: member.project.git?.dirty })
+    }
+    if (!rows.size) return undefined
+    return { id: context.repositoryId, scope: 'authorized-checkouts' as const, sharedRefs: true as const, worktrees: [...rows.values()] }
   }
   list(principal: Principal, query: ListQuery) {
     const f = query.filters
@@ -184,7 +202,7 @@ export class ProjectIndex {
   detail(principal: Principal, projectId: string, include: string[] = []) {
     const entry = this.entry(principal, projectId), p = entry.project
     const visible = new Set(this.entries(principal).map(entry => entry.project.id))
-    return clean({ ...this.summary(principal, entry), version: p.version, author: p.author, license: p.license, homepage: p.homepage, origin: !entry.gitDirectory || principal.roots.some(root => isWithin(root.directory, entry.gitDirectory!)) ? p.git?.origin : undefined, aiInstructionFiles: p.aiInstructionFiles ?? [], relatedProjectIds: this.application.registry.related(projectId).map(entry => entry.project.id).filter(id => visible.has(id)), capabilities: { analysis: principal.capabilities.includes('analysis'), development: principal.capabilities.includes('development'), mutation: principal.capabilities.includes('maintenance') && !!principal.maintenanceAutomation?.length, disabledReason: 'Checks require analysis and their network/project-execution capabilities. Development starts require development, network, and project-execution. Maintenance requires maintenance permission; applies additionally require local scoped automation grants.' }, resources: [`local-repos://v1/projects/${projectId}`, ...(principal.discloseContent ? [`local-repos://v1/projects/${projectId}/readme`] : []), ...s.reportKind.options.map(kind => `local-repos://v1/projects/${projectId}/reports/${kind}`), ...(p.preview && principal.discloseContent ? [`local-repos://v1/projects/${projectId}/preview`] : [])], ...(include.includes('dependencies') ? { dependencies: this.dependencies(principal, projectId, {}) } : {}), ...(include.includes('scripts') ? { scripts: this.scripts(principal, projectId, {}) } : {}), preview: p.preview ? { capturedAt: p.preview.capturedAt, source: p.preview.source, kind: p.preview.kind, url: p.preview.url } : undefined }, principal)
+    return clean({ ...this.summary(principal, entry), repository: this.repository(principal, entry), version: p.version, author: p.author, license: p.license, homepage: p.homepage, origin: !entry.gitDirectory || principal.roots.some(root => isWithin(root.directory, entry.gitDirectory!)) ? p.git?.origin : undefined, aiInstructionFiles: p.aiInstructionFiles ?? [], relatedProjectIds: this.application.registry.related(projectId).map(entry => entry.project.id).filter(id => visible.has(id)), capabilities: { analysis: principal.capabilities.includes('analysis'), development: principal.capabilities.includes('development'), mutation: principal.capabilities.includes('maintenance') && !!principal.maintenanceAutomation?.length, disabledReason: 'Checks require analysis and their network/project-execution capabilities. Development starts require development, network, and project-execution. Maintenance requires maintenance permission; applies additionally require local scoped automation grants.' }, resources: [`local-repos://v1/projects/${projectId}`, ...(principal.discloseContent ? [`local-repos://v1/projects/${projectId}/readme`] : []), ...s.reportKind.options.map(kind => `local-repos://v1/projects/${projectId}/reports/${kind}`), ...(p.preview && principal.discloseContent ? [`local-repos://v1/projects/${projectId}/preview`] : [])], ...(include.includes('dependencies') ? { dependencies: this.dependencies(principal, projectId, {}) } : {}), ...(include.includes('scripts') ? { scripts: this.scripts(principal, projectId, {}) } : {}), preview: p.preview ? { capturedAt: p.preview.capturedAt, source: p.preview.source, kind: p.preview.kind, url: p.preview.url } : undefined }, principal)
   }
   readme(principal: Principal, projectId: string, query: { cursor?: string; maxBytes?: number }) {
     if (!principal.discloseContent) throw new McpFailure('CAPABILITY_DISABLED', 'README content disclosure is disabled.')

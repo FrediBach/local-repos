@@ -1,4 +1,4 @@
-import type { RepoProject } from '@/types'
+import type { GitRepository, RepoProject } from '@/types'
 
 interface MonorepoIdentity {
   id: string
@@ -9,6 +9,8 @@ interface MonorepoIdentity {
 export interface ProjectResultGroup {
   id: string
   monorepo?: MonorepoIdentity
+  repository?: GitRepository
+  checkouts?: { id: string; path: string; items: ProjectResultGroup['items'] }[]
   items: { project: RepoProject; index: number }[]
 }
 
@@ -23,7 +25,8 @@ export function projectGridTitle(project: RepoProject, allProjects: RepoProject[
 }
 
 /** Keep related projects together at their first position in the selected sort. */
-export function groupProjectResults(projects: RepoProject[], allProjects = projects): ProjectResultGroup[] {
+export function groupProjectResults(projects: RepoProject[], allProjects = projects, repositories: readonly GitRepository[] = []): ProjectResultGroup[] {
+  const families = new Map(repositories.filter(repository => repository.worktrees.filter(worktree => worktree.role !== 'bare').length > 1).map(repository => [repository.id, repository]))
   const monorepos = new Map<string, MonorepoIdentity>()
   const parents = new Map<string, string>()
   for (const project of [...allProjects, ...projects]) {
@@ -36,6 +39,19 @@ export function groupProjectResults(projects: RepoProject[], allProjects = proje
 
   const groups = new Map<string, ProjectResultGroup>()
   projects.forEach((project, index) => {
+    const context = project.gitContext
+    const repository = context?.state === 'verified' ? families.get(context.repositoryId) : undefined
+    if (repository && context?.state === 'verified') {
+      const id = `repository:${repository.id}`
+      let group = groups.get(id)
+      if (!group) { group = { id, repository, checkouts: [], items: [] }; groups.set(id, group) }
+      const item = { project, index }
+      group.items.push(item)
+      let checkout = group.checkouts!.find(candidate => candidate.id === context.worktreeId)
+      if (!checkout) { checkout = { id: context.worktreeId, path: context.checkoutPath, items: [] }; group.checkouts!.push(checkout) }
+      checkout.items.push(item)
+      return
+    }
     let rootId = project.monorepo?.id ?? project.id
     const visited = new Set([rootId])
     while (parents.has(rootId)) {

@@ -1,4 +1,5 @@
-import type { RepoProject } from '../types'
+import type { GitRepository, RepoProject } from '../types'
+import { projectActionLabel, projectBranchLabel, projectRepository } from './project-worktrees'
 import { packageMatches } from './packages'
 import { commandTemplates, prepareCommandFields, prepareCommandQuery, preparedCommandMatchScore, projectCommands, type PreparedCommandFields, type PreparedCommandQuery, type ProjectCommand } from './project-commands'
 import type { FilterGroup, FilterKey } from './project-filters'
@@ -27,6 +28,7 @@ export interface SearchSuggestion {
 
 interface SearchOptions {
   projects: RepoProject[]
+  repositories?: GitRepository[]
   favorites: readonly string[]
   settings: AppSettings
   filterGroups: FilterGroup[]
@@ -36,7 +38,7 @@ interface SearchOptions {
 }
 
 interface RankedSuggestion { suggestion: SearchSuggestion; score: number }
-type IndexOptions = Pick<SearchOptions, 'projects' | 'favorites' | 'settings' | 'filterGroups'>
+type IndexOptions = Pick<SearchOptions, 'projects' | 'favorites' | 'settings' | 'filterGroups' | 'repositories'>
 type QueryOptions = Pick<SearchOptions, 'query' | 'selection' | 'packagesOnly'>
 
 export interface ProjectSearchIndex {
@@ -79,8 +81,8 @@ const initialFilters: [FilterKey, string][] = [
   ['server', 'running'], ['storage', 'unmeasured'], ['readme', 'present'],
 ]
 
-function projectFields(project: RepoProject): string[] {
-  return [project.name, project.dirName, project.relativePath, project.description, ...project.stack, ...project.tags ?? [],
+function projectFields(project: RepoProject, repository?: GitRepository): string[] {
+  return [repository?.name, ...(project.gitContext?.state === 'verified' ? [project.gitContext.checkoutPath, project.gitContext.projectPath] : []), project.name, project.dirName, project.relativePath, project.description, ...project.stack, ...project.tags ?? [],
     project.git?.branch, project.git?.origin, project.author, project.license, project.packageManager,
     project.monorepo?.name, project.monorepo?.packagePath, project.homepage, ...project.aiInstructionFiles ?? [],
     ...(project.dependencies ?? []).flatMap(dependency => [dependency.name, `${dependency.name}@${dependency.version}`])]
@@ -89,10 +91,11 @@ function projectFields(project: RepoProject): string[] {
 
 function commandSuggestion(project: RepoProject, command: ProjectCommand, templateSelected: boolean): SearchSuggestion {
   const script = command.id.startsWith('script:')
+  const location = project.gitContext?.state === 'verified' ? `${projectBranchLabel(project)} · ${project.relativePath}` : project.relativePath
   return {
     id: `command:${project.id}:${command.id}`,
     title: templateSelected && !script ? project.name : command.title,
-    description: templateSelected && !script ? `${command.title} · ${project.relativePath}` : `${project.name} · ${project.relativePath} · ${command.description}`,
+    description: templateSelected && !script ? `${command.title} · ${location}` : `${project.name} · ${location} · ${command.description}`,
     group: script ? 'Scripts' : 'Actions', helper: command.helper,
     intent: { kind: 'command', projectId: project.id, command },
   }
@@ -111,7 +114,7 @@ function preparePackages(projects: RepoProject[], prepare: typeof prepareCommand
     for (const name of names) {
       const entry = packages.get(name) ?? { name: dependency.name, versions: new Set<string>(), projects: new Map<string, string>() }
       entry.versions.add(dependency.version)
-      entry.projects.set(project.id, project.name)
+      entry.projects.set(project.id, projectActionLabel(project))
       packages.set(name, entry)
     }
   }
@@ -128,7 +131,7 @@ function preparePackages(projects: RepoProject[], prepare: typeof prepareCommand
 
 /** Catalogs, labels, package counts, and normalized fields change with workspace
  * data, not each keystroke. Callers can memoize this index independently of query. */
-export function createProjectSearchIndex({ projects, favorites, settings, filterGroups }: IndexOptions): ProjectSearchIndex {
+export function createProjectSearchIndex({ projects, repositories, favorites, settings, filterGroups }: IndexOptions): ProjectSearchIndex {
   const preparedFields = new Map<string, PreparedCommandFields>()
   const prepare = (fields: readonly string[]) => {
     const key = JSON.stringify(fields)
@@ -138,13 +141,13 @@ export function createProjectSearchIndex({ projects, favorites, settings, filter
   }
   const favoriteIds = new Set(favorites)
   const indexedProjects = projects.map(project => ({
-    id: project.id, fields: prepare(projectFields(project)), bonus: favoriteIds.has(project.id) ? 4 : 0,
+    id: project.id, fields: prepare(projectFields(project, projectRepository(project, repositories))), bonus: favoriteIds.has(project.id) ? 4 : 0,
     suggestion: {
       id: `project:${project.id}`, title: project.name,
-      description: [project.relativePath, project.stack.join(', '), project.tags?.join(', '), project.description].filter(Boolean).join(' · '),
+      description: [project.gitContext?.state === 'verified' ? projectBranchLabel(project) : undefined, project.relativePath, project.stack.join(', '), project.tags?.join(', '), project.description].filter(Boolean).join(' · '),
       group: 'Projects', intent: { kind: 'project' as const, projectId: project.id },
     },
-    commands: projectCommands(project, settings, favoriteIds.has(project.id)).map(command => ({
+    commands: projectCommands(project, settings, favoriteIds.has(project.id), projectRepository(project, repositories)).map(command => ({
       id: command.id, fields: prepare([command.title, command.keywords, command.description]),
       suggestion: commandSuggestion(project, command, false), templateSuggestion: commandSuggestion(project, command, true),
     })),
@@ -210,7 +213,9 @@ export function createProjectSearchIndex({ projects, favorites, settings, filter
           if (!tokenMatches.has(command.fields)) tokenMatches.set(command.fields, tokenQueries.some(token => preparedCommandMatchScore(token, command.fields) !== undefined))
           if (!tokenMatches.get(command.fields)) continue
         }
-        const score = preparedCommandMatchScore(preparedQuery, command.fields, project.fields)
+        // Once a project is selected, search its actions; a .worktrees path
+        // must not make every unrelated action match a worktrees query.
+        const score = preparedCommandMatchScore(preparedQuery, command.fields, selection.projectId ? undefined : project.fields)
         if (score === undefined) continue
         ranked.push({ score: score + 25 + project.bonus, suggestion: selection.templateId ? command.templateSuggestion : command.suggestion })
       }
@@ -247,6 +252,6 @@ function groupRankedSuggestions(ranked: RankedSuggestion[]): SearchSuggestion[] 
 
 /** Convenience wrapper for one-off searches. Interactive callers reuse an index.
  * Query text only selects existing catalog operations; it never becomes code. */
-export function searchSuggestions({ projects, favorites, settings, filterGroups, ...query }: SearchOptions): SearchSuggestion[] {
-  return createProjectSearchIndex({ projects, favorites, settings, filterGroups }).search(query)
+export function searchSuggestions({ projects, repositories, favorites, settings, filterGroups, ...query }: SearchOptions): SearchSuggestion[] {
+  return createProjectSearchIndex({ projects, repositories, favorites, settings, filterGroups }).search(query)
 }

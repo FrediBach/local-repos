@@ -9,7 +9,7 @@ export function ProjectPreview({ project, large = false, activity }: { project: 
   if (project.screenshot && failedImage !== project.screenshot) {
     return <CapturedPreview project={project} large={large} activity={activity} onError={() => setFailedImage(project.screenshot)} />
   }
-  const type = project.id.replace('demo-', '')
+  const type = project.id === 'demo-field-map' ? 'field' : project.id.replace('demo-', '')
   const demo = project.id.startsWith('demo-')
   return <div className={`project-preview preview-${demo ? type : 'empty'} ${large ? 'large' : ''}`}>
     <PreviewArtwork type={type} dirName={project.dirName} />

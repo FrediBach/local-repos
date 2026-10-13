@@ -1,4 +1,4 @@
-import type { ProjectDependency, RepoProject } from '@/types'
+import type { GitRepository, ProjectDependency, RepoProject } from '@/types'
 
 const now = Date.now()
 function sampleDependencies(stack: string[], hours: number): ProjectDependency[] {
@@ -29,6 +29,14 @@ export const demoProjects: RepoProject[] = [
   sample('demo-margin', 'margin', 'A simple space to collect thoughts, make connections, and keep writing.', ['React', 'TypeScript', 'Vite'], 5, 'feat/editor'),
   sample('demo-sunday', 'sunday-supply', 'Everyday objects, carefully chosen. An experiment in considered commerce.', ['Next.js', 'TypeScript', 'Tailwind'], 24),
   sample('demo-orbit', 'orbit-dashboard', 'A clear view of the numbers that matter. Analytics without the noise.', ['React', 'TypeScript', 'Vite'], 48, 'develop'),
-  sample('demo-field', 'field-notes', 'Small observations from outside. A journal of places, walks, and detours.', ['Astro', 'TypeScript'], 96),
+  { ...sample('demo-field', 'field-notes', 'Small observations from outside. A journal of places, walks, and detours.', ['Astro', 'TypeScript'], 96), gitContext: { state: 'verified', repositoryId: 'demo-field-repository', worktreeId: 'demo-field-main', checkoutPath: 'field-notes', projectPath: '', role: 'main' } },
+  { ...sample('demo-field-map', 'field-notes', 'An experimental map of favorite walks, in a separate checkout of field-notes.', ['Astro', 'TypeScript'], 72, 'feat/map'), dirName: 'field-notes-map', relativePath: '.worktrees/field-notes-map', gitContext: { state: 'verified', repositoryId: 'demo-field-repository', worktreeId: 'demo-field-linked', checkoutPath: '.worktrees/field-notes-map', projectPath: '', role: 'linked' } },
   sample('demo-toolbox', 'little-tools', 'A growing collection of small utilities that make the everyday a little easier.', ['Vue', 'TypeScript', 'Vite'], 168),
 ]
+
+export const demoRepositories: GitRepository[] = [{
+  id: 'demo-field-repository', name: 'field-notes', checkedAt: new Date(now).toISOString(), status: 'complete', worktrees: [
+    { id: 'demo-field-main', path: 'field-notes', role: 'main', availability: 'available', projectId: 'demo-field', branch: 'main' },
+    { id: 'demo-field-linked', path: '.worktrees/field-notes-map', role: 'linked', availability: 'available', projectId: 'demo-field-map', branch: 'feat/map' },
+  ],
+}]

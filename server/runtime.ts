@@ -42,6 +42,7 @@ interface RunningServer {
   logsTruncated: boolean
   entry: RegisteredProject
   port: number
+  ports: Set<number>
   stopping: boolean
 }
 
@@ -70,6 +71,11 @@ function serverResponds(url: string): Promise<boolean> {
     request.on('error', () => resolve(false))
     request.on('timeout', () => { request.destroy(); resolve(false) })
   })
+}
+
+function serverPort(value: string): number {
+  const url = new URL(value)
+  return Number(url.port || (url.protocol === 'https:' ? 443 : 80))
 }
 
 function terminate(child: ChildProcess, signal: NodeJS.Signals = 'SIGTERM'): void {
@@ -109,7 +115,7 @@ export class ProjectRuntime {
   private readonly generations = new Map<string, number>()
   private readonly keepAlive = new Set<string>()
   private readonly browsers = new Set<Browser>()
-  private readonly stoppingChildren = new Map<ChildProcess, { id: string; timer: ReturnType<typeof setTimeout> }>()
+  private readonly stoppingChildren = new Map<ChildProcess, { id: string; ports: Set<number>; timer: ReturnType<typeof setTimeout> }>()
   private screenshotDirectory?: Promise<string>
   private closed = false
 
@@ -437,12 +443,20 @@ export class ProjectRuntime {
     const pending = this.starts.get(id)
     if (pending) return pending
     if (this.running.has(id)) return this.registry.lookup(id).project.dev ?? { status: 'starting' }
+    const context = this.registry.lookup(id).project.gitContext
+    // Capture only earlier startup promises, before publishing this one. That
+    // creates an acyclic queue for sibling checkouts whose custom scripts may
+    // reveal a fixed port only after binding it. Running siblings stay independent.
+    const earlierStarts = context?.state === 'verified' ? [...this.starts].flatMap(([otherId, promise]) => {
+      const other = this.registry.lookup(otherId).project.gitContext
+      return other?.state === 'verified' && other.repositoryId === context.repositoryId && other.worktreeId !== context.worktreeId ? [promise] : []
+    }) : []
     this.processTokens.set(id, `proc_${randomUUID()}`)
     this.logHistory.set(id, { text: '', truncated: false })
     this.setDev(this.registry.lookup(id), { status: 'starting' })
     const generation = (this.generations.get(id) ?? 0) + 1
     this.generations.set(id, generation)
-    const promise = this.startOnce(id, generation)
+    const promise = this.startOnce(id, generation, earlierStarts)
     this.starts.set(id, promise)
     try {
       return await promise
@@ -457,7 +471,14 @@ export class ProjectRuntime {
     }
   }
 
-  private async startOnce(id: string, generation: number): Promise<DevState> {
+  private portOwner(id: string, port: number): string | undefined {
+    for (const [otherId, running] of this.running) if (otherId !== id && running.ports.has(port)) return otherId
+    for (const stopping of this.stoppingChildren.values()) if (stopping.ports.has(port)) return stopping.id
+  }
+
+  private async startOnce(id: string, generation: number, earlierStarts: Promise<DevState>[] = []): Promise<DevState> {
+    if (earlierStarts.length) await Promise.allSettled(earlierStarts)
+    if (this.closed || this.generations.get(id) !== generation) return this.registry.lookup(id).project.dev ?? { status: 'stopped' }
     const entry = await this.registry.get(id)
     if (this.closed || this.generations.get(id) !== generation) return entry.project.dev ?? { status: 'stopped' }
     if (this.running.has(id)) return entry.project.dev ?? { status: 'starting' }
@@ -470,6 +491,12 @@ export class ProjectRuntime {
     await this.registry.get(id)
     if (this.closed || this.generations.get(id) !== generation) return entry.project.dev ?? { status: 'stopped' }
     const url = `http://127.0.0.1:${port}`
+    const configured = configuredServerUrls(selected.command, port)
+    const ports = new Set([port, ...configured.map(serverPort)])
+    for (const candidate of ports) {
+      const owner = this.portOwner(id, candidate)
+      if (owner !== undefined) throw new HelperError(`Port ${candidate} is already used by another project. Choose a different port for this checkout or stop that server.`, 409)
+    }
     const child = spawn(command, args, {
       cwd: entry.directory,
       env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', BROWSER: 'none', NO_COLOR: '1', ...env },
@@ -477,7 +504,7 @@ export class ProjectRuntime {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
     })
-    const running: RunningServer = { child, logs: '', logsTruncated: false, entry, port, stopping: false }
+    const running: RunningServer = { child, logs: '', logsTruncated: false, entry, port, ports, stopping: false }
     this.running.set(id, running)
     this.setDev(entry, { status: 'starting', url })
     const append = (text: string) => {
@@ -513,14 +540,27 @@ export class ProjectRuntime {
       if (this.running.get(id) !== running || running.stopping) return entry.project.dev ?? { status: 'stopped' }
       const candidates = [...new Set([
         ...discoverServerUrls(running.logs),
-        ...configuredServerUrls(selectDevScript(entry.project)?.command ?? '', port),
+        ...configured,
         url,
       ])].slice(0, 8)
-      const responses = await Promise.all(candidates.map(async candidate => ({ candidate, ready: await serverResponds(candidate) })))
+      const conflicts = candidates.filter(candidate => this.portOwner(id, serverPort(candidate)) !== undefined)
+      const safeCandidates = candidates.filter(candidate => !conflicts.includes(candidate))
+      // Reserve discovered ports before probes so concurrent starts cannot both
+      // claim the same responding application as their own.
+      for (const candidate of safeCandidates) running.ports.add(serverPort(candidate))
+      const responses = await Promise.all(safeCandidates.map(async candidate => ({ candidate, ready: await serverResponds(candidate) })))
       if (this.running.get(id) !== running || running.stopping) return entry.project.dev ?? { status: 'stopped' }
       const ready = responses.find(response => response.ready)
       if (ready) {
         return this.setDev(entry, { status: 'running', url: ready.candidate })
+      }
+      if (conflicts.length) {
+        const conflictPort = serverPort(conflicts[0])
+        const stopping = this.stop(id)
+        const stoppedGeneration = this.generations.get(id)
+        await stopping
+        if (this.generations.get(id) !== stoppedGeneration) return entry.project.dev ?? { status: 'stopped' }
+        return this.setDev(entry, { status: 'error', error: `Port ${conflictPort} is already used by another project. Choose a different port for this checkout or stop that server.` })
       }
       await delay(250)
     }
@@ -555,7 +595,7 @@ export class ProjectRuntime {
           running.child.once('exit', () => this.stoppingChildren.delete(running.child))
         }
       }, 2_000)
-      this.stoppingChildren.set(running.child, { id, timer })
+      this.stoppingChildren.set(running.child, { id, ports: running.ports, timer })
       timer.unref()
     }
     return this.setDev(entry, { status: 'stopped' })

@@ -1,0 +1,49 @@
+.project-checkout-context { display: flex; align-items: center; gap: 5px 9px; flex-wrap: wrap; min-width: 0; margin: 4px 0 9px; color: var(--muted-foreground); font-size: .75rem; }
+.project-checkout-context > span, .project-checkout-context > button { display: inline-flex; align-items: center; gap: 4px; }
+.project-checkout-context > code { flex-basis: 100%; overflow-wrap: anywhere; color: var(--foreground); }
+.project-checkout-context > button { padding: 3px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--accent); }
+.project-checkout-context > button:hover { background: var(--hover); }
+.project-checkout-context .worktree-role { font-size: .6875rem; }
+.projects-list .project-info:has(.project-checkout-context) .project-checkout-context { grid-area: 2 / 1; margin: 2px 0; }
+.projects-list .project-info:has(.project-checkout-context) .project-description { grid-area: 3 / 1; }
+.projects-list .project-info:has(.project-checkout-context) .package-matches { grid-area: 4 / 1; }
+.projects-list .project-info:has(.project-checkout-context) .project-storage-summary { grid-area: 5 / 1; }
+.worktree-repository-group { min-width: 0; }
+.worktree-repository-heading, .worktree-checkout-heading { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 12px 0; }
+.worktree-repository-heading { border-bottom: 1px solid var(--border); }
+.worktree-repository-heading h2, .worktree-checkout-heading h3 { margin: 0; font-size: .9375rem; font-weight: 600; }
+.worktree-repository-heading > span, .worktree-checkout-heading > span { color: var(--muted-foreground); font-size: .75rem; }
+.worktree-checkout-heading > code { overflow-wrap: anywhere; font-size: .75rem; }
+.worktree-checkout-heading > button { margin-left: auto; padding: 4px 6px; color: var(--accent); font-size: .75rem; }
+.worktree-checkout { min-width: 0; margin-bottom: 10px; }
+.project-worktrees { min-width: 0; }
+.worktrees-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.worktrees-heading h3 { margin: 0 0 6px; font-size: 1.125rem; font-weight: 550; }
+.project-worktrees p { margin: 7px 0; font-size: .8125rem; line-height: 1.6; color: var(--muted-foreground); }
+.worktrees-scan-time { margin-bottom: 16px !important; }
+.worktrees-notice { padding: 10px 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-muted); overflow-wrap: anywhere; }
+.worktree-list { list-style: none; margin: 20px 0 0; padding: 0; }
+.worktree-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 0; border-top: 1px solid var(--border); }
+.worktree-row-content { min-width: 0; flex: 1; }
+.worktree-row-title { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.worktree-row-title strong { font-size: .875rem; overflow-wrap: anywhere; }
+.worktree-row-title > span { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; color: var(--muted-foreground); font-size: .6875rem; }
+.worktree-row[aria-current="true"] .worktree-row-title > span:first-of-type { color: var(--accent); }
+.worktree-path { display: block; margin-top: 7px; overflow-wrap: anywhere; white-space: pre-wrap; font-size: .8125rem; }
+.worktree-status { display: flex; gap: 4px 12px; flex-wrap: wrap; margin-top: 9px; font-size: .75rem; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.worktree-row details { margin-top: 10px; font-size: .8125rem; }
+.worktree-row summary { cursor: pointer; }
+.worktree-row details ul { padding-left: 20px; line-height: 1.7; overflow-wrap: anywhere; }
+.worktree-row > .button { flex-shrink: 0; }
+.worktrees-connect { margin-top: 15px; }
+.ignored-project .project-checkout-context { margin: 0; }
+.worktree-unavailable { padding: 26px 32px; }
+.worktree-unavailable > p { color: var(--muted-foreground); line-height: 1.6; }
+.worktree-unavailable-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 650px) {
+  .worktree-row, .worktrees-heading { flex-direction: column; gap: 10px; }
+  .worktree-checkout-heading { gap: 6px; }
+  .worktree-checkout-heading > code { flex-basis: 100%; }
+  .project-checkout-context { font-size: .6875rem; gap: 5px; }
+  .worktree-unavailable { padding: 21px 23px; }
+}

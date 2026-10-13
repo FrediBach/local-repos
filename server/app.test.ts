@@ -1,5 +1,7 @@
 import { lstat, mkdtemp, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { request, type Server } from 'node:http'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -53,6 +55,27 @@ async function createProject(scripts: Record<string, string> = {}): Promise<Repo
   expect(response.status).toBe(200)
   return (await response.json()).projects[0] as RepoProject
 }
+
+describe('repository Git HTTP requests', () => {
+  it('dispatches aggregate reads and rejects arbitrary scope or revision selection', async () => {
+    const main = path.join(directory, 'main'), linked = path.join(directory, 'linked')
+    await mkdir(main)
+    const git = (...args: string[]) => promisify(execFile)('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', ...args], { cwd: main })
+    await git('init', '-b', 'main')
+    await git('commit', '--allow-empty', '-m', 'Initial')
+    await git('worktree', 'add', '--detach', linked)
+    const scan = await (await post('/api/scan', { path: directory })).json()
+    const project = scan.projects.find((project: RepoProject) => project.relativePath === 'main')
+    const scope = { rootId: scan.rootId, repositoryId: project.gitContext.repositoryId, projectIds: scan.projects.map((project: RepoProject) => project.id) }
+    expect(await (await post(`/api/projects/${project.id}/repository-history`, scope)).json()).toMatchObject({ total: 1, coverage: 'complete', repositoryId: scope.repositoryId })
+    expect(await (await post(`/api/projects/${project.id}/repository-push-status`, scope)).json()).toMatchObject({ checkouts: [{ dirty: false }, { dirty: false }] })
+    expect((await post(`/api/projects/${project.id}/repository-daily-summary`, { ...scope, from: '2026-10-10T00:00:00.000Z', to: '2026-10-11T00:00:00.000Z' })).status).toBe(200)
+    expect((await post(`/api/projects/${project.id}/repository-history`, { ...scope, branch: '--all' })).status).toBe(400)
+    expect((await post(`/api/projects/${project.id}/repository-history`, { ...scope, projectIds: [...scope.projectIds, 'f'.repeat(20)] })).status).toBe(409)
+    expect((await post(`/api/projects/${project.id}/repository-history`, { ...scope, projectIds: Array.from({ length: 301 }, () => project.id) })).status).toBe(400)
+    expect((await post(`/api/projects/${project.id}/repository-history`, scope, { Origin: 'https://example.test' })).status).toBe(403)
+  })
+})
 
 describe('request-scoped scan progress', () => {
   const headers = { Accept: 'application/x-ndjson' }

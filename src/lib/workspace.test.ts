@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { preservePreviews, protectReportRevisions } from './workspace'
-import type { LighthouseReport, RepoProject, Workspace } from '../types'
+import type { GitRepository, LighthouseReport, RepoProject, Workspace } from '../types'
 
 const cachedPng = 'data:image/png;base64,aGVsbG8='
 
@@ -20,6 +20,14 @@ function workspace(projects: RepoProject[]): Workspace {
 }
 
 describe('captured preview persistence', () => {
+  it('retains dated inventory on failure but accepts authoritative removal and never shares inventories across roots', () => {
+    const repository: GitRepository = { id: 'repo', name: 'Repo', checkedAt: '2026-10-13T10:00:00Z', status: 'complete', worktrees: [{ id: 'main', path: 'main', role: 'main', availability: 'available', projectId: 'one' }] }
+    const previous = { ...workspace([project('one')]), repositories: [repository] }
+    const failed = { ...workspace([project('one')]), repositories: [{ ...repository, status: 'unavailable' as const, checkedAt: '2026-10-13T11:00:00Z', worktrees: [], error: 'Git unavailable' }] }
+    expect(preservePreviews(failed, previous).repositories).toEqual([{ ...repository, status: 'unavailable', error: 'Git unavailable' }])
+    expect(preservePreviews({ ...failed, rootPath: '/different' }, previous).repositories![0].worktrees).toEqual([])
+    expect(preservePreviews({ ...failed, repositories: [] }, previous).repositories).toEqual([])
+  })
   it('preserves Lighthouse snapshots across rescans and prefers fresh partial reports for the same ID', () => {
     const lighthouse: LighthouseReport = { scannedAt: '2026-10-10T10:00:00Z', version: '12.8.2', requestedUrl: 'http://localhost:3000/', url: 'http://localhost:3000/', formFactor: 'desktop', categories: [{ id: 'performance', title: 'Performance', score: 88 }], audits: [], warnings: [] }
     const previous = workspace([{ ...project('one'), lighthouse }])
@@ -101,6 +109,29 @@ describe('captured preview persistence', () => {
 describe('helper report reconciliation', () => {
   const report = { scannedAt: '2026-10-09T10:00:00Z', version: '0.9.17', score: 82, label: 'Great', findings: [] }
   const state = (revision: number, validity: 'available' | 'invalidated' | 'missing', helperInstanceId = 'boot_a') => ({ helperInstanceId, revision, validity })
+  it('keeps newer worktree membership and metadata while merging a fresh report from an older workspace', () => {
+    const removed = project('removed')
+    const newlyDiscovered = project('new')
+    const context: RepoProject['gitContext'] = { state: 'verified', repositoryId: 'repo', worktreeId: 'main', checkoutPath: 'new-path', projectPath: '.', role: 'main' }
+    const inventory: GitRepository = { id: 'repo', name: 'Repo', checkedAt: '2026-10-13T11:00:00Z', status: 'complete', worktrees: [{ id: 'main', path: 'new-path', projectId: 'one', role: 'main', availability: 'available' }] }
+    const previous: Workspace = { ...workspace([{ ...project('one'), name: 'Current name', relativePath: 'new-path', gitContext: context, git: { branch: 'new-branch' }, reactDoctor: report, reportState: { reactDoctor: state(9, 'available') } }, newlyDiscovered]), helperInstanceId: 'boot_a', revision: 9, repositories: [inventory], warnings: ['Current warning'], syncedAt: '2026-10-13T11:00:00Z' }
+    const fresh = { ...report, score: 95, scannedAt: '2026-10-13T11:01:00Z' }
+    const stale: Workspace = { ...workspace([{ ...project('one'), git: { branch: 'old-branch' }, reactDoctor: fresh, reportState: { reactDoctor: state(10, 'available') } }, removed]), helperInstanceId: 'boot_a', revision: 8, repositories: [{ ...inventory, worktrees: [...inventory.worktrees, { id: 'old', path: 'removed', projectId: 'removed', role: 'linked', availability: 'available' }] }], warnings: ['Old warning'] }
+    const result = protectReportRevisions(stale, previous)
+    expect(result).toMatchObject({ revision: 9, syncedAt: previous.syncedAt, warnings: previous.warnings, repositories: previous.repositories })
+    expect(result.projects.map(project => project.id)).toEqual(['one', 'new'])
+    expect(result.projects[0]).toMatchObject({ name: 'Current name', relativePath: 'new-path', gitContext: context, git: { branch: 'new-branch' }, reactDoctor: fresh, reportState: { reactDoctor: state(10, 'available') } })
+    expect(stale.projects.map(project => project.id)).toEqual(['one', 'removed'])
+  })
+
+  it('accepts authoritative empty inventory and does not reuse topology from another helper instance', () => {
+    const previous: Workspace = { ...workspace([]), helperInstanceId: 'boot_a', revision: 9, repositories: [] }
+    const stale: Workspace = { ...workspace([project('removed')]), helperInstanceId: 'boot_a', revision: 8, repositories: [{ id: 'old', name: 'Old', checkedAt: '2026-10-13', status: 'complete', worktrees: [] }] }
+    expect(protectReportRevisions(stale, previous)).toMatchObject({ projects: [], repositories: [], revision: 9 })
+    const restarted = { ...stale, helperInstanceId: 'boot_b', revision: 1 }
+    expect(protectReportRevisions(restarted, previous).projects).toHaveLength(1)
+    expect(protectReportRevisions(restarted, previous).repositories).toEqual(restarted.repositories)
+  })
   it('keeps tombstones through late scans and accepts only a newer successful report', () => {
     const saved = workspace([{ ...project('one'), reactDoctor: report, reportState: { reactDoctor: state(1, 'available') } }])
     const invalidated = preservePreviews(workspace([{ ...project('one'), reportState: { reactDoctor: state(2, 'invalidated') } }]), saved)

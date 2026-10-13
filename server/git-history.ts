@@ -1,11 +1,17 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { HelperError, isWithin, type RegisteredProject } from './scanner'
+import { gitEnvironment } from './git-worktrees'
 import type { GitCommit, GitHistory, GitHistoryQuery } from '../src/types'
 
 const execFileAsync = promisify(execFile)
 export const gitOptions = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-c', 'log.showSignature=false']
 const PAGE_SIZE = 25
+
+/** Internal, verified checkout HEADs only; never accept revisions from request data. */
+export interface GitReadScope { heads: string[] }
+
+export const gitReadEnvironment = gitEnvironment
 
 function queryOptions(input: Record<string, unknown>): GitHistoryQuery {
   const { branch = '', author = '', offset = 0 } = input
@@ -19,7 +25,7 @@ function queryOptions(input: Record<string, unknown>): GitHistoryQuery {
 export async function readCommits(directory: string, revisions: string[], visit: (commit: GitCommit) => void, signal?: AbortSignal): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn('git', [...gitOptions, 'log', '--date-order', '--no-color', '--no-decorate', '--encoding=UTF-8', '--format=%H%x00%aN%x00%aE%x00%cI%x00%s%x00', ...revisions, '--'], {
-      cwd: directory, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' }, stdio: ['ignore', 'pipe', 'pipe'], signal,
+      cwd: directory, env: gitReadEnvironment(), stdio: ['ignore', 'pipe', 'pipe'], signal,
     })
     const timeout = setTimeout(() => { child.kill(); reject(new HelperError('Reading Git history timed out. Try a specific branch.', 504)) }, 30_000)
     let pending = '', fields: string[] = []
@@ -47,11 +53,11 @@ export async function readCommits(directory: string, revisions: string[], visit:
   })
 }
 
-export async function readGitHistory(entry: RegisteredProject, input: Record<string, unknown> = {}, now = new Date()): Promise<GitHistory> {
+export async function readGitHistory(entry: RegisteredProject, input: Record<string, unknown> = {}, now = new Date(), scope?: GitReadScope): Promise<GitHistory> {
   const query = queryOptions(input)
   const directory = entry.gitDirectory ?? entry.workspaceDirectory ?? entry.directory
   const git = async (args: string[]) => (await execFileAsync('git', [...gitOptions, ...args], {
-    cwd: directory, timeout: 10_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' },
+    cwd: directory, timeout: 10_000, maxBuffer: 4 * 1024 * 1024, env: gitReadEnvironment(),
   })).stdout.trim()
   const to = now.toISOString().slice(0, 10)
   const start = new Date(`${to}T00:00:00Z`)
@@ -82,7 +88,7 @@ export async function readGitHistory(entry: RegisteredProject, input: Record<str
   }
   if (query.branch && !tips.has(query.branch)) throw new HelperError('This branch is no longer available. Refresh commit history.', 400)
   // Snapshot the tips so moving refs cannot change the traversal mid-request.
-  const revisions = query.branch ? [tips.get(query.branch)!] : [...new Set([...tips.values(), ...(head ? [head] : [])])]
+  const revisions = query.branch ? [tips.get(query.branch)!] : [...new Set([...tips.values(), ...(scope?.heads ?? (head ? [head] : []))])]
   if (!revisions.length) return result
   const authors = new Map<string, { name: string; email: string }>()
   const activity = new Map<string, number>()

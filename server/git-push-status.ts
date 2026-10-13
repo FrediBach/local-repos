@@ -1,18 +1,18 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { gitOptions } from './git-history'
+import { gitOptions, gitReadEnvironment, type GitReadScope } from './git-history'
 import { HelperError, isWithin, type RegisteredProject } from './scanner'
 import type { GitPushStatus } from '../src/types'
 
 const exec = promisify(execFile)
 
 /** Read current local refs without fetching, pushing, or changing the worktree. */
-export async function readGitPushStatus(entry: RegisteredProject): Promise<GitPushStatus> {
+export async function readGitPushStatus(entry: RegisteredProject, scope?: GitReadScope): Promise<GitPushStatus> {
   const directory = entry.gitDirectory ?? entry.workspaceDirectory ?? entry.directory
   const signal = AbortSignal.timeout(30_000)
   const git = async (args: string[]) => (await exec('git', [...gitOptions, ...args], {
     cwd: directory, timeout: 10_000, signal, maxBuffer: 2 * 1024 * 1024,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' },
+    env: gitReadEnvironment(),
   })).stdout.trim()
   const result: GitPushStatus = { available: false, hasOrigin: false, originRefsKnown: false, unpushedCommits: 0, dirty: false, shallow: false, checkedAt: new Date().toISOString() }
   let topLevel: string
@@ -36,7 +36,7 @@ export async function readGitPushStatus(entry: RegisteredProject): Promise<GitPu
     ])
     result.dirty = !!status
     result.shallow = shallow === 'true'
-    const local = new Set<string>(head ? [head] : [])
+    const local = new Set<string>(scope?.heads ?? (head ? [head] : []))
     const origin = new Set<string>()
     for (const line of refs.split('\n').filter(Boolean)) {
       const [ref, hash, symbolic] = line.split('\0')

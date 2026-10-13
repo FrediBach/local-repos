@@ -1,7 +1,7 @@
 import { activeProjects } from '@/lib/workspace'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { projectPushStatus } from '@/lib/api'
-import { localDate, summaryRepositories, type SummaryRepository } from '@/lib/daily-summary'
+import { projectPushStatus, repositoryPushStatus } from '@/lib/api'
+import { localDate, repositoryScope, summaryRepositories, type SummaryRepository } from '@/lib/daily-summary'
 import { dismissPushReminder, needsPushReminder, PUSH_REMINDER_DISMISSALS_KEY, reminderDismissed, reminderDue, type PushReminderResult } from '@/lib/push-reminder'
 import type { AppSettings } from '@/lib/settings'
 import type { Workspace } from '@/types'
@@ -11,10 +11,11 @@ interface State { key: string; day: string; results: PushReminderResult[]; check
 
 export function usePushReminder({ workspace, settings, busy }: Props) {
   const root = workspace?.mode === 'helper' ? workspace.rootPath ?? workspace.rootName : ''
+  const rootId = workspace?.rootId
   const enabled = !!root && settings.pushReminderEnabled
   const time = settings.pushReminderTime
   const repositories = JSON.stringify(summaryRepositories(workspace ? activeProjects(workspace) : []))
-  const key = JSON.stringify([root, repositories, time, enabled])
+  const key = JSON.stringify([root, rootId, repositories, time, enabled])
   const [revision, setRevision] = useState(0)
   const [state, setState] = useState<State>({ key: '', day: '', results: [], checking: false })
   const dismissed = useRef(new Map<string, string>())
@@ -45,7 +46,8 @@ export function usePushReminder({ workspace, settings, busy }: Props) {
       await Promise.all(Array.from({ length: Math.min(3, sources.length) }, async () => {
         while (active && index < sources.length) {
           const project = sources[index++]
-          try { results.push({ project, status: await projectPushStatus(project.id) }) }
+          const scope = repositoryScope(project, rootId)
+          try { results.push({ project, status: await (scope ? repositoryPushStatus(project.id, scope) : projectPushStatus(project.id)) }) }
           catch (error) { results.push({ project, error: error instanceof Error ? error.message : 'Could not check this repository.' }) }
         }
       }))
@@ -69,7 +71,7 @@ export function usePushReminder({ workspace, settings, busy }: Props) {
       document.removeEventListener('visibilitychange', check)
       window.removeEventListener('storage', onStorage)
     }
-  }, [enabled, key, repositories, revision, root, time])
+  }, [enabled, key, repositories, revision, root, rootId, time])
 
   const current = enabled && state.key === key && state.day === localDate() && reminderDue(time)
   return {

@@ -1,8 +1,8 @@
 import { localDate, type SummaryRepository } from './daily-summary'
 import { validReminderTime } from './settings'
-import type { GitPushStatus } from '@/types'
+import type { GitPushStatus, RepositoryGitPushStatus } from '@/types'
 
-export interface PushReminderResult { project: SummaryRepository; status?: GitPushStatus; error?: string }
+export interface PushReminderResult { project: SummaryRepository; status?: GitPushStatus & Partial<RepositoryGitPushStatus>; error?: string }
 export const PUSH_REMINDER_DISMISSALS_KEY = 'local-repos:push-reminder-dismissals:v1'
 
 export function reminderDue(time: string, now = new Date()): boolean {
@@ -12,7 +12,7 @@ export function reminderDue(time: string, now = new Date()): boolean {
 }
 
 export function needsPushReminder({ status, error }: PushReminderResult): boolean {
-  return !!error || !!status?.available && status.hasOrigin && (status.unpushedCommits > 0 || status.dirty || !status.originRefsKnown)
+  return !!error || status?.coverage === 'partial' || !!status?.available && status.hasOrigin && (status.unpushedCommits > 0 || status.dirty || !status.originRefsKnown)
 }
 
 export function reminderDismissed(workspace: string, day = localDate()): boolean {

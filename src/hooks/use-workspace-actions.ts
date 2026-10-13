@@ -20,7 +20,7 @@ interface Options {
   busy: string
   workspaceVersion: RefObject<number>
   setBusy: (busy: string) => void
-  setLogs: (logs: string) => void
+  setLogs: (logs: string, projectId?: string) => void
   setNotice: (notice: { text: string; error?: boolean } | undefined) => void
   setConnectOpen: (open: boolean) => void
   persist: (workspace: Workspace, reportError?: boolean, refreshActivity?: boolean) => Promise<boolean>
@@ -356,7 +356,7 @@ export function useWorkspaceActions({ workspace, busy, workspaceVersion, setBusy
     const scan = titles[name] ? scans.begin(titles[name], () => version === workspaceVersion.current, project) : undefined
     try {
       if (updateLevel || name === 'fix-vulnerability') { await changePackages(project, name, body, updateLevel, version, scan?.report); return }
-      if (name === 'logs') { const result = await api<{ logs: string }>(`/projects/${encodeURIComponent(project.id)}/logs`); setLogs(result.logs || 'No output yet. Start the dev server to see its logs.'); return }
+      if (name === 'logs') { const result = await api<{ logs: string }>(`/projects/${encodeURIComponent(project.id)}/logs`); if (version === workspaceVersion.current) setLogs(result.logs || 'No output yet. Start the dev server to see its logs.', project.id); return }
       const result = await projectAction<Partial<RepoProject>>(project.id, name, body, scan?.report)
       if (name === 'screenshot' && result.screenshot) { scan?.report({ phase: 'Saving preview' }); result.screenshot = await cachePreview(result.screenshot) }
       if (version !== workspaceVersion.current) return

@@ -3,6 +3,7 @@ import { Check, LoaderCircle, Plus, Tag, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { normalizeTag, normalizeTags, suggestedTags, tagNameLimit } from '@/lib/project-tags'
+import { projectActionLabel } from '@/lib/project-worktrees'
 import type { RepoProject } from '@/types'
 import './project-tags.css'
 
@@ -12,7 +13,7 @@ export function ProjectTagChips({ project, active = [], ready, onFilter, onEdit 
   const tags = project.tags ?? []
   return <>
     {tags.slice(0, 3).map(tag => <button type="button" className="user-project-tag" key={tag} title={`Filter by tag: ${tag}`} aria-label={`Filter by tag: ${tag}`} aria-pressed={active.includes(`tag:${tag}`)} onClick={() => onFilter(tag)}><Tag size={12} aria-hidden="true" /><span>{tag}</span></button>)}
-    <button type="button" className="edit-project-tags" disabled={!ready} aria-label={`${tags.length ? 'Edit' : 'Add'} tags for ${project.name}`} title={tags.length ? 'Edit tags' : 'Add tags'} onClick={onEdit}><Plus size={12} aria-hidden="true" />{tags.length > 3 ? `${tags.length - 3} more` : !tags.length ? 'Add tags' : <span className="sr-only">Edit tags</span>}</button>
+    <button type="button" className="edit-project-tags" disabled={!ready} aria-label={`${tags.length ? 'Edit' : 'Add'} tags for ${projectActionLabel(project)}`} title={tags.length ? 'Edit tags' : 'Add tags'} onClick={onEdit}><Plus size={12} aria-hidden="true" />{tags.length > 3 ? `${tags.length - 3} more` : !tags.length ? 'Add tags' : <span className="sr-only">Edit tags</span>}</button>
   </>
 }
 
@@ -44,7 +45,7 @@ export function ProjectTagDialog({ project, availableTags, onSave, onClose, retu
 
   return <Dialog open onOpenChange={open => { if (!open && !saving) onClose() }}><DialogContent className="tag-dialog" onOpenAutoFocus={event => { event.preventDefault(); inputRef.current?.focus() }} onCloseAutoFocus={event => { event.preventDefault(); returnFocus() }}>
     <span className="eyebrow"><Tag size={14} /> ORGANIZE YOUR PROJECTS</span>
-    <DialogTitle>Tags for {project.name}</DialogTitle>
+    <DialogTitle>Tags for {projectActionLabel(project)}</DialogTitle>
     <DialogDescription>Group projects your way. Click a tag on a project to filter your workspace.</DialogDescription>
     <form onSubmit={event => { event.preventDefault(); if (!saving) { if (name) add(name); else void save() } }}>
       <fieldset disabled={saving} className="tag-editor-fields">

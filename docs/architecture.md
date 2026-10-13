@@ -128,6 +128,23 @@ Declared workspace members share their root's package manager and lockfile.
 [workspace.ts](../src/lib/workspace.ts) and `ProjectRegistry.related()` encode
 these distinctions for client and helper coordination.
 
+Git worktrees add a separate relationship: optional `gitContext` references a
+canonical checkout and shared repository identity, while `ScanResult.repositories`
+contains bounded, dated worktree inventories. Project IDs still hash project
+paths. Repository IDs additionally include the common Git directory's device and
+inode, preventing replacement Git data at the same path from reusing history
+caches while preserving project preferences. Listed checkouts are inspected only inside the connected root, including
+explicitly listed hidden/deep locations, within existing scan budgets. Outside
+locations remain informational. Package scopes and runtime ownership do not span
+sibling checkouts. Browser Git pointer files remain unresolved metadata.
+
+Repository Git reads validate a current root and selected registered projects,
+then combine shared refs with those checkouts' HEADs. This preserves detached
+tips while counting shared commits once. Push reminders retain separate dirty
+states for each checkout. MCP inventory is projected from authorized memberships,
+never from unrestricted sibling paths. See [worktree behavior](../README.md#git-worktrees)
+and the [implementation plan](plan/git-worktrees.md).
+
 ## Constraints to preserve
 
 - Metadata discovery reads bounded files without evaluating project code. It

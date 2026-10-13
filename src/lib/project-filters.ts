@@ -1,4 +1,4 @@
-import type { RepoProject } from '../types'
+import type { GitRepository, RepoProject } from '../types'
 import { selectDevScript } from './dev-script'
 import { packageMatches } from './packages'
 import { tagFilterValue } from './project-tags'
@@ -68,6 +68,11 @@ const fixedGroups = (settings: AppSettings): FilterGroup[] => [
     option('unknown', 'Working tree status unknown', p => !!p.git && p.git.dirty === undefined),
     option('none', 'No Git metadata', p => !p.git),
   ] },
+  { key: 'worktree', label: 'Worktree', section: 'Project', options: [
+    option('main', 'Main worktree', p => p.gitContext?.state === 'verified' && p.gitContext.role === 'main'),
+    option('linked', 'Linked worktree', p => p.gitContext?.state === 'verified' && p.gitContext.role === 'linked'),
+    option('unknown', 'Worktree relationship unknown', p => p.gitContext?.state === 'unresolved' || !!p.git && !p.gitContext),
+  ] },
   { key: 'server', label: 'Development server', section: 'Project', options: [
     option('running', 'Running or starting', isRunning),
     option('stopped', 'Stopped', p => p.dev?.status === 'stopped'),
@@ -124,12 +129,12 @@ export function matchesProjectFilters(project: RepoProject, filters: ProjectFilt
   return groups.every(group => group.key === except || !filters[group.key]?.length || group.options.some(option => filters[group.key]?.includes(option.value) && option.matches(project, context)))
 }
 
-export function matchesProjectSearch(project: RepoProject, query: string, scope: 'all' | 'packages'): boolean {
+export function matchesProjectSearch(project: RepoProject, query: string, scope: 'all' | 'packages', repository?: GitRepository): boolean {
   const term = query.trim().toLowerCase()
   if (!term) return true
   if (packageMatches(project, query).length) return true
   if (scope === 'packages') return false
-  return [project.name, project.description, ...project.stack, ...project.tags ?? [], project.dirName, project.relativePath, project.git?.branch, project.git?.origin, project.author, project.license, project.packageManager, project.monorepo?.name, project.monorepo?.packagePath]
+  return [repository?.name, project.name, project.description, ...project.stack, ...project.tags ?? [], project.dirName, project.relativePath, project.git?.branch, project.git?.origin, project.author, project.license, project.packageManager, project.monorepo?.name, project.monorepo?.packagePath, ...(project.gitContext?.state === 'verified' ? [project.gitContext.checkoutPath, project.gitContext.projectPath] : [])]
     .filter(Boolean).join(' ').toLowerCase().includes(term)
 }
 

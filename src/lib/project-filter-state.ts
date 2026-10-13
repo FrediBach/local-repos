@@ -1,4 +1,4 @@
-export type FilterKey = 'tags' | 'stars' | 'audit' | 'outdated' | 'git' | 'server' | 'activity' | 'structure' | 'storage' | 'preview' | 'readme' | 'stack' | 'manager' | 'branch' | 'license'
+export type FilterKey = 'tags' | 'stars' | 'audit' | 'outdated' | 'git' | 'server' | 'activity' | 'structure' | 'storage' | 'preview' | 'readme' | 'stack' | 'manager' | 'branch' | 'license' | 'worktree'
 export type ProjectFilters = Partial<Record<FilterKey, string[]>>
 export type ProjectSort = 'updated' | 'oldest' | 'name' | 'stack' | 'vulnerabilities' | 'outdated' | 'size' | 'dependencies' | 'favorites'
 export const projectSortOptions: { value: ProjectSort; label: string }[] = [
@@ -22,7 +22,7 @@ export interface CustomFilter extends ProjectFilterState {
 }
 
 export const customFilterNameLimit = 80
-const filterKeys: FilterKey[] = ['tags', 'stars', 'audit', 'outdated', 'git', 'server', 'activity', 'structure', 'storage', 'preview', 'readme', 'stack', 'manager', 'branch', 'license']
+const filterKeys: FilterKey[] = ['tags', 'stars', 'audit', 'outdated', 'git', 'server', 'activity', 'structure', 'storage', 'preview', 'readme', 'stack', 'manager', 'branch', 'license', 'worktree']
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 const isText = (value: unknown, limit: number): value is string => typeof value === 'string' && value.length <= limit && !/[\u0000-\u001f\u007f]/.test(value)
 export const validCustomFilterName = (value: unknown): value is string => isText(value, customFilterNameLimit) && !!value.trim()

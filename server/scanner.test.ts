@@ -27,6 +27,171 @@ async function fixture(name: string, metadata: unknown = { name }): Promise<stri
 }
 
 describe('local directory scanning', () => {
+  async function committedRepository(name = 'main') {
+    const directory = await fixture(name, { name: 'shared-name', workspaces: ['packages/*'] })
+    await fixture(`${name}/packages/web`, { name: 'web' })
+    const git = (args: string[]) => execFileAsync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', ...args], { cwd: directory })
+    await git(['init', '-b', 'main'])
+    await git(['add', '.'])
+    await git(['commit', '--no-gpg-sign', '-m', 'Fixture packages'])
+    return { directory, git }
+  }
+
+  it('discovers listed hidden and deep worktrees with independent package scopes and stable IDs', async () => {
+    const { directory, git } = await committedRepository()
+    const hidden = path.join(root, '.worktrees/feature')
+    const deep = path.join(root, 'one/two/three/deep')
+    const outside = path.join(temporary, 'outside-worktree')
+    await git(['worktree', 'add', '-b', 'feature', hidden])
+    await git(['worktree', 'add', '--detach', deep])
+    await git(['worktree', 'add', '-b', 'external', outside])
+    await writeFile(path.join(hidden, 'changed.txt'), 'Only this checkout is dirty')
+    const { result, registered } = await scanDirectory(root)
+    expect(result.projects).toHaveLength(6)
+    expect(result.repositories).toHaveLength(1)
+    const repository = result.repositories![0]
+    expect(repository.status).toBe('complete')
+    expect(repository.worktrees).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'main', role: 'main', availability: 'available', dirty: false }),
+      expect.objectContaining({ path: '.worktrees/feature', role: 'linked', availability: 'available', dirty: true }),
+      expect.objectContaining({ path: 'one/two/three/deep', role: 'linked', availability: 'available', detached: true }),
+      expect.objectContaining({ path: await realpath(outside), availability: 'outside' }),
+    ]))
+    const canonicalRoot = await realpath(root)
+    const main = registered.find(entry => entry.directory === path.join(canonicalRoot, 'main'))!
+    const feature = registered.find(entry => entry.project.relativePath === '.worktrees/feature')!
+    const member = registered.find(entry => entry.project.relativePath === '.worktrees/feature/packages/web')!
+    expect(main.project.gitContext).toMatchObject({ state: 'verified', repositoryId: repository.id, role: 'main', projectPath: '.' })
+    expect(member.project.gitContext).toMatchObject({ state: 'verified', repositoryId: repository.id, checkoutPath: '.worktrees/feature', projectPath: 'packages/web', role: 'linked' })
+    expect(member.project.monorepo?.id).toBe(feature.project.id)
+    expect(member.workspaceDirectory).toBe(await realpath(hidden))
+    const registry = new ProjectRegistry()
+    registry.register(registered)
+    expect(registry.related(feature.project.id).map(entry => entry.project.id).sort()).toEqual([feature.project.id, member.project.id].sort())
+    const rescan = await scanDirectory(root)
+    expect(rescan.result.projects.map(project => project.id)).toEqual(result.projects.map(project => project.id))
+    const mainOnly = await scanDirectory(directory)
+    expect(mainOnly.result.projects[0].id).toBe(main.project.id)
+    expect(mainOnly.result.repositories![0].worktrees.filter(row => row.availability === 'outside')).toHaveLength(3)
+  })
+
+  it('supports selecting a linked checkout whose administration is outside the connected root', async () => {
+    const { git } = await committedRepository()
+    const linked = path.join(root, 'linked')
+    await git(['worktree', 'add', '-b', 'linked', linked])
+    const { result, registered } = await scanDirectory(linked)
+    expect(result.projects).toHaveLength(2)
+    expect(result.projects.find(project => project.relativePath === '.')?.gitContext).toMatchObject({ state: 'verified', role: 'linked', checkoutPath: '.' })
+    expect(result.repositories![0].worktrees).toMatchObject([{ availability: 'outside' }, { availability: 'available', path: '.' }])
+    const registry = new ProjectRegistry()
+    registry.register(registered)
+    await expect(registry.get(registered[0].project.id)).resolves.toBeDefined()
+  })
+
+  it('keeps missing and symlinked listed locations non-actionable and never scans outside inventory paths', async () => {
+    const { git } = await committedRepository()
+    const missing = path.join(root, '.worktrees/missing')
+    const linked = path.join(root, '.worktrees/linked')
+    await git(['worktree', 'add', '-b', 'missing', missing])
+    await git(['worktree', 'add', '-b', 'linked', linked])
+    await rm(missing, { recursive: true })
+    const moved = path.join(temporary, 'moved')
+    await rename(linked, moved)
+    await symlink(moved, linked)
+    const { result } = await scanDirectory(root)
+    expect(result.projects).toHaveLength(2)
+    expect(result.repositories![0]).toMatchObject({ status: 'partial' })
+    expect(result.repositories![0].worktrees.find(row => row.path.endsWith('/missing'))).toMatchObject({ availability: 'missing', prunable: true })
+    expect(result.repositories![0].worktrees.find(row => row.path.endsWith('/linked'))).toMatchObject({ availability: 'unavailable' })
+    expect(result.repositories![0].worktrees.filter(row => row.projectId)).toHaveLength(1)
+  })
+
+  it('does not mistake a separate Git directory for a linked worktree', async () => {
+    const directory = await fixture('separate')
+    await execFileAsync('git', ['init', '-b', 'main', '--separate-git-dir', path.join(temporary, 'git-data')], { cwd: directory })
+    const { result } = await scanDirectory(root)
+    expect(result.projects[0].gitContext).toMatchObject({ state: 'verified', role: 'main' })
+    expect(result.repositories![0].worktrees[0]).toMatchObject({ role: 'main', availability: 'available', unborn: true })
+  })
+
+  it('keeps a submodule and its packages independent of the containing checkout', async () => {
+    const { directory, git } = await committedRepository()
+    await git(['-c', 'protocol.file.allow=always', 'submodule', 'add', directory, 'module'])
+    const { result, registered } = await scanDirectory(root)
+    expect(result.projects).toHaveLength(4)
+    const parent = result.projects.find(project => project.relativePath === 'main')!
+    const module = result.projects.find(project => project.relativePath === 'main/module')!
+    const child = registered.find(entry => entry.project.relativePath === 'main/module/packages/web')!
+    expect(module.monorepo).toBeUndefined()
+    expect(module.gitContext).toMatchObject({ state: 'verified', role: 'main' })
+    expect(module.gitContext).not.toMatchObject({ repositoryId: parent.gitContext?.state === 'verified' ? parent.gitContext.repositoryId : '' })
+    expect(child.project.monorepo?.id).toBe(module.id)
+    expect(child.workspaceDirectory).toBe(await realpath(path.join(directory, 'module')))
+    expect(result.repositories).toHaveLength(2)
+  })
+
+  it('keeps cloned repositories separate even when their origins are identical', async () => {
+    const { directory, git } = await committedRepository()
+    await git(['remote', 'add', 'origin', 'https://github.com/example/shared'])
+    const clone = path.join(root, 'clone')
+    await execFileAsync('git', ['clone', directory, clone])
+    await execFileAsync('git', ['remote', 'set-url', 'origin', 'https://github.com/example/shared'], { cwd: clone })
+    const { result } = await scanDirectory(root)
+    expect(result.repositories).toHaveLength(2)
+    expect(result.repositories![0].id).not.toBe(result.repositories![1].id)
+    expect(result.projects.filter(project => project.git?.origin === 'https://github.com/example/shared')).toHaveLength(4)
+  })
+
+  it('retains checkout identity across narrower package scans without sharing sibling maintenance', async () => {
+    const { directory } = await committedRepository()
+    await writeFile(path.join(directory, 'packages/web/package.json'), '{"name":"aaa-sorted-before-root"}')
+    const broad = await scanDirectory(root)
+    const registry = new ProjectRegistry()
+    registry.register(broad.registered)
+    const member = broad.registered.find(entry => entry.project.relativePath === 'main/packages/web')!
+    const checkout = broad.registered.find(entry => entry.project.relativePath === 'main')!
+    expect(broad.result.repositories![0].worktrees[0]).toMatchObject({ path: 'main', projectId: checkout.project.id })
+    const previous = member.gitIdentity
+    const narrow = await scanDirectory(path.join(directory, 'packages/web'))
+    registry.register(narrow.registered)
+    expect(registry.lookup(member.project.id).gitIdentity).toEqual(previous)
+    expect(registry.lookup(member.project.id).project.gitContext).toMatchObject({ state: 'verified', projectPath: 'packages/web' })
+    await expect(registry.get(member.project.id)).resolves.toMatchObject({ workspaceDirectory: await realpath(directory) })
+  })
+
+  it('discovers checkout packages from a bare-backed worktree without a runnable bare project', async () => {
+    const { directory } = await committedRepository()
+    const bare = path.join(temporary, 'bare.git')
+    await execFileAsync('git', ['clone', '--bare', directory, bare])
+    const linked = path.join(root, '.worktrees/bare-linked')
+    await execFileAsync('git', ['--git-dir', bare, 'worktree', 'add', linked, 'main'])
+    const { result } = await scanDirectory(linked)
+    expect(result.projects).toHaveLength(2)
+    expect(result.repositories![0].worktrees).toMatchObject([{ role: 'bare', availability: 'outside' }, { role: 'linked', availability: 'available', path: '.' }])
+  })
+
+  it('rejects retargeted and replaced Git identities before taking registered actions', async () => {
+    const { directory, git } = await committedRepository()
+    const linked = path.join(root, 'linked')
+    await git(['worktree', 'add', '-b', 'linked', linked])
+    const { registered } = await scanDirectory(root)
+    const registry = new ProjectRegistry()
+    registry.register(registered)
+    const main = registered.find(entry => entry.project.relativePath === 'main')!
+    const other = registered.find(entry => entry.project.relativePath === 'linked')!
+    await writeFile(path.join(linked, '.git'), `gitdir: ${path.join(directory, '.git')}\n`)
+    await expect(registry.get(other.project.id)).rejects.toMatchObject({ status: 403 })
+    await rename(path.join(directory, '.git'), path.join(directory, 'old-git'))
+    await execFileAsync('git', ['init', '-b', 'replacement'], { cwd: directory })
+    await expect(registry.get(main.project.id)).rejects.toMatchObject({ status: 403 })
+    const replaced = (await scanDirectory(root)).result.projects.find(project => project.relativePath === 'main')!
+    expect(replaced.id).toBe(main.project.id)
+    expect(replaced.gitContext).toMatchObject({ state: 'verified', worktreeId: main.project.gitContext?.state === 'verified' ? main.project.gitContext.worktreeId : '' })
+    if (replaced.gitContext?.state !== 'verified' || main.project.gitContext?.state !== 'verified') throw new Error('Expected verified checkout identities')
+    expect(replaced.gitContext.repositoryId).not.toBe(main.project.gitContext.repositoryId)
+    expect((await scanDirectory(root)).result.projects.find(project => project.id === replaced.id)?.gitContext).toEqual(replaced.gitContext)
+  })
+
   it('counts source with inherited ignore rules, rejects symlinks and refreshes metrics', async () => {
     const directory = await fixture('metrics', { name: 'metrics', workspaces: ['app'] })
     await fixture('metrics/app', { name: 'app' })

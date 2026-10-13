@@ -223,7 +223,7 @@ describe('read-only folder scan', () => {
     expect(result.warnings).toEqual(['.: workspace declarations could not be read.'])
   })
 
-  it('keeps immediate nested Git repositories standalone without inheriting Git or scanning deeper', async () => {
+  it('keeps nested Git repositories standalone and discovers their own immediate packages', async () => {
     const result = await scanDirectory(directory('studio', {
       '.git': { HEAD: 'ref: refs/heads/main\n' },
       'package.json': JSON.stringify({ name: 'studio', packageManager: 'pnpm@10.0.0', workspaces: ['*'] }),
@@ -235,10 +235,12 @@ describe('read-only folder scan', () => {
       linked: { '.git': 'gitdir: ../elsewhere', 'package.json': '{"name":"linked"}' },
       gitOnly: { '.git': { HEAD: 'ref: refs/heads/other\n' } },
     }))
-    expect(result.projects.map(project => project.name)).toEqual(['gitOnly', 'independent', 'linked', 'studio'])
+    expect(result.projects.map(project => project.name)).toEqual(['gitOnly', 'independent', 'linked', 'studio', 'too-deep'])
     expect(result.projects[1]).toMatchObject({ packageManager: 'bun', git: { branch: 'independent' } })
     expect(result.projects[2].git).toBeUndefined()
-    expect(result.projects.every(project => project.monorepo === undefined)).toBe(true)
+    expect(result.projects.slice(0, 4).every(project => project.monorepo === undefined)).toBe(true)
+    expect(result.projects[4].monorepo?.id).toBe(result.projects[1].id)
+    expect(result.projects[4].gitContext).toEqual({ state: 'unresolved' })
     expect(result.projects[3].workspacePackageCount).toBeUndefined()
   })
 
@@ -267,7 +269,8 @@ describe('read-only folder scan', () => {
     }))
     expect(result.projects[0]).toMatchObject({ name: 'broken', description: 'Useful description.' })
     expect(result.warnings).toHaveLength(2)
-    expect(result.warnings?.join(' ')).toContain('Linked worktree')
+    expect(result.warnings?.join(' ')).toContain('Git pointer')
+    expect(result.projects[0].gitContext).toEqual({ state: 'unresolved' })
   })
 
   it('queries saved permission without prompting and only requests it when asked', async () => {

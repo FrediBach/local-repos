@@ -268,6 +268,32 @@ apply to both the header and preview graphs.
 
 ## Project details and action menus
 
+Projects with worktree relationships display branch/path context, and list view
+groups their matching rows by repository and checkout. Grid cards remain separate.
+Filtering happens before grouping, preserving project counts and selected sort
+order; hidden siblings are never inserted. The Worktree facet is independent of
+the existing Branch and Project structure facets. Saved filters retain it.
+
+The cached **Worktrees** tab shows scope, scan age, main/linked roles, working
+changes, and unavailable/external entries. **View package** navigates to the same
+checkout-relative package path; **View checkout** explicitly falls back to the
+root when that package is absent. It opens Overview in the existing dialog without
+running Git or changing filters. Closing restores the original opener; removed
+projects show an unavailable panel. Log responses carry their project ID so late
+responses cannot populate a different selected checkout. Browser pointer files
+show unresolved relationship guidance rather than inferred linked status.
+
+Daily summaries and commit heatmaps use aggregate repository reads scoped to
+active projects and the current helper root. Activity caches use shared repository
+IDs for verified Git contexts; single-checkout History callbacks cannot overwrite
+aggregate activity. Cached aggregates record their eligible checkout membership;
+changes immediately hide incompatible counts and refresh them, including when a
+checkout is ignored. Ignoring one package does not change coverage when another
+eligible project still represents that checkout. Push reminders show a shared
+unpushed count plus named dirty or unavailable checkouts. Favorites, tags,
+ignored state, maintenance reports,
+previews, and dev processes remain project-specific.
+
 The project dialog keeps the preview, metadata, and latest commit in **Overview**,
 followed by documentation, disk usage, and dependency cleanup. **History** contains the commit
 log, and **Development** holds the server, scripts, preview capture, and logs.

@@ -5,13 +5,18 @@ import { ArrowRight, FolderGit2, ShieldCheck } from 'lucide-react'
 import { ProjectCard } from './project-card'
 import { ProjectEmptyState } from './project-empty-state'
 import { groupProjectResults, projectGridTitle, type ProjectResultGroup } from '@/lib/project-groups'
-import type { RepoProject } from '@/types'
+import { projectActionLabel, projectBranchLabel, projectRepository, worktreeCountLabel } from '@/lib/project-worktrees'
+import { ProjectCheckoutContext } from './project-worktrees'
+import type { GitRepository, RepoProject } from '@/types'
 import type { PreviewCommitActivity } from '@/lib/commit-activity'
+
+const emptyRepositories: GitRepository[] = []
 
 interface Props extends Omit<ComponentProps<typeof ProjectCard>, 'project' | 'displayName' | 'activity' | 'index' | 'favorite' | 'capturing' | 'todoCount'> {
   ignoredProjects?: RepoProject[]
   projects: RepoProject[]
   allProjects?: RepoProject[]
+  repositories?: GitRepository[]
   projectActivity?: Record<string, PreviewCommitActivity>
   favoriteIds: Set<string>
   capturingId?: string
@@ -24,15 +29,21 @@ interface Props extends Omit<ComponentProps<typeof ProjectCard>, 'project' | 'di
   onConnect: () => void
 }
 
-export function ProjectResults({ ignoredProjects = [], onIgnore, projects, allProjects = projects, projectActivity, favoriteIds, capturingId, filter, hasRefinements, emptyWorkspace, isDemo, onReset, onConnect,
+export function ProjectResults({ ignoredProjects = [], onIgnore, projects, allProjects = projects, repositories = emptyRepositories, projectActivity, favoriteIds, capturingId, filter, hasRefinements, emptyWorkspace, isDemo, onReset, onConnect,
   view, query, activeTags, tagsReady, busy, onOpen, onEditTags, onToggleFavorite, onTagFilter, onTechnologyFilter, onAction, todoCounts, onTodos }: Props) {
   const renderProject = ({ project, index }: ProjectResultGroup['items'][number]) => <ProjectCard key={project.id} project={project} index={index} view={view} query={query}
+    repository={projectRepository(project, repositories)}
     activity={projectActivity?.[project.id]}
     displayName={view === 'grid' ? projectGridTitle(project, allProjects) : project.name}
     activeTags={activeTags} tagsReady={tagsReady} favorite={favoriteIds.has(project.id)} capturing={capturingId === project.id} busy={busy} todoCount={todoCounts?.[project.id]} onTodos={onTodos}
     onOpen={onOpen} onEditTags={onEditTags} onToggleFavorite={onToggleFavorite} onIgnore={onIgnore} onTagFilter={onTagFilter} onTechnologyFilter={onTechnologyFilter} onAction={onAction} />
   return <>
-        {projects.length ? <div className={`project-results projects-${view}`}>{view === 'grid' ? projects.map((project, index) => renderProject({ project, index })) : groupProjectResults(projects, allProjects).map(group => group.monorepo
+        {projects.length ? <div className={`project-results projects-${view}`}>{view === 'grid' ? projects.map((project, index) => renderProject({ project, index })) : groupProjectResults(projects, allProjects, repositories).map(group => group.repository
+          ? <section key={group.id} className="worktree-repository-group" aria-label={`${group.repository.name} repository worktrees`}>
+            <header className="worktree-repository-heading"><FolderGit2 size={18} aria-hidden="true" /><h2>{group.repository.name}</h2><span>{group.items.length} matching {group.items.length === 1 ? 'project' : 'projects'} in {group.checkouts!.length} {group.checkouts!.length === 1 ? 'worktree' : 'worktrees'}</span></header>
+            {group.checkouts!.map(checkout => <section className="worktree-checkout" key={checkout.id} aria-label={`Worktree ${checkout.path}`}><header className="worktree-checkout-heading"><h3>{projectBranchLabel(checkout.items[0].project)}</h3><code>{checkout.path}</code><span>{checkout.items[0].project.gitContext?.state === 'verified' && checkout.items[0].project.gitContext.role === 'main' ? 'Main worktree' : 'Linked worktree'}</span><button type="button" aria-label={`View worktrees for ${projectActionLabel(checkout.items[0].project)}`} onClick={() => onOpen(checkout.items[0].project, 'worktrees')}>{worktreeCountLabel(group.repository)}</button></header><div className="projects-list">{checkout.items.map(renderProject)}</div></section>)}
+          </section>
+          : group.monorepo
           ? <section key={group.id} className="monorepo-group" aria-label={`${group.monorepo.name} monorepo`}>
             <header className="monorepo-group-header"><FolderGit2 size={18} aria-hidden="true" /><div className="monorepo-group-info"><div className="monorepo-group-title"><h2>{group.monorepo.name}</h2><span>Monorepo</span></div><code>{group.monorepo.relativePath}</code></div><span className="monorepo-group-count">{group.items.length} {group.items.length === 1 ? 'project' : 'projects'} shown</span></header>
             <div className={`monorepo-group-projects projects-${view}`}>{group.items.map(renderProject)}</div>
@@ -42,9 +53,9 @@ export function ProjectResults({ ignoredProjects = [], onIgnore, projects, allPr
         {!!ignoredProjects.length && <section className="ignored-projects" aria-label="Ignored projects">
           <h2>Ignored projects</h2>
           <div className={`ignored-project-results projects-${view}`}>{ignoredProjects.map(project => <div className="ignored-project" key={project.id}>
-            <span>{project.name}</span>
+            <div><span>{project.name}</span><ProjectCheckoutContext project={project} repository={projectRepository(project, repositories)} /></div>
             <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild><button id={`ignored-project-${project.id}`} className="project-menu" aria-label={`Actions for ignored ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger>
+              <DropdownMenuTrigger asChild><button id={`ignored-project-${project.id}`} className="project-menu" aria-label={`Actions for ignored ${projectActionLabel(project)}`}><Ellipsis size={17} /></button></DropdownMenuTrigger>
               <DropdownMenuContent align="end"><DropdownMenuItem disabled={!!busy} onSelect={() => onIgnore?.(project.id)}>Unignore project</DropdownMenuItem></DropdownMenuContent>
             </DropdownMenu>
           </div>)}</div>

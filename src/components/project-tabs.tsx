@@ -1,16 +1,16 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-const allTabs = ['overview', 'history', 'development', 'packages', 'vulnerabilities', 'updates', 'unused', 'react-doctor', 'lighthouse'] as const
+const allTabs = ['overview', 'history', 'worktrees', 'development', 'packages', 'vulnerabilities', 'updates', 'unused', 'react-doctor', 'lighthouse'] as const
 export type ProjectTab = typeof allTabs[number]
-const labels: Record<ProjectTab, string> = { overview: 'Overview', history: 'History', development: 'Development', packages: 'Packages', vulnerabilities: 'Vulnerabilities', updates: 'Updates', unused: 'Metrics', 'react-doctor': 'React Doctor', lighthouse: 'Lighthouse' }
+const labels: Record<ProjectTab, string> = { overview: 'Overview', history: 'History', worktrees: 'Worktrees', development: 'Development', packages: 'Packages', vulnerabilities: 'Vulnerabilities', updates: 'Updates', unused: 'Metrics', 'react-doctor': 'React Doctor', lighthouse: 'Lighthouse' }
 
-export function ProjectTabs({ value, onChange, children, react = false, frontend = false }: { value: ProjectTab; onChange: (tab: ProjectTab) => void; children: ReactNode; react?: boolean; frontend?: boolean }) {
+export function ProjectTabs({ value, onChange, children, react = false, frontend = false, worktrees = false }: { value: ProjectTab; onChange: (tab: ProjectTab) => void; children: ReactNode; react?: boolean; frontend?: boolean; worktrees?: boolean }) {
   const id = useId()
   const tablist = useRef<HTMLDivElement>(null)
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   const [scrollable, setScrollable] = useState({ left: false, right: false })
-  const tabs = allTabs.filter(tab => (tab !== 'react-doctor' || react) && (tab !== 'lighthouse' || frontend))
+  const tabs = allTabs.filter(tab => (tab !== 'worktrees' || worktrees) && (tab !== 'react-doctor' || react) && (tab !== 'lighthouse' || frontend))
 
   function updateScrollControls() {
     const node = tablist.current
@@ -24,7 +24,7 @@ export function ProjectTabs({ value, onChange, children, react = false, frontend
 
   useEffect(() => {
     revealSelectedTab()
-  }, [value, react, frontend])
+  }, [value, react, frontend, worktrees])
 
   useEffect(() => {
     const node = tablist.current

@@ -22,6 +22,24 @@ it.each(['grid', 'list'] as const)('keeps the %s preview clickable through its a
   expect(props.onOpen).toHaveBeenCalledWith(standalone)
 })
 
+it('keeps a filtered worktree package in its repository context without reinserting hidden siblings', () => {
+  const project: RepoProject = { ...web, id: 'linked-web', relativePath: 'suite-task/frontend', git: { branch: 'feat/task' }, gitContext: { state: 'verified', repositoryId: 'repo', worktreeId: 'linked', checkoutPath: 'suite-task', projectPath: 'frontend', role: 'linked' } }
+  const { container } = render(<ProjectResults {...props} view="list" projects={[project]} allProjects={[root, web, project]} repositories={[{ id: 'repo', name: 'Suite', checkedAt: '2026-10-13T10:00:00Z', status: 'complete', worktrees: [
+    { id: 'main', path: 'suite', role: 'main', availability: 'available', projectId: root.id },
+    { id: 'linked', path: 'suite-task', role: 'linked', availability: 'available' },
+  ] }]} />)
+  const group = screen.getByRole('region', { name: 'Suite repository worktrees' })
+  expect(within(group).getByText('1 matching project in 1 worktree')).toBeTruthy()
+  expect(within(group).getByRole('region', { name: 'Worktree suite-task' })).toBeTruthy()
+  expect(screen.getAllByRole('article')).toHaveLength(1)
+  expect(container.querySelector('.monorepo-group')).toBeNull()
+  const card = within(group).getByRole('article')
+  fireEvent.click(within(card).getByRole('button', { name: 'View worktrees for Frontend · feat/task · suite-task/frontend' }))
+  expect(props.onOpen).toHaveBeenLastCalledWith(project, 'worktrees')
+  fireEvent.click(within(card).getByRole('button', { name: 'Favorite Frontend · feat/task · suite-task/frontend' }))
+  expect(props.onToggleFavorite).toHaveBeenLastCalledWith(project.id)
+})
+
 describe('monorepo results in list view', () => {
   const view = 'list'
 

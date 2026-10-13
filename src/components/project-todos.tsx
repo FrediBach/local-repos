@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { TodoFilters } from './todo-filters'
 import type { ProjectTab } from '@/components/project-tabs'
 import { useTodoFiltering } from '@/hooks/use-todo-filtering'
+import { projectActionLabel, projectBranchLabel } from '@/lib/project-worktrees'
 import type { ProjectTodo } from '@/lib/project-todos'
 import { todoKindLabels, todoPriorityLabels, todoSortOptions } from '@/lib/project-todo-filtering'
 import type { RepoProject } from '@/types'
@@ -59,7 +60,7 @@ export function ProjectTodos({ projects, todos, projectId, onClearProject, onOpe
       <div><span className="eyebrow"><ClipboardList size={14} aria-hidden="true" /> THE IMPORTANT NEXT STEPS</span><h2 tabIndex={-1}>A short list. A clear next step.</h2><p>Important findings from your scans, grouped into a few tasks for each project.</p></div>
       {projectId && <Button variant="outline" size="sm" onClick={onClearProject}><ArrowLeft size={15} aria-hidden="true" />All todos</Button>}
     </div>
-    <div className="todos-scope"><p>{projectId ? <><FolderGit2 size={14} aria-hidden="true" />{selectedProject?.name || 'Selected project'}</> : 'Across all projects'}</p><p><Clock3 size={14} aria-hidden="true" />{latestScan ? <>Last scan <time dateTime={latestScan.toISOString()}>{latestScan.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></> : 'No scans yet'}</p></div>
+    <div className="todos-scope"><p>{projectId ? <><FolderGit2 size={14} aria-hidden="true" />{selectedProject ? projectActionLabel(selectedProject) : 'Selected project'}</> : 'Across all projects'}</p><p><Clock3 size={14} aria-hidden="true" />{latestScan ? <>Last scan <time dateTime={latestScan.toISOString()}>{latestScan.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></> : 'No scans yet'}</p></div>
     {isDemo && <div className="todos-demo"><p>Connect your directory to build a todo list from your own project scans.</p><Button variant="outline" size="sm" onClick={onConnect}>Connect directory</Button></div>}
     <dl className="todos-stats" aria-label="Todo overview">
       <div><dt><ClipboardList size={15} aria-hidden="true" />Open todos</dt><dd>{visibleTodos.length}</dd></div>
@@ -69,8 +70,8 @@ export function ProjectTodos({ projects, todos, projectId, onClearProject, onOpe
     </dl>
     <TodoFilters filtering={filtering} />
     <div className="todos-section-heading"><h3>{projectId ? 'Project priorities' : 'By project'}</h3><span>{todoSortOptions.find(option => option.value === filtering.sort)?.label} · refreshed with each scan</span></div>
-    {groups.length ? <div className="todos-projects">{groups.map(({ project, todos: projectTodos }) => <article className="todos-project" aria-label={`${project.name} todos`} key={project.id}>
-      <div className="todos-project-heading"><div><h3>{project.name}</h3><p>{project.relativePath}</p></div><span>{projectTodos.length} {projectTodos.length === 1 ? 'todo' : 'todos'}</span></div>
+    {groups.length ? <div className="todos-projects">{groups.map(({ project, todos: projectTodos }) => <article className="todos-project" aria-label={`${projectActionLabel(project)} todos`} key={project.id}>
+      <div className="todos-project-heading"><div><h3>{project.name}</h3><p>{project.gitContext?.state === 'verified' && <>{projectBranchLabel(project)} · </>}{project.relativePath}</p></div><span>{projectTodos.length} {projectTodos.length === 1 ? 'todo' : 'todos'}</span></div>
       <ul>{projectTodos.map(todo => <TodoTask key={todo.id} todo={todo} project={project} dismissNoteId={`${id}-dismiss-note`} onOpen={onOpen} onDismiss={dismiss} />)}</ul>
     </article>)}</div> : visibleTodos.length > 0 && filtering.hasFilters ? <div className="todos-empty" role="status"><Search size={30} aria-hidden="true" /><h3 tabIndex={-1}>No todos match your filters.</h3><p>Try a different search or remove a filter to see more tasks.</p><Button variant="outline" size="sm" onClick={() => { filtering.clearFilters(); section.current?.querySelector<HTMLInputElement>('[aria-label="Search todos"]')?.focus() }}>Reset search and filters</Button></div> : <TodoEmptyState projectId={projectId} selectedProject={selectedProject} visibleProjects={visibleProjects} scannedProjects={scannedProjects} onOpen={onOpen} />}
     {scannedProjects.length > 0 && scannedProjects.length < visibleProjects.length && <p className="todos-coverage"><ScanLine size={15} aria-hidden="true" />{visibleProjects.length - scannedProjects.length} {visibleProjects.length - scannedProjects.length === 1 ? 'project has' : 'projects have'} no scans yet. Their findings are not included.</p>}
@@ -87,7 +88,7 @@ function TodoTask({ todo, project, dismissNoteId, onOpen, onDismiss }: {
   return <li aria-label={todo.title} className="todos-task">
     <div className={`todos-task-icon todos-priority-${todo.priority}`}><Icon size={19} aria-hidden="true" /></div>
     <div className="todos-task-content"><div className="todos-task-meta"><span className={`todos-priority todos-priority-${todo.priority}`}>{todoPriorityLabels[todo.priority]}</span><span>{label}</span></div><h4>{todo.title}</h4><p>{todo.description}</p><span className="todos-task-date">{scannedAt ? <>Scanned <time dateTime={scannedAt.toISOString()}>{scannedAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></> : 'Scan date unavailable'}</span></div>
-    <div className="todos-task-actions"><Button variant="outline" size="sm" aria-label={`Review ${todo.title} in ${project.name}`} onClick={() => onOpen(project, todo.tab)}>Review scan<ArrowUpRight size={14} aria-hidden="true" /></Button><Button variant="ghost" size="sm" data-todo-dismiss aria-label={`Dismiss ${todo.title} in ${project.name}`} aria-describedby={dismissNoteId} onClick={event => onDismiss(todo, event.currentTarget)}><X size={14} aria-hidden="true" />Dismiss</Button></div>
+    <div className="todos-task-actions"><Button variant="outline" size="sm" aria-label={`Review ${todo.title} in ${projectActionLabel(project)}`} onClick={() => onOpen(project, todo.tab)}>Review scan<ArrowUpRight size={14} aria-hidden="true" /></Button><Button variant="ghost" size="sm" data-todo-dismiss aria-label={`Dismiss ${todo.title} in ${projectActionLabel(project)}`} aria-describedby={dismissNoteId} onClick={event => onDismiss(todo, event.currentTarget)}><X size={14} aria-hidden="true" />Dismiss</Button></div>
   </li>
 }
 

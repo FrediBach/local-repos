@@ -1,6 +1,32 @@
 # Git worktree support plan
 
-Status: proposed, 2026-10-13. No application changes are implemented by this plan.
+Status: first release implemented, 2026-10-13. Phases 0–4 cover existing
+worktrees; phase 5 remains planned. This document preserves the design
+proposal. See the [user guide](../../README.md#git-worktrees) and architecture
+guides for implemented behavior and limitations.
+
+Implementation verification on 2026-10-13:
+
+- `npm test`: 144 test files and 1,618 tests passed; no skipped tests reported.
+- `npm run build`: passed, including typechecking. Vite retains its large-chunk
+  advisory warning.
+- Isolated Chromium against disposable Git fixtures verified hidden-worktree
+  discovery, sibling package navigation, list/grid views, mobile and dark layouts,
+  and Escape closing. No page errors or horizontal page overflow were observed.
+  UI tests cover action targeting, focus restoration, stale logs, and unavailable
+  states. The native in-app browser bridge was unavailable for this session.
+- `git diff --check` and local documentation-link checks passed.
+- `npm run doctor` still exits nonzero with 34 findings. The newly introduced
+  unstable default props were fixed. The watcher-cleanup error is a false
+  positive: cleanup clears its timer and invalidates late work, with cancellation
+  tests passing. Remaining findings include existing advisories, intentionally
+  bounded asynchronous loops, and component-complexity warnings.
+
+Worktree creation/removal and automatic topology-only watching remain outside
+this release. Startup readiness is ordered across sibling checkouts to detect
+fixed-port collisions; their running processes and package operations remain
+independent. Repository caches include filesystem identity and eligible checkout
+membership so replacement or ignore changes cannot reuse incompatible counts.
 
 Support Git worktrees as separate local checkouts of a shared repository. Users
 should be able to recognize the checkout they are looking at, find its siblings,
@@ -28,7 +54,7 @@ verified. The application continues to display one connected folder at a time.
 | Browser access | Preserve read-only discovery and explain unavailable Git relationships without following Git pointer files. |
 | Initial scope | No worktree creation, deletion, movement, repair, branch checkout, fetch, or push in the first release. |
 
-## Current implementation and gaps
+## Pre-implementation baseline and gaps
 
 The helper already detects a project when an entry named `.git` exists, including
 a file, and invokes Git from that project's directory. Consequently, a linked
@@ -86,8 +112,10 @@ Connected folder
 
 Preserve helper project IDs derived from canonical project paths, including IDs
 for worktrees already discovered today. Add a repository ID derived from the
-canonical common Git directory and a worktree ID derived from the canonical
-checkout root, with separate namespaces. These are local identities, not portable
+canonical common Git directory plus its filesystem device/inode identity, and a
+worktree ID derived from the canonical checkout root, with separate namespaces.
+Replacing Git data at the same path therefore changes the history-cache identity
+while preserving project preferences and checkout identity. These are local identities, not portable
 IDs or authorization tokens. A move still changes path-based identities; automatic
 preference migration across moves is outside the first release.
 

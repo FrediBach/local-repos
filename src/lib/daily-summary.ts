@@ -1,7 +1,7 @@
-import type { GitDay, GitDayCommit, GitDayQuery, RepoProject } from '@/types'
+import type { GitDay, GitDayCommit, GitDayQuery, RepoProject, RepositoryGitCoverage, RepositoryGitScope } from '@/types'
 
-export type SummaryRepository = Pick<RepoProject, 'id' | 'name' | 'relativePath'>
-export interface SummaryResult { project: SummaryRepository; data?: GitDay; error?: string }
+export type SummaryRepository = Pick<RepoProject, 'id' | 'name' | 'relativePath'> & { repositoryId?: string; projectIds?: string[] }
+export interface SummaryResult { project: SummaryRepository; data?: GitDay & Partial<RepositoryGitCoverage>; error?: string }
 export interface SummaryCommit extends GitDayCommit { project: SummaryRepository }
 
 export function localDate(date = new Date()): string {
@@ -23,11 +23,32 @@ export function adjacentDay(day: string, offset: number): string {
   return localDate(date)
 }
 
-/** Workspace packages share repository-wide history with their outermost root. */
+export function repositoryScope(project: SummaryRepository, rootId?: string): RepositoryGitScope | undefined {
+  if (rootId && project.repositoryId && project.projectIds?.length) return { rootId, repositoryId: project.repositoryId, projectIds: project.projectIds }
+}
+
+/** Keep an actionable representative while sharing Git history across checkouts. */
 export function summaryRepositories(projects: RepoProject[]): SummaryRepository[] {
   const byId = new Map(projects.map(project => [project.id, project]))
   const roots = new Map<string, SummaryRepository>()
+  const representativeRank = new Map<string, number>()
   for (let project of projects) {
+    if (project.gitContext?.state === 'verified') {
+      const key = project.gitContext.repositoryId
+      const existing = roots.get(key)
+      const rank = (project.gitContext.projectPath === '.' ? 2 : 0) + (project.gitContext.role === 'main' ? 1 : 0)
+      if (existing) {
+        existing.projectIds!.push(project.id)
+        if (rank > (representativeRank.get(key) ?? -1)) {
+          Object.assign(existing, { id: project.id, name: project.name, relativePath: project.gitContext.checkoutPath })
+          representativeRank.set(key, rank)
+        }
+      } else {
+        roots.set(key, { id: project.id, name: project.name, relativePath: project.gitContext.checkoutPath, repositoryId: key, projectIds: [project.id] })
+        representativeRank.set(key, rank)
+      }
+      continue
+    }
     const visited = new Set<string>()
     while (project.monorepo && byId.has(project.monorepo.id) && !visited.has(project.id)) {
       visited.add(project.id)
@@ -52,7 +73,12 @@ export const branchCount = (commits: SummaryCommit[]) => new Set(commits.flatMap
 const counted = (count: number, singular: string, plural = `${singular}s`) => `${count} ${count === 1 ? singular : plural}`
 
 export function summaryNotes(results: SummaryResult[]): string[] {
-  return results.flatMap(result => result.error ? [`${result.project.name}: ${result.error}`] : result.data?.shallow ? [`${result.project.name}: shallow clone; only downloaded history is available.`] : [])
+  return results.flatMap(({ project, data, error }) => error ? [`${project.name}: ${error}`] : [
+    ...(data?.available === false ? [`${project.name}: Git history is unavailable.`] : []),
+    ...(data?.shallow ? [`${project.name}: shallow clone; only downloaded history is available.`] : []),
+    ...(data?.coverage === 'partial' ? [`${project.name}: incomplete worktree coverage.`] : []),
+    ...(data?.warnings ?? []).map(warning => `${project.name}: ${warning}`),
+  ])
 }
 
 export function formatDailyReport(day: string, commits: SummaryCommit[], results: SummaryResult[], author = '', projectId = ''): string {
@@ -76,6 +102,6 @@ export function formatDailyReport(day: string, commits: SummaryCommit[], results
   lines.push('', 'TIMELINE')
   for (const commit of commits) lines.push(`${commitTime(commit.committedAt)} · ${commit.project.name} · ${commit.message || '(No commit message)'} [${commit.hash.slice(0, 7)}] · ${commit.author || commit.email} · ${commit.branches.map(branchLabel).join(', ') || 'No containing branch (detached HEAD)'}`)
   if (notes.length) lines.push('', 'COVERAGE NOTES', ...notes.map(note => `- ${note}`))
-  lines.push('', 'Commit times are reference points, not hours worked. Includes locally available branch history; uncommitted work is excluded. Branches contain these commits now; original branches may differ. Monorepo history is counted once.')
+  lines.push('', 'Commit times are reference points, not hours worked. Includes locally available branch history; uncommitted work is excluded. Branches contain these commits now; original branches may differ. Shared monorepo and worktree history is counted once.')
   return lines.join('\n')
 }

@@ -6,17 +6,17 @@ import { adjacentDay, branchCount, branchLabel, commitTime, dayRange, formatDail
 import type { RepoProject } from '@/types'
 import './daily-summary.css'
 
-interface Props { projects: RepoProject[]; helper: boolean; onConnect: () => void }
+interface Props { projects: RepoProject[]; helper: boolean; rootId?: string; onConnect: () => void }
 interface CopyContext { key: string; author: string; projectId: string }
 
-export function DailySummary({ projects, helper, onConnect }: Props) {
+export function DailySummary({ projects, helper, rootId, onConnect }: Props) {
   const [day, setDay] = useState(localDate)
   const [author, setAuthor] = useState('')
   const [projectId, setProjectId] = useState('')
   const [revision, setRevision] = useState(0)
   const [copyFeedback, setCopyFeedback] = useState<{ context: CopyContext; status: 'copied' | 'error' }>()
   const copyRequest = useRef(0)
-  const { repositories, key, range, results, loading } = useDailySummary(projects, helper, day, revision)
+  const { repositories, key, range, results, loading } = useDailySummary(projects, helper, day, revision, rootId)
   // A fresh context also prevents old feedback reappearing when filters are restored.
   const copyContext = useMemo(() => ({ key, author, projectId }), [key, author, projectId])
   const copied = copyFeedback?.context === copyContext && copyFeedback.status === 'copied'
@@ -92,7 +92,7 @@ function SummaryResults({ validDay, loading, results, repositories, commits, fil
     <SummaryNotes notes={notes} failed={failed} onRetry={onRetry} />
     <dl className="daily-stats"><div><dt><GitCommitHorizontal size={15} />Commits</dt><dd>{commits.length}</dd></div><div><dt><FolderGit2 size={15} />Projects</dt><dd>{groups.length}</dd></div><div><dt><GitBranch size={15} />Branches</dt><dd>{branchCount(commits)}</dd></div><div><dt><Clock3 size={15} />First / last commit</dt><dd className="daily-time-range">{commits.length ? <>{commitTime(commits[0].committedAt)} <span>→</span> {commitTime(commits[commits.length - 1].committedAt)}</> : '—'}</dd></div></dl>
     {commits.length ? <SummaryTimeline commits={commits} groups={groups} /> : <SummaryEmpty failed={failed} total={results.length} filtered={filtered} onClearFilters={onClearFilters} />}
-    <p className="daily-footnote">Commit times are reference points, not hours worked. Includes locally available local and remote-tracking branches; uncommitted work is excluded. Branches shown contain the commits now; original branches may differ. Monorepo history is counted once.</p>
+    <p className="daily-footnote">Commit times are reference points, not hours worked. Includes locally available local and remote-tracking branches; uncommitted work is excluded. Branches shown contain the commits now; original branches may differ. Shared monorepo and worktree history is counted once.</p>
   </>
 }
 

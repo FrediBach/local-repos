@@ -155,6 +155,46 @@ can register again after a helper restart.
 
 ## Runtime services
 
+### Git worktrees
+
+[`git-worktrees.ts`](../server/git-worktrees.ts) resolves canonical checkout,
+private Git, and common Git directories, validates linked back-pointers, and
+parses bounded NUL-delimited worktree inventories. Its controlled Git environment
+prevents inherited repository-selection variables and disables hooks, fsmonitor,
+prompts, and lazy fetch. `.git` files alone do not establish a linked relationship;
+submodules and separate Git directories retain their own identity.
+Repository IDs hash the canonical common directory together with its device and
+inode. Ordinary rescans and helper restarts preserve that ID; replacement Git data
+gets a new history-cache identity without changing path-based project or worktree
+IDs and their project preferences.
+
+The scanner enumerates once per common directory and admits only verified
+in-root checkouts. Exact listed locations can bypass the normal hidden/depth
+search, but share the 500-folder/300-project budgets and retain symlink,
+dependency, build, and administrative exclusions. Each checkout begins a fresh
+package context. Outside paths are inventory-only; bare anchors are not runnable
+projects. Registry actions revalidate directory identities, including device and
+inode, so moved or replaced Git metadata requires rescan. The existing internal
+`gitDirectory` remains the command working directory; `gitIdentity` holds the
+separate administrative paths and never grants sibling filesystem access.
+
+[`git-repository.ts`](../server/git-repository.ts) supplies
+`POST /api/projects/:id/repository-history`, `/repository-daily-summary`, and
+`/repository-push-status`. Requests carry current `rootId`, `repositoryId`, and
+bounded `projectIds`, plus existing query fields. The helper validates membership
+and derives checkout HEADs, including detached tips. Shared refs and eligible
+HEADs are deduplicated within the repository; push responses include per-checkout
+working state and coverage. Ordinary project Git endpoints retain their scope.
+MCP returns only authorized checkout projections, without exposing outside paths,
+reasons, or counts; its daily aggregate and cursor bindings follow Git identity.
+
+Inventories flow through scan results and revisioned workspace snapshots. A failed
+inventory refresh preserves dated prior data with unavailable freshness. Manual
+and periodic metadata scans refresh topology; package-change watching can skip
+topology-only changes. No creation, removal, repair, pruning, or branch switching
+is performed. Known helper-owned dev-server ports are reserved across starts and
+probes so a sibling checkout cannot appear ready against another project's app.
+
 [`ProjectRuntime`](../server/runtime.ts) coordinates operations and owns their
 in-flight promises, child processes, cached reports, logs, browsers, and PNGs.
 Individual service modules handle command construction, validation, and parsing.
@@ -313,6 +353,11 @@ in `finally`, including failed captures.
 ## Concurrency and safety contracts
 
 Runtime deduplicates concurrent starts, captures, and report scans per project.
+Startup readiness for verified sibling worktrees is ordered by admission: each
+new start waits for previously admitted sibling starts to settle before spawning.
+This prevents a custom script's late-announced fixed port from being mistaken for
+another checkout's server. The wait preserves generation cancellation and shutdown
+checks; unrelated repositories and already-running sibling servers stay independent.
 Capture deduplication is by ID, so simultaneous requests with different preview
 modes share the first pending capture. Dependency updates and removal acquire a
 maintenance reservation before filesystem awaits. Runtime checks

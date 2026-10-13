@@ -738,6 +738,42 @@ relative dates. The local helper refreshes this snapshot during directory sync;
 no fetch is performed. Browser-only and older cached projects show the available
 latest commit and indicate when recent history is unavailable.
 
+## Git worktrees
+
+The local helper discovers existing Git worktrees and shows which checkouts share
+a repository. List view groups them by repository and checkout; grid view keeps
+separate cards with branch and path context. Project counts include each
+checkout's packages. Favorites, tags, ignored state, reports, and development
+servers stay attached to each project.
+
+Choose **Worktrees** on a card or in project details to see the cached inventory,
+including main/linked roles, working changes, scan time, and availability.
+**View package** opens the matching package in another checkout. If it does not
+exist there, **View checkout** clearly offers the checkout overview instead.
+Navigation does not switch branches, start processes, or alter library filters.
+Search recognizes checkout context; the Worktree filter complements Branch.
+
+Verified worktrees inside the connected folder can be discovered even in hidden
+or deeper locations such as `.worktrees/`, within scan limits. Worktrees outside
+the folder are informational: connect a folder containing them to use their
+projects. Browser-only access cannot resolve Git pointer files and shows helper
+guidance. Missing, locked, stale, partial, and unavailable inventory states are
+shown explicitly; no automatic repair or removal occurs.
+
+Daily summaries and commit activity count shared history once, including eligible
+detached checkout tips. Push reminders retain each checkout's working changes.
+Package installs, cleanup, and report invalidation remain within the selected
+checkout's package workspace. Use different dev-server ports for simultaneous
+checkouts. Sibling startup requests wait for earlier starts to finish becoming
+ready so a late-announced fixed port cannot attach to the wrong checkout. Once
+running, their servers stay independent; port conflicts are reported explicitly.
+
+Use **Sync folder** after adding, moving, or removing worktrees externally.
+Periodic metadata scans also refresh them; package-change watching may not notice
+changes to worktree topology alone. This release supports existing worktrees.
+Creation and removal from the interface remain a later phase of the
+[worktree plan](docs/plan/git-worktrees.md).
+
 ## POC limits
 
 - Both scanners look for repositories in the selected folder and up to two directory levels beneath it. Inside each detected repository, automatic discovery checks only its immediate subfolders for `package.json`, including repositories without a root package manifest. Declared workspaces continue to be searched up to eight levels beneath their root. Scans skip hidden folders, dependencies, and common build output. Browser scanning is limited to 500 folders and 250 projects; helper scanning is limited to 500 folders and 300 projects.

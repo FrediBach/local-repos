@@ -1,7 +1,7 @@
 import { remoteRepository } from '../src/lib/remote-activity'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { open, readdir, realpath, stat } from 'node:fs/promises'
+import { lstat, open, readdir, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { aiInstructionFileNames, extractReadmeIntro, normalizeGitOrigin, parsePackageJson } from '../src/lib/metadata'
@@ -11,6 +11,7 @@ import { packageFingerprint, repositoryFingerprint } from './package-fingerprint
 import { documentationFolders } from '../src/lib/documentation'
 import { readProjectDocumentation } from './documentation'
 import { readCodeMetrics } from './code-metrics'
+import { gitEnvironment, gitRepositoryId, gitWorktreeId, readGitIdentity, readWorktreeInventory, sameGitIdentity, type GitIdentity } from './git-worktrees'
 
 const execFileAsync = promisify(execFile)
 const MAX_METADATA_BYTES = 256 * 1024
@@ -28,6 +29,7 @@ export interface RegisteredProject {
   root: string
   workspaceDirectory?: string
   gitDirectory?: string
+  gitIdentity?: GitIdentity
 }
 
 export class HelperError extends Error {
@@ -72,7 +74,7 @@ async function git(directory: string, args: string[]): Promise<string | undefine
       timeout: 5_000,
       maxBuffer: 256 * 1024,
       encoding: 'utf8',
-      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1' },
+      env: gitEnvironment(),
     })
     return stdout.trim()
   } catch {
@@ -99,7 +101,7 @@ async function readGit(directory: string): Promise<RepoProject['git']> {
   return { branch: branch || (commit ? 'Detached HEAD' : undefined), commit, message, committedAt, recentCommits, origin: origin ? normalizeGitOrigin(origin) : undefined, dirty: status === undefined ? undefined : status.length > 0 }
 }
 
-async function inspectProject(directory: string, root: string, names: string[], warnings: string[], onProgress?: ScanProgressReporter): Promise<RegisteredProject> {
+async function inspectProject(directory: string, root: string, names: string[], warnings: string[], onProgress?: ScanProgressReporter, identify = readGitIdentity): Promise<RegisteredProject> {
   const filenames = new Set(names)
   const detail = path.relative(root, directory) || path.basename(directory)
   onProgress?.({ phase: 'Reading package metadata and lockfiles', detail })
@@ -123,7 +125,12 @@ async function inspectProject(directory: string, root: string, names: string[], 
   onProgress?.({ phase: 'Counting source lines', detail })
   const codeMetrics = await readCodeMetrics(directory, root)
   if (filenames.has('.git')) onProgress?.({ phase: 'Reading Git branch, commit, and working-tree status', detail })
-  const gitInfo = filenames.has('.git') ? await readGit(directory) : undefined
+  let gitIdentity: GitIdentity | undefined
+  if (filenames.has('.git')) {
+    try { gitIdentity = await identify(directory) }
+    catch { warnings.push(`${detail}: Git checkout identity could not be verified. Sync after checking its Git metadata.`) }
+  }
+  const gitInfo = gitIdentity ? await readGit(directory) : undefined
   onProgress?.({ phase: 'Checking project instruction files', detail })
   const aiInstructionFiles: string[] = []
   for (const name of aiInstructionFileNames) {
@@ -156,6 +163,7 @@ async function inspectProject(directory: string, root: string, names: string[], 
     packageFingerprint: fingerprint,
     packageManager: metadata?.packageManager ?? 'npm',
     git: gitInfo,
+    gitContext: gitIdentity ? { state: 'verified', repositoryId: gitRepositoryId(gitIdentity), worktreeId: gitWorktreeId(gitIdentity.checkoutDirectory), checkoutPath: path.relative(root, gitIdentity.checkoutDirectory) || '.', projectPath: '.', role: gitIdentity.gitDirectory === gitIdentity.commonDirectory ? 'main' : 'linked' } : filenames.has('.git') ? { state: 'unresolved' } : undefined,
     updatedAt: gitInfo?.committedAt ?? directoryStat.mtime.toISOString(),
     scannedAt: new Date().toISOString(),
     dev: { status: 'stopped' },
@@ -165,7 +173,7 @@ async function inspectProject(directory: string, root: string, names: string[], 
     else if (filenames.has('yarn.lock')) project.packageManager = 'yarn'
     else if (filenames.has('bun.lock') || filenames.has('bun.lockb')) project.packageManager = 'bun'
   }
-  return { project, directory, root, gitDirectory: filenames.has('.git') ? directory : undefined }
+  return { project, directory, root, gitDirectory: filenames.has('.git') ? directory : undefined, gitIdentity }
 }
 
 function looksLikeProject(names: string[]): boolean {
@@ -197,6 +205,14 @@ export async function scanDirectory(input: unknown, onProgress?: ScanProgressRep
   let inspectedFolders = 0
   let scheduledFolders = 1
   let truncated = false
+  const scheduled = new Set([root])
+  const identities = new Map<string, Promise<GitIdentity>>()
+  const identify = (directory: string) => {
+    let pending = identities.get(directory)
+    if (!pending) { pending = readGitIdentity(directory); identities.set(directory, pending) }
+    return pending
+  }
+  const inventories = new Map<string, Awaited<ReturnType<typeof readWorktreeInventory>>>()
   type WorkspaceContext = { entry: RegisteredProject; patterns: string[]; depth: number; automatic: boolean }
   const queue: { directory: string; entries: typeof entries; depth: number; workspace?: WorkspaceContext }[] = [{ directory: root, entries, depth: 0 }]
   while (queue.length && registered.length < MAX_PROJECTS && inspectedFolders < 500) {
@@ -222,11 +238,15 @@ export async function scanDirectory(input: unknown, onProgress?: ScanProgressRep
         const declaredWorkspace = !!workspace && matchesWorkspace(memberPath, workspace.patterns)
         if (workspace ? (names.includes('package.json') && (directChild || declaredWorkspace)) || (directChild && names.includes('.git')) : looksLikeProject(names)) {
           try {
-            project = await inspectProject(directory, root, names, warnings, reportFolder)
+            project = await inspectProject(directory, root, names, warnings, reportFolder, identify)
             if (workspace && !names.includes('.git')) {
               project.project.monorepo = { id: workspace.entry.project.id, name: workspace.entry.project.name, relativePath: workspace.entry.project.relativePath, packagePath: memberPath, declaredWorkspace }
               project.project.git ??= workspace.entry.project.git
               project.gitDirectory = workspace.entry.gitDirectory
+              project.gitIdentity = workspace.entry.gitIdentity
+              project.project.gitContext = workspace.entry.project.gitContext?.state === 'verified'
+                ? { ...workspace.entry.project.gitContext, projectPath: path.relative(workspace.entry.gitIdentity!.checkoutDirectory, directory).split(path.sep).join('/') || '.' }
+                : workspace.entry.project.gitContext
               if (project.project.git?.committedAt) project.project.updatedAt = project.project.git.committedAt
               if (declaredWorkspace) {
                 project.workspaceDirectory = workspace.entry.directory
@@ -235,7 +255,7 @@ export async function scanDirectory(input: unknown, onProgress?: ScanProgressRep
               }
             }
             // A nested Git checkout is a separate repository, not a package of its parent.
-            if (workspace && names.includes('.git')) return project
+            if (workspace && names.includes('.git')) workspace = undefined
             if (!workspace || declaredWorkspace) {
               let patterns: string[] = []
               try {
@@ -262,14 +282,17 @@ export async function scanDirectory(input: unknown, onProgress?: ScanProgressRep
           if (workspace && !(workspace.automatic && depth === workspace.depth) && !matchesWorkspace(path.relative(workspace.entry.directory, path.join(directory, child.name)).split(path.sep).join('/'), workspace.patterns, true)) continue
           // Reserve before awaiting filesystem access so concurrent groups cannot
           // all claim the same remaining budget or silently drop overflow.
+          const candidateDirectory = path.join(directory, child.name)
+          if (scheduled.has(candidateDirectory)) continue
           if (scheduledFolders >= 500) {
             truncated = true
             break
           }
           scheduledFolders += 1
+          scheduled.add(candidateDirectory)
           try {
-            const childDirectory = await realpath(path.join(directory, child.name))
-            if (!isWithin(root, childDirectory)) continue
+            const childDirectory = await realpath(candidateDirectory)
+            if (childDirectory !== candidateDirectory || !isWithin(root, childDirectory)) continue
             queue.push({ directory: childDirectory, entries: await readdir(childDirectory, { withFileTypes: true }), depth: depth + 1, workspace })
           } catch {
             warnings.push(`${child.name}: this folder could not be read.`)
@@ -284,6 +307,43 @@ export async function scanDirectory(input: unknown, onProgress?: ScanProgressRep
       }
     }))
     for (const project of inspected) if (project && registered.length < MAX_PROJECTS) registered.push(project)
+    for (const entry of inspected) {
+      const identity = entry?.gitIdentity
+      if (!identity || inventories.has(identity.commonDirectory)) continue
+      onProgress?.({ phase: 'Discovering linked Git worktrees', detail: entry.project.relativePath })
+      const inventory = await readWorktreeInventory(identity, root)
+      inventories.set(identity.commonDirectory, inventory)
+      if (inventory.repository.status === 'unavailable') { warnings.push('Git worktree inventory could not be refreshed for a discovered repository.'); continue }
+      for (const [index, record] of inventory.records.entries()) {
+        const row = inventory.repository.worktrees[index]
+        if (record.bare || !isWithin(root, record.directory)) continue
+        const parts = path.relative(root, record.directory).split(path.sep).filter(Boolean)
+        if (parts.some(part => part === '.git' || ignoredDirectories.has(part))) { inventory.repository.status = 'partial'; continue }
+        const alreadyScheduled = scheduled.has(record.directory)
+        if (!alreadyScheduled) {
+          if (scheduledFolders >= 500 || registered.length >= MAX_PROJECTS) { truncated = true; inventory.repository.status = 'partial'; continue }
+          scheduled.add(record.directory)
+          scheduledFolders++
+        }
+        try {
+          // Inventory may name hidden or deep checkouts, but never grants symlink traversal.
+          let candidate = root
+          for (const part of parts) {
+            candidate = path.join(candidate, part)
+            const info = await lstat(candidate)
+            if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Not an ordinary checkout directory')
+          }
+          if (await realpath(record.directory) !== record.directory) throw new Error('Checkout path changed')
+          const candidateIdentity = await identify(record.directory)
+          if (candidateIdentity.commonDirectory !== identity.commonDirectory) throw new Error('Checkout belongs to a different repository')
+          if (alreadyScheduled) continue
+          queue.push({ directory: record.directory, entries: await readdir(record.directory, { withFileTypes: true }), depth: 0 })
+        } catch (error) {
+          row.availability = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'unavailable'
+          inventory.repository.status = 'partial'
+        }
+      }
+    }
     onProgress?.({ phase: 'Discovering project folders', detail: `${inspectedFolders} folders checked · ${registered.length} projects found`, completed: inspectedFolders })
   }
   if (truncated || queue.length || registered.length >= MAX_PROJECTS) warnings.push(`Scan limited to 500 folders and ${MAX_PROJECTS} projects. Choose a smaller collection to see the rest.`)
@@ -293,8 +353,28 @@ export async function scanDirectory(input: unknown, onProgress?: ScanProgressRep
     const count = registered.filter(child => child.project.monorepo?.id === entry.project.id).length
     if (count) entry.project.workspacePackageCount = count
   }
+  const byDirectory = new Map(registered.map(entry => [entry.directory, entry]))
+  for (const inventory of inventories.values()) {
+    const main = registered.find(entry => entry.gitIdentity && entry.directory === entry.gitIdentity.checkoutDirectory && entry.gitIdentity.gitDirectory === entry.gitIdentity.commonDirectory && gitRepositoryId(entry.gitIdentity) === inventory.repository.id)
+    if (main && inventory.records[0] && !inventory.records[0].bare) {
+      inventory.records[0].directory = main.directory
+      inventory.repository.worktrees[0].path = path.relative(root, main.directory) || '.'
+    }
+    for (const [index, record] of inventory.records.entries()) {
+      const row = inventory.repository.worktrees[index]
+      const entry = byDirectory.get(record.directory)
+      if (row.role !== 'bare' && entry?.project.gitContext?.state === 'verified' && entry.project.gitContext.repositoryId === inventory.repository.id) {
+        row.id = entry.project.gitContext.worktreeId
+        row.role = entry.project.gitContext.role
+        row.availability = 'available'
+        row.projectId = entry.project.id
+        row.dirty = entry.project.git?.dirty
+      }
+    }
+    if (inventory.repository.status !== 'unavailable') inventory.repository.status = inventory.repository.worktrees.some(row => row.role !== 'bare' && !['available', 'outside'].includes(row.availability)) ? 'partial' : 'complete'
+  }
   return {
-    result: { rootName: path.basename(root) || root, rootPath: root, projects: registered.map((entry) => entry.project), syncedAt: new Date().toISOString(), warnings },
+    result: { rootName: path.basename(root) || root, rootPath: root, projects: registered.map((entry) => entry.project), repositories: [...inventories.values()].map(value => value.repository), syncedAt: new Date().toISOString(), warnings },
     registered,
   }
 }
@@ -319,10 +399,17 @@ export class ProjectRegistry {
         entry.workspaceDirectory = previous.workspaceDirectory
         entry.project.monorepo = previous.project.monorepo
       }
-      if (previous.gitDirectory && !entry.gitDirectory && previous.gitDirectory !== entry.root && isWithin(previous.gitDirectory, entry.root)) entry.gitDirectory = previous.gitDirectory
+      if (previous.gitDirectory && !entry.gitDirectory && previous.gitDirectory !== entry.root && isWithin(previous.gitDirectory, entry.root)) {
+        entry.gitDirectory = previous.gitDirectory
+        entry.gitIdentity = previous.gitIdentity
+        entry.project.gitContext = previous.project.gitContext?.state === 'verified' && previous.gitIdentity
+          ? { ...previous.project.gitContext, checkoutPath: path.relative(entry.root, previous.gitIdentity.checkoutDirectory) || '.' }
+          : previous.project.gitContext
+      }
       const nextWorkspace = entry.workspaceDirectory ? byDirectory.get(entry.workspaceDirectory) : undefined
       const nextWorkspaceKnown = nextWorkspace && this.projects.has(nextWorkspace.project.id)
-      if ((previous.workspaceDirectory !== entry.workspaceDirectory || previous.gitDirectory !== entry.gitDirectory) && (scopeBusy?.(entry.project.id) || (nextWorkspaceKnown && scopeBusy?.(nextWorkspace.project.id)))) {
+      const gitIdentityChanged = !!previous.gitIdentity !== !!entry.gitIdentity || !!previous.gitIdentity && !!entry.gitIdentity && !sameGitIdentity(previous.gitIdentity, entry.gitIdentity)
+      if ((previous.workspaceDirectory !== entry.workspaceDirectory || previous.gitDirectory !== entry.gitDirectory || gitIdentityChanged) && (scopeBusy?.(entry.project.id) || (nextWorkspaceKnown && scopeBusy?.(nextWorkspace.project.id)))) {
         throw new HelperError('SCOPE_CONFLICT: Workspace context changed while the project is busy. Rescan when idle.', 409)
       }
       if (isWithin(previous.root, entry.root)) entry.root = previous.root
@@ -369,6 +456,11 @@ export class ProjectRegistry {
       throw new HelperError('The workspace path changed. Sync again before taking an action.', 403)
     }
     if (entry.gitDirectory && (await realpath(entry.gitDirectory) !== entry.gitDirectory || !isWithin(entry.root, entry.gitDirectory))) throw new HelperError('The Git path changed. Sync again before taking an action.', 403)
+    if (entry.gitIdentity) {
+      try {
+        if (!sameGitIdentity(entry.gitIdentity, await readGitIdentity(entry.gitIdentity.checkoutDirectory))) throw new Error('Git identity changed')
+      } catch { throw new HelperError('The Git checkout changed. Sync again before taking an action.', 403) }
+    }
     return entry
   }
 }

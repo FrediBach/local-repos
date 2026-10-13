@@ -12,6 +12,18 @@ const results: SummaryResult[] = [
 ]
 
 describe('daily summary reporting', () => {
+  it('groups worktrees by Git identity while retaining all eligible project IDs', () => {
+    const main = { ...project, gitContext: { state: 'verified' as const, repositoryId: 'repo', worktreeId: 'main', checkoutPath: 'root', projectPath: '.', role: 'main' as const } }
+    const linked = { ...main, id: 'linked', gitContext: { ...main.gitContext, worktreeId: 'linked', role: 'linked' as const, checkoutPath: 'linked' } }
+    const child = { ...linked, id: 'child', gitContext: { ...linked.gitContext, projectPath: 'packages/web' } }
+    const clone = { ...main, id: 'clone', gitContext: { ...main.gitContext, repositoryId: 'clone-repo' } }
+    expect(summaryRepositories([main, linked, child, clone])).toEqual(expect.arrayContaining([
+      { id: main.id, name: main.name, relativePath: 'root', repositoryId: 'repo', projectIds: ['root', 'linked', 'child'] },
+      { id: 'clone', name: main.name, relativePath: 'root', repositoryId: 'clone-repo', projectIds: ['clone'] },
+    ]))
+    expect(summaryRepositories([child])[0].id).toBe('child')
+    expect(summaryRepositories([child, linked, main])[0]).toMatchObject({ id: main.id, name: main.name, relativePath: 'root', projectIds: ['child', 'linked', 'root'] })
+  })
   it('deduplicates nested monorepo members even when the roots arrive later', () => {
     const member = { ...project, id: 'member', monorepo: { id: 'inner', name: 'Inner', relativePath: 'root/inner', packagePath: 'web' } }
     const inner = { ...project, id: 'inner', monorepo: { id: 'root', name: 'Root', relativePath: 'root', packagePath: 'inner' } }

@@ -99,6 +99,15 @@ export function createApp(options: { allowedOrigins?: string[]; mcpPolicy?: McpP
   app.post('/api/projects/:id/push-status', async (request, response) => {
     response.json(await readGitPushStatus(await registry.get(request.params.id)))
   })
+  app.post('/api/projects/:id/repository-history', async (request, response) => {
+    response.json(await application.repositoryHistory(request.params.id, request.body ?? {}))
+  })
+  app.post('/api/projects/:id/repository-daily-summary', async (request, response) => {
+    response.json(await application.repositoryDay(request.params.id, request.body ?? {}))
+  })
+  app.post('/api/projects/:id/repository-push-status', async (request, response) => {
+    response.json(await application.repositoryPushStatus(request.params.id, request.body ?? {}))
+  })
   app.post('/api/projects/:id/start', async (request, response) => response.json({ dev: await runtime.start(request.params.id) }))
   app.post('/api/projects/:id/stop', async (request, response) => response.json({ dev: await runtime.stop(request.params.id) }))
   app.post('/api/projects/:id/storage', async (request, response) => respondWithScan(request, response, async onProgress => ({ storage: await application.readReport(request.params.id, 'storage', () => runtime.storage(request.params.id, onProgress)), reportState: { storage: application.projectState(registry.lookup(request.params.id).project).reportState?.storage } })))

@@ -44,6 +44,43 @@ const scan: ScanResult = {
   syncedAt: '2026-10-07T10:00:00.000Z',
 }
 
+it('navigates between cached worktrees without changing action scope or accepting late logs, and restores the original opener', async () => {
+  const main: RepoProject = { ...project, gitContext: { state: 'verified', repositoryId: 'repo', worktreeId: 'main-tree', checkoutPath: project.relativePath, projectPath: '', role: 'main' } }
+  const linked: RepoProject = { ...main, id: 'linked-project', relativePath: 'notebook-search', description: 'The linked checkout.', git: { branch: 'feat/search' }, gitContext: { state: 'verified', repositoryId: 'repo', worktreeId: 'linked-tree', checkoutPath: 'notebook-search', projectPath: '', role: 'linked' } }
+  const workspace: Workspace = { ...scan, mode: 'helper', projects: [main, linked], repositories: [{ id: 'repo', name: 'Notebook', checkedAt: scan.syncedAt, status: 'complete', worktrees: [
+    { id: 'main-tree', path: main.relativePath, role: 'main', availability: 'available', projectId: main.id, branch: 'main' },
+    { id: 'linked-tree', path: linked.relativePath, role: 'linked', availability: 'available', projectId: linked.id, branch: 'feat/search' },
+  ] }] }
+  storage.loadWorkspace.mockResolvedValue(workspace)
+  let resolveLogs!: (value: Response) => void
+  fetchMock.mockImplementation((url: string) => {
+    if (url === '/api/health') return response({ ok: true })
+    if (url === '/api/scan') return response(workspace)
+    if (url === `/api/projects/${main.id}/logs`) return new Promise<Response>(resolve => { resolveLogs = resolve })
+    if (url === `/api/projects/${linked.id}/open`) return response({})
+    return response({ available: false })
+  })
+  const user = userEvent.setup()
+  render(<App />)
+  const opener = await screen.findByRole('button', { name: `View worktrees for ${main.name} · main · ${main.relativePath}` })
+  await user.click(opener)
+  await user.click(screen.getByRole('tab', { name: 'Development' }))
+  await user.click(screen.getByRole('button', { name: 'Logs', exact: true }))
+  await user.click(screen.getByRole('tab', { name: 'Worktrees' }))
+  await user.click(screen.getByRole('button', { name: `View checkout: ${linked.name} · feat/search · ${linked.relativePath}` }))
+  const details = screen.getByRole('dialog', { name: `${linked.name} · feat/search · ${linked.relativePath}` })
+  expect(within(details).getByRole('tab', { name: 'Overview', selected: true })).toBeTruthy()
+  await act(async () => { resolveLogs(await response({ logs: 'Output from the previous checkout' })) })
+  await user.click(screen.getByRole('tab', { name: 'Development' }))
+  expect(screen.queryByText('Output from the previous checkout')).toBeNull()
+  const editor = within(details).getByRole('button', { name: 'VS Code', exact: true })
+  await user.click(editor)
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === `/api/projects/${linked.id}/open`)).toBe(true))
+  expect(fetchMock.mock.calls.some(([url]) => url === `/api/projects/${main.id}/open`)).toBe(false)
+  await user.keyboard('{Escape}')
+  await waitFor(() => expect(document.activeElement).toBe(opener))
+})
+
 const response = (body: unknown, ok = true) => Promise.resolve({
   ok, json: async () => body,
 } as Response)
@@ -103,6 +140,22 @@ describe('project workspace interactions', () => {
     await act(async () => { resolve(undefined) })
     expect(screen.getByRole('button', { name: 'View margin' })).toBeTruthy()
     expect(screen.getByText('Demo workspace')).toBeTruthy()
+  })
+
+  it('demonstrates worktree navigation with sample inventory while retaining connection guidance', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'View worktrees for field-notes · main · field-notes' }))
+    expect(screen.getByText(/These are example worktrees/)).toBeTruthy()
+    expect(screen.queryByText(/Git relationships cannot be resolved in browser mode/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'View checkout: field-notes · feat/map · .worktrees/field-notes-map' }))
+    const dialog = screen.getByRole('dialog', { name: 'field-notes · feat/map · .worktrees/field-notes-map' })
+    expect(within(within(dialog).getByRole('region', { name: 'Project summary' })).getByText(/An experimental map of favorite walks/)).toBeTruthy()
+    expect(within(dialog).getByText('SAMPLE PROJECT')).toBeTruthy()
+    await user.click(within(dialog).getByRole('tab', { name: 'Worktrees' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Connect your folder' }))
+    expect(screen.getByRole('dialog', { name: 'Bring your projects together.' })).toBeTruthy()
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/projects/'))).toHaveLength(0)
   })
 
   it('keeps demo projects hidden after a cache error and allows connecting', async () => {
@@ -333,7 +386,7 @@ describe('project workspace interactions', () => {
     render(<App />)
     await waitFor(() => expect(storage.loadWorkspace).toHaveBeenCalledOnce())
     expect(screen.getByText('You’re looking at an example workspace.')).toBeTruthy()
-    expect(screen.getAllByRole('article')).toHaveLength(6)
+    expect(screen.getAllByRole('article')).toHaveLength(7)
 
     await user.type(screen.getByRole('combobox', { name: 'Search projects' }), 'FEAT/EDITOR')
     expect(screen.getAllByRole('article')).toHaveLength(1)
@@ -344,7 +397,7 @@ describe('project workspace interactions', () => {
     expect(screen.getByRole('heading', { name: 'A little too quiet here.' })).toBeTruthy()
     expect(screen.queryAllByRole('article')).toHaveLength(0)
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
-    expect(screen.getAllByRole('article')).toHaveLength(6)
+    expect(screen.getAllByRole('article')).toHaveLength(7)
   })
 
   it('persists favorites and updates the favorite filter when a project is removed', async () => {
@@ -364,7 +417,7 @@ describe('project workspace interactions', () => {
     expect(storage.saveFavorites).toHaveBeenLastCalledWith([])
     expect(screen.getByRole('heading', { name: 'Make room for your favorites.' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Back to all projects' }))
-    expect(screen.getAllByRole('article')).toHaveLength(6)
+    expect(screen.getAllByRole('article')).toHaveLength(7)
   })
 
   it('switches views and opens the complete README in an accessible project dialog', async () => {
@@ -375,7 +428,7 @@ describe('project workspace interactions', () => {
     await user.click(screen.getByRole('button', { name: 'List view' }))
     expect(screen.getByRole('button', { name: 'List view' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: 'Grid view' }).getAttribute('aria-pressed')).toBe('false')
-    expect(screen.getAllByRole('article')).toHaveLength(6)
+    expect(screen.getAllByRole('article')).toHaveLength(7)
 
     await user.click(screen.getByRole('button', { name: 'View margin' }))
     const dialog = screen.getByRole('dialog', { name: 'margin' })

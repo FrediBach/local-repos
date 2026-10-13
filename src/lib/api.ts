@@ -1,4 +1,4 @@
-import type { GitDay, GitDayQuery, GitHistory, GitHistoryQuery, GitPushStatus, RepoProject, ScanProgressReporter, ScanResult } from '@/types'
+import type { GitDay, GitDayQuery, GitHistory, GitHistoryQuery, GitPushStatus, RepoProject, RepositoryGitDay, RepositoryGitHistory, RepositoryGitPushStatus, RepositoryGitScope, ScanProgressReporter, ScanResult } from '@/types'
 
 let helperWorkspacePath: string | undefined
 let registration: { path: string; promise: Promise<ScanResult> } | undefined
@@ -100,6 +100,9 @@ export const projectAction = <T = Partial<RepoProject>>(id: string, action: stri
 export const projectHistory = (id: string, query: GitHistoryQuery = {}) => projectAction<GitHistory>(id, 'history', query)
 export const projectDay = (id: string, query: GitDayQuery) => projectAction<GitDay>(id, 'daily-summary', query)
 export const projectPushStatus = (id: string) => projectAction<GitPushStatus>(id, 'push-status')
+export const repositoryHistory = (id: string, scope: RepositoryGitScope, query: GitHistoryQuery = {}) => projectAction<RepositoryGitHistory>(id, 'repository-history', { ...scope, ...query })
+export const repositoryDay = (id: string, scope: RepositoryGitScope, query: GitDayQuery) => projectAction<RepositoryGitDay>(id, 'repository-daily-summary', { ...scope, ...query })
+export const repositoryPushStatus = (id: string, scope: RepositoryGitScope) => projectAction<RepositoryGitPushStatus>(id, 'repository-push-status', scope)
 
 export function originUrl(origin?: string): string | undefined {
   if (!origin) return

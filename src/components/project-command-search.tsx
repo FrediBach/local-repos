@@ -4,7 +4,8 @@ import { useSettings } from '@/hooks/use-settings'
 import { commandTemplates, type ProjectCommand } from '@/lib/project-commands'
 import type { FilterGroup, FilterKey } from '@/lib/project-filters'
 import { createProjectSearchIndex, type SearchSelection, type SearchSuggestion, type WorkspaceCommandId } from '@/lib/project-search'
-import type { RepoProject } from '@/types'
+import { projectActionLabel } from '@/lib/project-worktrees'
+import type { GitRepository, RepoProject } from '@/types'
 import './project-command-search.css'
 
 export interface ProjectCommandSearchProps {
@@ -14,6 +15,7 @@ export interface ProjectCommandSearchProps {
   searchScope: 'all' | 'packages'
   setSearchScope: (scope: 'all' | 'packages') => void
   projects: RepoProject[]
+  repositories?: GitRepository[]
   favorites: string[]
   filterGroups: FilterGroup[]
   helper: boolean
@@ -29,7 +31,7 @@ const suggestionIcon = (suggestion: SearchSuggestion) => suggestion.group === 'S
   : suggestion.intent.kind === 'project' ? FolderOpen : suggestion.intent.kind === 'package' ? Package
     : suggestion.intent.kind === 'filter' ? SlidersHorizontal : Command
 
-export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, setSearchScope, projects, favorites, filterGroups, helper, busy, tagsReady, onCommand, onWorkspaceCommand, onFilter }: ProjectCommandSearchProps) {
+export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, setSearchScope, projects, repositories, favorites, filterGroups, helper, busy, tagsReady, onCommand, onWorkspaceCommand, onFilter }: ProjectCommandSearchProps) {
   const { settings } = useSettings()
   const [open, setOpen] = useState(false)
   const [selection, setSelection] = useState<SearchSelection>({})
@@ -44,8 +46,8 @@ export function ProjectCommandSearch({ searchRef, query, setQuery, searchScope, 
   const input = scoped ? scopedQuery : query
   const selectedProject = projects.find(project => project.id === selection.projectId)
   const selectedTemplate = commandTemplates(settings).find(template => template.id === selection.templateId)
-  const scopeLabel = selectedProject?.name ?? selectedTemplate?.title
-  const searchIndex = useMemo(() => createProjectSearchIndex({ projects, favorites, settings, filterGroups }), [projects, favorites, settings, filterGroups])
+  const scopeLabel = selectedProject ? projectActionLabel(selectedProject) : selectedTemplate?.title
+  const searchIndex = useMemo(() => createProjectSearchIndex({ projects, repositories, favorites, settings, filterGroups }), [projects, repositories, favorites, settings, filterGroups])
   const suggestions = useMemo(() => open ? searchIndex.search({ query: input, selection, packagesOnly: searchScope === 'packages' }) : [], [open, searchIndex, input, selection, searchScope])
   const visible = suggestions.slice(0, limit)
   const activeIndex = Math.min(active, visible.length - 1)

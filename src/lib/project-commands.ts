@@ -1,5 +1,6 @@
+import { hasWorktreeDetails } from './project-worktrees'
 import { remoteRepository } from './remote-activity'
-import type { RepoProject } from '../types'
+import type { GitRepository, RepoProject } from '../types'
 import type { AppSettings } from './settings'
 import { desktopAppName } from './desktop-apps'
 import { selectDevScript } from './dev-script'
@@ -17,7 +18,7 @@ export interface CommandTemplate {
 export interface ProjectCommand extends CommandTemplate {
   helper: boolean
   intent: { kind: 'action'; name: string; body?: unknown }
-    | { kind: 'details'; tab?: 'overview' | 'packages' | 'updates' | 'react-doctor' | 'lighthouse' }
+    | { kind: 'details'; tab?: 'overview' | 'packages' | 'updates' | 'react-doctor' | 'lighthouse' | 'worktrees' }
     | { kind: 'tags' }
     | { kind: 'favorite' }
     | { kind: 'todos' }
@@ -29,6 +30,7 @@ type Applications = Pick<AppSettings, 'editor' | 'gitClient'>
 export function commandTemplates(settings: Applications): CommandTemplate[] {
   return [
     { id: 'details', title: 'Project details', description: 'Overview, Git history, development server, and disk usage', keywords: 'open view overview inspect commits history metadata' },
+    { id: 'worktrees', title: 'View worktrees', description: 'Browse related checkouts and their project paths', keywords: 'git worktree worktrees checkout checkouts linked siblings repository' },
     { id: 'folder', title: 'Open project folder', description: 'Show the project directory in your file manager', keywords: 'finder explorer directory dir files reveal show browse' },
     { id: 'editor', title: `Open in ${desktopAppName(settings.editor)}`, description: 'Open the project in your preferred code editor', keywords: `edit code editor ide ${settings.editor}` },
     { id: 'git-client', title: `Open in ${desktopAppName(settings.gitClient)}`, description: 'Open the project in your preferred Git client', keywords: `git client repository branches ${settings.gitClient}` },
@@ -56,13 +58,14 @@ export function commandTemplates(settings: Applications): CommandTemplate[] {
 }
 
 /** Describe existing operations only; callers retain connection and busy guards. */
-export function projectCommands(project: RepoProject, settings: Applications, favorite: boolean): ProjectCommand[] {
+export function projectCommands(project: RepoProject, settings: Applications, favorite: boolean, repository?: GitRepository): ProjectCommand[] {
   const running = project.dev?.status === 'running' || project.dev?.status === 'starting'
   const devScript = selectDevScript(project)
   const commands = commandTemplates(settings).flatMap((template): ProjectCommand[] => {
     const action = (name: string, body?: unknown): ProjectCommand[] => [{ ...template, helper: true, intent: { kind: 'action', name, ...(body === undefined ? {} : { body }) } }]
-    const details = (tab: 'overview' | 'packages' | 'updates' | 'lighthouse'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
+    const details = (tab: 'overview' | 'packages' | 'updates' | 'lighthouse' | 'worktrees'): ProjectCommand[] => [{ ...template, helper: false, intent: { kind: 'details', tab } }]
     switch (template.id) {
+      case 'worktrees': return hasWorktreeDetails(project, repository) ? details('worktrees') : []
       case 'folder': return action('open', { app: 'folder' })
       case 'editor': return action('open', { app: settings.editor })
       case 'git-client': return action('open', { app: settings.gitClient })

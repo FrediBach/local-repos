@@ -16,13 +16,16 @@ import { PackageMatches } from './project-packages'
 import { formatBytes } from '@/lib/format-bytes'
 import { relativeTime } from '@/lib/relative-time'
 import { useSettings } from '@/hooks/use-settings'
-import type { RepoProject } from '@/types'
+import type { GitRepository, RepoProject } from '@/types'
+import { projectActionLabel } from '@/lib/project-worktrees'
+import { ProjectCheckoutContext } from './project-worktrees'
 import type { PreviewCommitActivity } from '@/lib/commit-activity'
 
 interface Props {
   project: RepoProject; index: number; view: 'grid' | 'list'; query: string; activeTags?: string[]; tagsReady: boolean; favorite: boolean; capturing: boolean; busy: string
   displayName?: string
   activity?: PreviewCommitActivity
+  repository?: GitRepository
   onOpen: (project: RepoProject, tab?: ProjectTab) => void; onEditTags: (project: RepoProject) => void
   onIgnore?: (id: string) => void
   onToggleFavorite: (id: string) => void; onTagFilter: (tag: string) => void; onTechnologyFilter: (technology: string) => void
@@ -31,15 +34,16 @@ interface Props {
   onTodos?: (project: RepoProject) => void
 }
 
-export function ProjectCard({ project, displayName = project.name, activity, index, view, query, activeTags, tagsReady, favorite, capturing: batchCapturing, busy, onOpen, onEditTags, onToggleFavorite, onIgnore, onTagFilter, onTechnologyFilter, onAction, todoCount = 0, onTodos }: Props) {
+export function ProjectCard({ project, displayName = project.name, activity, repository, index, view, query, activeTags, tagsReady, favorite, capturing: batchCapturing, busy, onOpen, onEditTags, onToggleFavorite, onIgnore, onTagFilter, onTechnologyFilter, onAction, todoCount = 0, onTodos }: Props) {
+  const actionLabel = projectActionLabel(project, displayName)
   const capturing = batchCapturing || busy === `${project.id}:screenshot`
   const tags = <CardTags project={project} activeTags={activeTags} tagsReady={tagsReady} onTagFilter={onTagFilter} onEditTags={onEditTags} onTechnologyFilter={onTechnologyFilter} />
-  const title = <><button id={`project-open-${project.id}`} className="project-title" title={displayName} onClick={() => onOpen(project)}>{displayName}</button><ProjectAiBadge project={project} /><ProjectContributorNote project={project} /></>
-  const favoriteButton = <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} onClick={() => onToggleFavorite(project.id)} aria-label={`${favorite ? 'Unfavorite' : 'Favorite'} ${displayName}`} aria-pressed={favorite}><Star size={16} /></button>
-  const preview = <button className="preview-button" onClick={() => onOpen(project)} aria-label={`View ${displayName}`}><ProjectPreview project={project} activity={activity} />{capturing && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
+  const title = <><button id={`project-open-${project.id}`} className="project-title" title={displayName} aria-label={actionLabel} onClick={() => onOpen(project)}>{displayName}</button><ProjectAiBadge project={project} /><ProjectContributorNote project={project} /></>
+  const favoriteButton = <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} onClick={() => onToggleFavorite(project.id)} aria-label={`${favorite ? 'Unfavorite' : 'Favorite'} ${actionLabel}`} aria-pressed={favorite}><Star size={16} /></button>
+  const preview = <button className="preview-button" onClick={() => onOpen(project)} aria-label={`View ${actionLabel}`}><ProjectPreview project={project} activity={activity} />{capturing && <span className="project-capture-badge" title="Capturing preview"><LoaderCircle size={12} className="spinning" /><span>Capturing preview</span></span>}</button>
   return <article className={`project-card ${view === 'grid' && project.monorepo ? 'is-subpackage' : ''} ${capturing ? 'is-capturing' : ''}`} style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}>
     {view === 'grid' ? <div className="project-preview-container">{preview}{favoriteButton}</div> : preview}
-    <div className="project-info"><div className="project-title-row">{view === 'list' ? <div className="project-name-tags"><div className="project-name">{title}</div>{tags}</div> : <div className="project-name">{title}</div>}<ProjectAuditBadge project={project} onClick={() => onOpen(project, 'vulnerabilities')} /><ProjectOutdatedBadge project={project} onClick={() => onOpen(project, 'updates')} /><ProjectReactDoctorBadge project={project} onClick={() => onOpen(project, 'react-doctor')} /><ProjectLighthouseBadge project={project} onClick={() => onOpen(project, 'lighthouse')} />{view === 'list' && favoriteButton}</div><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><ProjectRemoteActivity project={project} />{view === 'grid' && tags}<CardStorage storage={project.storage} /></div>
+    <div className="project-info"><div className="project-title-row">{view === 'list' ? <div className="project-name-tags"><div className="project-name">{title}</div>{tags}</div> : <div className="project-name">{title}</div>}<ProjectAuditBadge project={project} onClick={() => onOpen(project, 'vulnerabilities')} /><ProjectOutdatedBadge project={project} onClick={() => onOpen(project, 'updates')} /><ProjectReactDoctorBadge project={project} onClick={() => onOpen(project, 'react-doctor')} /><ProjectLighthouseBadge project={project} onClick={() => onOpen(project, 'lighthouse')} />{view === 'list' && favoriteButton}</div><ProjectCheckoutContext project={project} repository={repository} onWorktrees={() => onOpen(project, 'worktrees')} /><p className="project-description">{project.description || 'A project waiting for its next chapter. Add a README to tell its story.'}</p><PackageMatches project={project} query={query} /><ProjectRemoteActivity project={project} />{view === 'grid' && tags}<CardStorage storage={project.storage} /></div>
     <CardFooter project={project} tagsReady={tagsReady} favorite={favorite} busy={busy} onOpen={onOpen} onEditTags={onEditTags} onToggleFavorite={onToggleFavorite} onIgnore={onIgnore} onAction={onAction} todoCount={todoCount} onTodos={onTodos} />
   </article>
 }

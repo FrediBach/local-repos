@@ -52,7 +52,7 @@ export function useHelperState(options: {
         const changedPreview = state.projects.some(project => project.preview && project.preview.capturedAt !== previousProjects.get(project.id)?.preview?.capturedAt)
         let previewWarning: string | undefined
         if (state.revision !== next.revision || changedPreview) {
-          next = preservePreviews({ ...next, helperInstanceId: state.helperInstanceId, revision: state.revision, projects: state.projects, warnings: state.warnings }, next)
+          next = preservePreviews({ ...next, helperInstanceId: state.helperInstanceId, revision: state.revision, projects: state.projects, repositories: state.repositories, warnings: state.warnings }, next)
           next = { ...next, projects: await Promise.all(next.projects.map(async project => {
             if (!project.screenshot?.startsWith('/api/screenshots/')) return project
             try { return { ...project, screenshot: await cachePreview(project.screenshot) } }

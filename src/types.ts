@@ -63,6 +63,57 @@ export interface GitPushStatus {
   checkedAt: string
 }
 
+export interface RepositoryGitScope {
+  rootId: string
+  repositoryId: string
+  projectIds: string[]
+}
+export interface RepositoryGitCoverage {
+  repositoryId: string
+  coverage: 'complete' | 'partial'
+  warnings?: string[]
+}
+export interface RepositoryGitHistory extends GitHistory, RepositoryGitCoverage {}
+export interface RepositoryGitDay extends GitDay, RepositoryGitCoverage {}
+export interface RepositoryGitPushStatus extends GitPushStatus, RepositoryGitCoverage {
+  checkouts: { worktreeId: string; projectId: string; path: string; dirty?: boolean; error?: string }[]
+}
+
+/** Git relationships are independent of package workspace membership. */
+export type GitContext = { state: 'unresolved' } | {
+  state: 'verified'
+  repositoryId: string
+  worktreeId: string
+  checkoutPath: string
+  projectPath: string
+  role: 'main' | 'linked'
+}
+export interface GitWorktree {
+  id: string
+  /** Relative to the connected root, or informational absolute path outside it. */
+  path: string
+  role: 'main' | 'linked' | 'bare'
+  availability: 'available' | 'outside' | 'missing' | 'unavailable' | 'unscanned'
+  projectId?: string
+  branch?: string
+  head?: string
+  detached?: boolean
+  unborn?: boolean
+  locked?: boolean
+  lockReason?: string
+  prunable?: boolean
+  pruneReason?: string
+  dirty?: boolean
+}
+export interface GitRepository {
+  id: string
+  name: string
+  checkedAt: string
+  status: 'complete' | 'partial' | 'unavailable'
+  error?: string
+  worktrees: GitWorktree[]
+}
+
 export interface ProjectDependency {
   name: string
   version: string
@@ -233,6 +284,7 @@ export interface WorkspaceState {
   resetRequired: boolean
   registered: boolean
   projects: RepoProject[]
+  repositories?: GitRepository[]
   activeOperations: HelperActivity[]
   warnings: string[]
 }
@@ -283,6 +335,7 @@ export interface CodeMetrics {
 }
 
 export interface RepoProject {
+  gitContext?: GitContext
   reportState?: Partial<Record<HelperReportKind, HelperReportState>>
   id: string
   name: string
@@ -354,6 +407,7 @@ export interface ScanProgress {
 export type ScanProgressReporter = (progress: ScanProgress) => void
 
 export interface ScanResult {
+  repositories?: GitRepository[]
   rootId?: string
   helperInstanceId?: string
   revision?: number

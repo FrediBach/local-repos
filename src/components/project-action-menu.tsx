@@ -3,6 +3,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useSettings } from '@/hooks/use-settings'
 import { desktopAppName } from '@/lib/desktop-apps'
 import { projectCommands } from '@/lib/project-commands'
+import { projectActionLabel } from '@/lib/project-worktrees'
 import { selectDevScript } from '@/lib/dev-script'
 import { discoverProjectScripts, scriptRunCommand } from '@/lib/project-scripts'
 import type { OpenProjectRequest, PreviewMode, RepoProject, RunProjectScriptRequest } from '@/types'
@@ -32,7 +33,7 @@ export function ProjectActionMenu({ project, tagsReady, favorite, busy, onOpen, 
   const primaryScript = selectDevScript(project)?.name
   const scripts = discoverProjectScripts(project).filter(script => script.name !== primaryScript)
   return <DropdownMenu modal={false}>
-    <DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${project.name}`}><Ellipsis size={17} /></button></DropdownMenuTrigger>
+    <DropdownMenuTrigger asChild><button className="project-menu" aria-label={`Actions for ${projectActionLabel(project)}`}><Ellipsis size={17} /></button></DropdownMenuTrigger>
     <DropdownMenuContent align="end">
       <DropdownMenuItem onSelect={() => onOpen(project)}><FolderGit2 size={14} />Project details</DropdownMenuItem>
       <DropdownMenuItem disabled={!tagsReady} onSelect={() => onEditTags(project)}><Tag size={14} />Edit tags</DropdownMenuItem>

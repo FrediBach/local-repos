@@ -14,6 +14,8 @@ import { WorkspaceToolbar } from '@/components/workspace-toolbar'
 import { ProjectSearchToolbar } from '@/components/project-search-toolbar'
 import { ProjectDetailDialog } from '@/components/project-detail-dialog'
 import type { ProjectTab } from '@/components/project-tabs'
+import { demoRepositories } from '@/lib/demo'
+import { projectActionLabel, projectRepository } from '@/lib/project-worktrees'
 import { ConnectWorkspaceDialog } from '@/components/connect-workspace-dialog'
 import { WorkspaceHelpDialog } from '@/components/workspace-help-dialog'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -67,6 +69,9 @@ function WorkspaceApp() {
   const [connectOpen, setConnectOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string>()
+  const selectedIdRef = useRef(selectedId)
+  const selectedSnapshot = useRef<RepoProject | undefined>(undefined)
+  useLayoutEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   const [todoProjectId, setTodoProjectId] = useState<string>()
   const [path, setPath] = useState('')
   const [helper, setHelper] = useState(false)
@@ -89,14 +94,20 @@ function WorkspaceApp() {
   const busy = localBusy || (helperState.operations.length ? 'external' : '')
   const favoritesVersion = useRef(0)
   const { remoteActivityBatch, scanAllRemoteActivity, action, packageBusy, runAutomaticScan, scanProgress, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch, scanAllVulnerabilities, scanAllOutdated, scanAllReactDoctor, scanAllLighthouse, captureAllPreviews } = useWorkspaceActions({
-    workspace, busy, workspaceVersion, setBusy, setLogs, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
+    workspace, busy, workspaceVersion, setBusy, setLogs: (value, projectId) => { if (!projectId || selectedIdRef.current === projectId) setLogs(value) }, setNotice, setConnectOpen, persist, reportCriticalVulnerabilities,
   })
   const { rawProjects, ignoredIds, ignoredProjects, projects, isDemo, running, favoriteIds, favoriteCount, stacks, availableTags } = useWorkspaceProjects(workspace, workspaceStatus, projectTags, favorites, settings)
+  const repositories = workspace?.repositories ?? (isDemo ? demoRepositories : undefined)
   const projectTodos = useProjectTodos(projects, workspace)
   useWorkspaceFavicon(workspace, projects)
   const tagProject = projects.find(p => p.id === tagProjectId)
-  const selected = projects.find(p => p.id === selectedId)
-  const selectedScanProgress = projectScanProgress(selectedId, selected?.name, scanProgress, [
+  const liveSelected = projects.find(p => p.id === selectedId)
+  const selected = liveSelected ?? (selectedId && selectedSnapshot.current?.id === selectedId ? selectedSnapshot.current : undefined)
+  useLayoutEffect(() => { if (liveSelected) selectedSnapshot.current = liveSelected }, [liveSelected])
+  const selectedContext = selected?.gitContext
+  const selectedWorktree = selected && selectedContext?.state === 'verified' ? projectRepository(selected, repositories)?.worktrees.find(worktree => worktree.id === selectedContext.worktreeId) : undefined
+  const selectedUnavailable = !!selected && (!liveSelected || !!selectedWorktree && selectedWorktree.availability !== 'available')
+  const selectedScanProgress = projectScanProgress(selectedId, selected ? projectActionLabel(selected) : undefined, scanProgress, [
     { title: 'Scanning vulnerabilities', progress: auditBatch.progress },
     { title: 'Checking outdated packages', progress: outdatedBatch.progress },
     { title: 'Running React Doctor', progress: reactDoctorBatch.progress },
@@ -106,12 +117,12 @@ function WorkspaceApp() {
   ])
   const { filters, setFilters, selectedTags, filter, stack, query, setQuery, searchReset, searchScope, setSearchScope, sort, setSort, page, setPage,
     activeCustomFilter, applyCustomFilter, saveCustomFilter,
-    filterContext, filterGroups, searched, filtered, hasFilters, hasRefinements, clearFilters, toggleTechnology, toggleTag, navigate } = useProjectFiltering(projects, favorites)
+    filterContext, filterGroups, searched, filtered, hasFilters, hasRefinements, clearFilters, toggleTechnology, toggleTag, navigate } = useProjectFiltering(projects, favorites, repositories)
   const { connect, resync, forgetWorkspace, metadataProgress } = useWorkspaceConnection({
     workspace, busy, path, workspaceVersion, setBusy, setConnectError, setConnectOpen, setHelper, setNotice, persist,
     batches: [remoteActivityBatch, previewBatch, auditBatch, outdatedBatch, reactDoctorBatch, lighthouseBatch],
     clearCriticalAlerts: () => { auditHistory.current.clear(); setCriticalAlerts([]) },
-    onConnected: () => navigate('all'),
+    onConnected: () => { setSelectedId(undefined); navigate('all') },
     onForgotten: () => { setWorkspace(undefined); setWorkspaceStatus('ready'); setSelectedId(undefined); navigate('all') },
   })
   const activeScanProgress = metadataProgress.progress ?? scanProgress
@@ -189,7 +200,7 @@ function WorkspaceApp() {
     const changes = newCriticalVulnerabilities(auditHistory.current.get(project.id) ?? project.audit, audit)
     auditHistory.current.set(project.id, audit)
     if (changes.findings.length || changes.additionalCount) {
-      setCriticalAlerts(current => mergeCriticalAlerts(current, { projectId: project.id, projectName: project.name, ...changes }))
+      setCriticalAlerts(current => mergeCriticalAlerts(current, { projectId: project.id, projectName: projectActionLabel(project), ...changes }))
     }
   }
 
@@ -225,7 +236,14 @@ function WorkspaceApp() {
   function openProject(project: RepoProject, tab: ProjectTab = 'overview') {
     const active = document.activeElement
     projectOpener.current = active instanceof HTMLElement && active.closest('.project-card, .project-todos, .command-search') ? active : document.getElementById(`project-open-${project.id}`)
+    selectedSnapshot.current = project
     setSelectedId(project.id); setDetailTab(tab); setLogs(undefined)
+  }
+  function navigateWorktree(project: RepoProject) {
+    const current = projects.find(candidate => candidate.id === project.id)
+    if (!current || current.gitContext?.state !== 'verified' || selected?.gitContext?.state !== 'verified' || current.gitContext.repositoryId !== selected.gitContext.repositoryId) return
+    selectedSnapshot.current = current
+    setSelectedId(current.id); setDetailTab('overview'); setLogs(undefined)
   }
   function openTodos(project?: RepoProject) {
     setTodoProjectId(project?.id)
@@ -246,7 +264,7 @@ function WorkspaceApp() {
   }
   function runCommand(project: RepoProject, selectedCommand: ProjectCommand) {
     // Resolve from current metadata; the helper also revalidates script commands.
-    const command = projectCommands(project, settings, favoriteIds.has(project.id)).find(item => item.id === selectedCommand.id)
+    const command = projectCommands(project, settings, favoriteIds.has(project.id), projectRepository(project, repositories)).find(item => item.id === selectedCommand.id)
     if (!command || (command.helper && busy)) return
     const intent = command.intent
     if (intent.kind === 'details') openProject(project, intent.tab)
@@ -301,16 +319,18 @@ function WorkspaceApp() {
           scanAllRemoteActivity={scanAllRemoteActivity} scanAllOutdated={scanAllOutdated}
           scanAllVulnerabilities={scanAllVulnerabilities} scanAllReactDoctor={scanAllReactDoctor} scanAllLighthouse={scanAllLighthouse} captureAllPreviews={captureAllPreviews} />
 
-        <WorkspaceBatchProgress remoteActivityBatch={remoteActivityBatch} previewBatch={previewBatch} auditBatch={auditBatch}
+        <WorkspaceBatchProgress projects={rawProjects} remoteActivityBatch={remoteActivityBatch} previewBatch={previewBatch} auditBatch={auditBatch}
           outdatedBatch={outdatedBatch} reactDoctorBatch={reactDoctorBatch} lighthouseBatch={lighthouseBatch} />
 
         <ProjectSearchToolbar key={`${workspace?.mode ?? 'demo'}:${workspace?.rootPath ?? workspace?.rootName ?? ''}:${searchReset}`} searchRef={searchRef} query={query} setQuery={setQuery} searchScope={searchScope} setSearchScope={setSearchScope}
+          repositories={repositories}
           projects={projects} favorites={favorites} filterGroups={filterGroups} helper={workspace?.mode === 'helper'} busy={!!busy} tagsReady={tagsReady}
           onCommand={runCommand} onWorkspaceCommand={runWorkspaceCommand} onFilter={(key, value) => setFilters(current => ({ ...current, [key]: filterGroups.find(group => group.key === key)?.multiple ? [...new Set([...(current[key] ?? []), value])] : [value] }))}
           sort={sort} setSort={setSort} view={view} setView={setView} />
         <ProjectFilters filters={filters} groups={filterGroups} projects={searched} context={filterContext} query={query} packageSearch={searchScope === 'packages'} total={projects.length} matching={filtered.length} onChange={setFilters} onClearSearch={() => setQuery('')} onClear={clearFilters} onSave={saveCustomFilter} />
 
         <ProjectResults ignoredProjects={ignoredProjects} onIgnore={workspace ? toggleIgnored : undefined} projects={filtered} allProjects={projects} favoriteIds={favoriteIds} capturingId={previewBatch.progress?.current?.id}
+          repositories={repositories}
           projectActivity={commitActivity.projectActivity}
           todoCounts={projectTodos.counts} onTodos={openTodos}
           filter={filter} hasRefinements={hasRefinements} emptyWorkspace={!rawProjects.length} isDemo={isDemo}
@@ -325,10 +345,12 @@ function WorkspaceApp() {
       onOpenChange={value => { if (!busy) { setConnectOpen(value); setConnectError('') } }} onPathChange={setPath} onConnect={connect} />
 
     <ProjectDetailDialog scanProgress={selectedScanProgress} onActivity={commitActivity.remember} selected={selected} helper={workspace?.mode === 'helper'} demo={isDemo} busy={busy}
+      repositories={repositories} projects={rawProjects} ignoredIds={ignoredIds} helperConnected={helper && !helperState.error} unavailable={selectedUnavailable}
+      onNavigate={navigateWorktree} onResync={resync} onConnect={() => { setSelectedId(undefined); setConnectError(''); setConnectOpen(true) }}
       activity={selected ? commitActivity.projectActivity[selected.id] : undefined}
       packageBusy={packageBusy(selected)}
       detailTab={detailTab} onTabChange={setDetailTab} logs={logs} tagsReady={tagsReady} selectedTags={selectedTags} favorite={!!selected && favoriteIds.has(selected.id)}
-      onClose={() => setSelectedId(undefined)} onCloseAutoFocus={event => { if (projectOpener.current?.isConnected) { event.preventDefault(); projectOpener.current.focus() } }}
+      onClose={() => setSelectedId(undefined)} onCloseAutoFocus={event => { event.preventDefault(); (projectOpener.current?.isConnected ? projectOpener.current : searchRef.current)?.focus() }}
       onTagFilter={toggleTag} onEditTags={editTags} onAction={action} onToggleFavorite={toggleFavorite} />
 
     <WorkspaceHelpDialog open={helpOpen} onOpenChange={setHelpOpen} workspace={workspace} busy={!!busy}

@@ -61,7 +61,7 @@ async function readGit(directory: FileSystemDirectoryHandle, entries: Map<string
   const gitEntry = entries.get('.git')
   if (!gitEntry) return undefined
   if (gitEntry.kind === 'file') {
-    warn('Linked worktree Git metadata requires the local helper.')
+    warn('Git pointer metadata requires the local helper; its repository relationship is unavailable in browser mode.')
     return undefined
   }
   try {
@@ -220,12 +220,13 @@ export async function scanDirectory(handle: FileSystemDirectoryHandle, onProgres
         hasPackageJson: entries.has('package.json'),
         packageManager: workspace && declaredWorkspace && !ownsGit ? workspace.project.packageManager : packageManager,
         git: ownsGit ? git : git ?? workspace?.project.git,
+        gitContext: ownsGit ? { state: 'unresolved' } : workspace?.project.gitContext,
         ...(workspace && !ownsGit ? { monorepo: { id: workspace.project.id, name: workspace.project.name, relativePath: workspace.project.relativePath, packagePath: memberPath, declaredWorkspace } } : {}),
         updatedAt: (ownsGit ? git : git ?? workspace?.project.git)?.committedAt ?? (modifiedAt ? new Date(modifiedAt).toISOString() : undefined),
         scannedAt: syncedAt,
       }
       projects.push(project)
-      if (workspace && ownsGit) return
+      if (workspace && ownsGit) workspace = undefined
       if (!workspace || declaredWorkspace) {
         onProgress?.({ phase: 'Reading workspace declarations', detail: folderName })
         let patterns: string[] = []
