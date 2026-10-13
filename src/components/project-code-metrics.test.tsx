@@ -120,3 +120,30 @@ it('distinguishes missing distributions, empty scans and zero-line files, and la
   expect(screen.getByRole('img', { name: /0 lines: 1 file/ })).toBeTruthy()
   expect(screen.getByText('· partial scan')).toBeTruthy()
 })
+
+it('shows the largest files for the selected type, including files outside the overall top ten', async () => {
+  const user = userEvent.setup()
+  const largestFiles = Array.from({ length: 10 }, (_, index) => ({ path: `src/file-${index}.ts`, language: 'TypeScript', lines: 1000 - index }))
+  const css = { path: 'styles/theme.css', language: 'CSS', lines: 500 }
+  render(<ProjectCodeMetrics report={{ ...report, largestFiles, languages: [
+    { ...report.languages[0], largestFiles }, { ...report.languages[1], largestFiles: [css] },
+  ] }} demo={false} />)
+  const region = within(screen.getByRole('region', { name: 'Largest files' }))
+  expect(region.getAllByRole('row')).toHaveLength(11)
+  expect(region.getByText('src/file-0.ts')).toBeTruthy()
+  expect(region.queryByText('styles/theme.css')).toBeNull()
+  await user.selectOptions(screen.getByRole('combobox', { name: 'File type' }), 'CSS')
+  expect(region.getByRole('row', { name: 'styles/theme.css CSS 500' })).toBeTruthy()
+  expect(region.queryByText('src/file-0.ts')).toBeNull()
+  await user.selectOptions(screen.getByRole('combobox', { name: 'File type' }), '')
+  expect(region.getAllByRole('row')).toHaveLength(11)
+})
+
+it('distinguishes missing large-file data, empty selections and partial results', () => {
+  const { rerender } = render(<ProjectCodeMetrics report={report} demo={false} />)
+  expect(screen.getByText('Resync your directory to identify large files.')).toBeTruthy()
+  rerender(<ProjectCodeMetrics report={{ ...report, largestFiles: [] }} demo={false} />)
+  expect(screen.getByText('No files with at least 500 lines in this selection.')).toBeTruthy()
+  rerender(<ProjectCodeMetrics report={{ ...report, largestFiles: [], partial: true }} demo={false} />)
+  expect(screen.getByText('No files with at least 500 lines were found among the files read for this selection.')).toBeTruthy()
+})

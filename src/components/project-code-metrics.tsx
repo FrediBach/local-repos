@@ -1,6 +1,6 @@
 import { ChartNoAxesCombined } from 'lucide-react'
 import { useId, useState } from 'react'
-import type { CodeMetrics } from '@/types'
+import type { CodeLargeFile, CodeMetrics } from '@/types'
 import { CodeDistributionChart } from './code-distribution-chart'
 import './project-code-metrics.css'
 
@@ -56,5 +56,19 @@ function FileStatistics({ report }: { report: CodeMetrics }) {
     </div>)}</dl>
     <p className="maintenance-hint">{!statistics ? 'Resync your directory to collect per-file statistics.' : !files ? 'No source files were counted in this selection.' : `Based on ${selected?.name ?? 'all'} source files${report.partial ? ' successfully read in this partial scan' : ''}. Empty and blank-only files count as zero lines.`}</p>
     <CodeDistributionChart buckets={selected ? selected.distribution : report.distribution} type={selected?.name ?? 'all file types'} partial={report.partial} />
+    <LargestFiles files={selected ? selected.largestFiles : report.largestFiles} partial={report.partial} />
+  </section>
+}
+
+function LargestFiles({ files, partial }: { files?: CodeLargeFile[]; partial: boolean }) {
+  return <section className="code-largest-files" aria-label="Largest files">
+    <h4>Largest files</h4>
+    <p className="maintenance-hint">Up to 10 files with at least 500 nonblank lines, largest first.{partial && ' Based on successfully read files in this partial scan.'}</p>
+    {!files ? <p className="maintenance-empty">Resync your directory to identify large files.</p>
+      : !files.length ? <p className="maintenance-empty">{partial ? 'No files with at least 500 lines were found among the files read for this selection.' : 'No files with at least 500 lines in this selection.'}</p>
+        : <table><caption className="sr-only">Largest files in the selected file type</caption>
+          <thead><tr><th scope="col">File</th><th scope="col">Type</th><th scope="col">Lines</th></tr></thead>
+          <tbody>{files.slice(0, 10).map(file => <tr key={file.path}><th scope="row"><code>{file.path}</code></th><td>{file.language}</td><td>{format(file.lines)}</td></tr>)}</tbody>
+        </table>}
   </section>
 }

@@ -36,5 +36,12 @@
 .code-distribution-data table { width: 100%; margin-top: 12px; border-collapse: collapse; color: var(--foreground); }
 .code-distribution-data th, .code-distribution-data td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
 .code-distribution-data td { font-variant-numeric: tabular-nums; }
+.code-largest-files { margin-top: 24px; }
+.code-largest-files h4 { margin: 0; font-size: .875rem; font-weight: 600; }
+.code-largest-files table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .8125rem; }
+.code-largest-files th, .code-largest-files td { padding: 9px 6px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.code-largest-files tbody th { font-weight: 400; }
+.code-largest-files th:nth-child(2) { width: 95px; }
+.code-largest-files th:last-child, .code-largest-files td:last-child { width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 520px) { .code-metrics-chart ul { grid-template-columns: 1fr; } }
 @media (max-width: 380px) { .code-file-statistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

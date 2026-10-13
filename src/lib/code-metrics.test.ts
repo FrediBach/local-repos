@@ -67,6 +67,35 @@ it('respects nested, anchored, directory, glob, escaped and negated ignore rules
   expect(report).toMatchObject({ totalLines: 3, totalFiles: 3, partial: false })
 })
 
+it('retains separate top tens per type and overall, with project-relative paths', async () => {
+  const files: Record<string, string> = {}
+  for (let index = 0; index < 12; index += 1) {
+    files[`repo/apps/web/src/file-${index}.ts`] = 'code\n'.repeat(1000 + index)
+    files[`repo/apps/web/styles/file-${index}.css`] = 'style\n'.repeat(500 + index)
+  }
+  const report = await scanCodeMetrics(source(files), 'repo/apps/web')
+  expect(report.largestFiles).toHaveLength(10)
+  expect(report.largestFiles?.every(file => file.language === 'TypeScript')).toBe(true)
+  expect(report.largestFiles?.[0]).toEqual({ path: 'src/file-11.ts', language: 'TypeScript', lines: 1011 })
+  expect(report.largestFiles?.at(-1)?.lines).toBe(1002)
+  const css = report.languages.find(row => row.name === 'CSS')!
+  expect(css.largestFiles).toHaveLength(10)
+  expect(css.largestFiles?.[0]).toEqual({ path: 'styles/file-11.css', language: 'CSS', lines: 511 })
+  expect(css.largestFiles?.at(-1)?.lines).toBe(502)
+})
+
+it('includes exactly 500 nonblank lines, breaks ties by path and excludes ignored or unreadable files', async () => {
+  const report = await scanCodeMetrics(source({
+    '.gitignore': 'ignored.ts', 'ignored.ts': 'code\n'.repeat(900),
+    'z.ts': 'code\n'.repeat(500), 'a.ts': 'code\n'.repeat(500),
+    'small.ts': 'code\n'.repeat(499) + '\n'.repeat(100),
+    'binary.ts': '\0' + 'code\n'.repeat(900), 'unreadable.ts': undefined,
+  }))
+  expect(report.partial).toBe(true)
+  expect(report.largestFiles).toEqual([{ path: 'a.ts', language: 'TypeScript', lines: 500 }, { path: 'z.ts', language: 'TypeScript', lines: 500 }])
+  expect((await scanCodeMetrics(source({ 'small.ts': 'code' }))).largestFiles).toEqual([])
+})
+
 it('inherits ancestor rules for workspace members and separates nested repositories', async () => {
   const files = {
     '.gitignore': '*.ts', 'repo/.git/HEAD': 'ref', 'repo/.gitignore': '*.generated.ts',

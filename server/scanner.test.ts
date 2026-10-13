@@ -42,6 +42,10 @@ describe('local directory scanning', () => {
     expect(first.result.projects.find(project => project.name === 'metrics')!.codeMetrics?.totalLines).toBe(4)
     await writeFile(path.join(directory, 'app/main.ts'), 'one\n')
     expect((await scanDirectory(root)).result.projects.find(project => project.name === 'app')!.codeMetrics?.totalLines).toBe(2)
+    await writeFile(path.join(directory, 'app/main.ts'), 'code\n'.repeat(500))
+    const large = (await scanDirectory(root)).result.projects
+    expect(large.find(project => project.name === 'app')!.codeMetrics?.largestFiles).toEqual([{ path: 'main.ts', language: 'TypeScript', lines: 500 }])
+    expect(large.find(project => project.name === 'metrics')!.codeMetrics?.largestFiles?.[0].path).toBe('app/main.ts')
     await symlink(path.join(temporary, 'missing'), path.join(directory, 'app/.gitignore'))
     expect((await scanDirectory(root)).result.projects.find(project => project.name === 'app')!.codeMetrics).toMatchObject({ totalLines: 0, partial: true })
   })

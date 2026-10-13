@@ -1,6 +1,6 @@
 import ignore, { type Ignore } from 'ignore'
 import { codeDistribution } from './code-distribution'
-import type { CodeFileStatistics, CodeMetrics } from '../types'
+import type { CodeFileStatistics, CodeLargeFile, CodeMetrics } from '../types'
 
 const languages: Record<string, string> = {
   ts: 'TypeScript', tsx: 'TSX', mts: 'TypeScript', cts: 'TypeScript',
@@ -34,6 +34,7 @@ export interface CodeSource {
 }
 type Rules = { directory: string; matcher: Ignore }[]
 const join = (directory: string, name: string) => directory ? `${directory}/${name}` : name
+const largestFirst = (a: CodeLargeFile, b: CodeLargeFile) => b.lines - a.lines || a.path.localeCompare(b.path)
 
 function fileStatistics(lineCounts: number[]): CodeFileStatistics {
   if (!lineCounts.length) return { average: null, min: null, max: null, median: null }
@@ -49,7 +50,7 @@ function fileStatistics(lineCounts: number[]): CodeFileStatistics {
 
 /** Read-only counts, shared by both connection modes. Paths are relative to the granted root. */
 export async function scanCodeMetrics(source: CodeSource, projectPath = ''): Promise<CodeMetrics> {
-  const counts = new Map<string, { name: string; lines: number; files: number; lineCounts: number[] }>()
+  const counts = new Map<string, { name: string; lines: number; files: number; lineCounts: number[]; largestFiles: CodeLargeFile[] }>()
   const warnings = new Set<string>()
   let entries = 0
   let folders = 0
@@ -113,10 +114,15 @@ export async function scanCodeMetrics(source: CodeSource, projectPath = ''): Pro
         bytes += new TextEncoder().encode(text).byteLength
         if (text.includes('\0')) continue
         const lines = text.split(/\r\n|\n|\r/).filter(line => line.trim().length > 0).length
-        const row = counts.get(language) ?? { name: language, lines: 0, files: 0, lineCounts: [] }
+        const row = counts.get(language) ?? { name: language, lines: 0, files: 0, lineCounts: [], largestFiles: [] }
         row.lines += lines
         row.files += 1
         row.lineCounts.push(lines)
+        if (lines >= 500) {
+          row.largestFiles.push({ path: projectPath ? relative.slice(projectPath.length + 1) : relative, language, lines })
+          row.largestFiles.sort(largestFirst)
+          if (row.largestFiles.length > 10) row.largestFiles.pop()
+        }
         counts.set(language, row)
       }
     } catch {
@@ -146,5 +152,6 @@ export async function scanCodeMetrics(source: CodeSource, projectPath = ''): Pro
   }
   const rows = [...counts.values()].map(({ lineCounts, ...row }) => ({ ...row, fileStatistics: fileStatistics(lineCounts), distribution: codeDistribution(lineCounts) })).sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name))
   const allLineCounts = [...counts.values()].flatMap(row => row.lineCounts)
-  return { scannedAt: new Date().toISOString(), totalLines: rows.reduce((sum, row) => sum + row.lines, 0), totalFiles: rows.reduce((sum, row) => sum + row.files, 0), fileStatistics: fileStatistics(allLineCounts), distribution: codeDistribution(allLineCounts), languages: rows, partial: warnings.size > 0, warnings: [...warnings] }
+  const largestFiles = rows.flatMap(row => row.largestFiles).sort(largestFirst).slice(0, 10)
+  return { scannedAt: new Date().toISOString(), totalLines: rows.reduce((sum, row) => sum + row.lines, 0), totalFiles: rows.reduce((sum, row) => sum + row.files, 0), fileStatistics: fileStatistics(allLineCounts), distribution: codeDistribution(allLineCounts), largestFiles, languages: rows, partial: warnings.size > 0, warnings: [...warnings] }
 }

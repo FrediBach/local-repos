@@ -89,13 +89,18 @@ Metrics refresh with metadata, use the existing workspace cache and generation
 guards, and require no process execution, separate action, or report lifecycle.
 Scans retain bounded per-file line counts in memory to calculate exact overall
 and per-type averages, minima, maxima, and medians, including zero-line files.
-Only aggregate `fileStatistics` values are cached; older snapshots can omit them,
+The cached `fileStatistics` contain only aggregates; older snapshots can omit them,
 and scans with no counted files store null statistics.
 The same bounded counts produce optional overall and per-type `distribution`
 arrays via [`code-distribution.ts`](../src/lib/code-distribution.ts). These store
 at most 100 equal-width inclusive line ranges and file counts, including empty
-ranges, without persisting individual filenames or line-count arrays. Empty
+ranges, without persisting full per-file line-count arrays. Empty
 scans store an empty distribution; older caches may omit it.
+Optional `largestFiles` arrays retain at most ten files of 500 or more nonblank
+lines overall and per type, ordered by descending size then path. Each row holds
+only a project-relative path, language, and line count. Per-type lists are bounded
+during traversal; their union supplies the overall top ten. Old caches may omit
+these arrays, while completed scans with no qualifying files store empty arrays.
 
 The browser owns one displayed workspace and its durable cache. The helper keeps
 an in-memory registry of scanned projects and runtime resources. A helper action

@@ -395,6 +395,13 @@ counts in a table. Resync existing scans to use the finer ranges.
 The chart scrolls horizontally on narrow screens. Resync older cached scans to
 collect distribution data; partial distributions only include successfully read files.
 
+**Largest files** lists up to ten files with at least **500 nonblank lines**, in
+descending line-count order (path order breaks ties). It follows the same file-type
+selector and shows each file's project-relative path, type, and line count. Each
+type has its own top ten, so filtering can reveal files outside the overall top
+ten. The scan's ignore rules and limits apply; partial scans only list files read
+successfully. Resync older cached scans to collect this list.
+
 Types are identified by extension or known filenames. Counts include comments,
 markup, styles, and configuration (such as JSON and YAML); blank lines and
 unrecognized types, including prose documents, are excluded. Root and nested

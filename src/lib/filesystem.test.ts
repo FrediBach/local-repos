@@ -28,6 +28,15 @@ function directory(name: string, tree: Tree): FileSystemDirectoryHandle {
 }
 
 describe('read-only folder scan', () => {
+  it('caches large-file paths relative to each browser project, respecting ignore rules', async () => {
+    const result = await scanDirectory(directory('metrics', {
+      'package.json': '{"name":"metrics","workspaces":["app"]}', '.gitignore': '*.generated.ts',
+      app: { 'package.json': '{"name":"app"}', 'main.ts': 'code\n'.repeat(500), 'out.generated.ts': 'code\n'.repeat(900) },
+    }))
+    expect(result.projects.find(project => project.name === 'app')?.codeMetrics?.largestFiles).toEqual([{ path: 'main.ts', language: 'TypeScript', lines: 500 }])
+    expect(result.projects.find(project => project.name === 'metrics')?.codeMetrics?.largestFiles?.[0].path).toBe('app/main.ts')
+  })
+
   it('counts code and inherits parent ignore rules for browser workspace members', async () => {
     const result = await scanDirectory(directory('metrics', {
       'package.json': '{"name":"metrics","workspaces":["app"]}',

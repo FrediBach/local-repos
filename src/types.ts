@@ -262,6 +262,13 @@ export interface CodeLineBucket {
   files: number
 }
 
+export interface CodeLargeFile {
+  /** Relative to this project's directory. */
+  path: string
+  language: string
+  lines: number
+}
+
 export interface CodeMetrics {
   scannedAt: string
   totalLines: number
@@ -269,7 +276,8 @@ export interface CodeMetrics {
   /** Older cached scans omit per-file statistics. Empty scans use null values. */
   fileStatistics?: CodeFileStatistics
   distribution?: CodeLineBucket[]
-  languages: { name: string; lines: number; files: number; fileStatistics?: CodeFileStatistics; distribution?: CodeLineBucket[] }[]
+  largestFiles?: CodeLargeFile[]
+  languages: { name: string; lines: number; files: number; fileStatistics?: CodeFileStatistics; distribution?: CodeLineBucket[]; largestFiles?: CodeLargeFile[] }[]
   partial: boolean
   warnings: string[]
 }

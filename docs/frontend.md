@@ -282,6 +282,10 @@ empty and partial distributions are labeled explicitly. Both axes adapt to the
 selected type. The existing project total and composition chart keep their overall
 scope. Missing cached statistics prompt resync, while empty scans display dashes. The selector falls
 back to all types if its chosen type disappears during a rescan. The tab
+also shows **Largest files** below the histogram: at most ten files of 500 or more
+nonblank lines, with project-relative paths, types, and counts. The selector uses
+each type's separately collected top ten, rather than filtering the overall list.
+Old caches prompt resync; empty and partial lists have distinct explanations. The tab
 keeps its internal `unused` key so existing action navigation remains valid.
 Eligible projects also show **React Doctor** and **Lighthouse**. `ProjectHistory` mounts only when **History** is
 selected, so opening the overview does not load its commit log.
